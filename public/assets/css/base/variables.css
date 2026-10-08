@@ -1,0 +1,317 @@
+/* ==========================================================
+   Fleet & Transportation Management System
+   Design Tokens
+   Version: 1.1 — Theme System
+========================================================== */
+
+/* ==========================================
+   LIGHT THEME (default)
+========================================== */
+
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* Semantic surfaces */
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f3f4f6;
+  --color-surface-hover: #e5e7eb;
+  --color-surface-muted: #f8fafc;
+  --color-surface-soft: #f9fafb;
+
+  /* Text */
+  --color-text: #24313f;
+  --color-text-muted: #6b7280;
+  --color-text-light: #9ca3af;
+  --color-text-inverse: #ffffff;
+
+  /* Borders */
+  --color-border: #e5e7eb;
+  --color-border-subtle: #f3f4f6;
+  --color-border-strong: #d1d5db;
+  --color-border-input: #dbe2ea;
+
+  /* Brand / status — mint green identity */
+  --color-primary: #00a86b;
+  --color-primary-hover: #008f5b;
+  --color-primary-active: #007a4d;
+  --color-primary-soft: #e7f7f0;
+  --color-primary-light: #c5efdc;
+  --color-primary-dark: #006d43;
+
+  --color-success: #00a86b;
+  --color-success-strong: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-success-text: #15803d;
+
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+  --color-warning-text: #d97706;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-soft: #fee2e2;
+  --color-danger-text: #dc2626;
+
+  --color-info: #3b82f6;
+  --color-info-soft: #dbeafe;
+  --color-info-text: #1d4ed8;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Legacy aliases (existing components) */
+  --color-background: var(--color-bg);
+  --color-text-primary: var(--color-text);
+  --color-text-secondary: var(--color-text-muted);
+
+  /* Shell */
+  --sidebar-bg: #071e27;
+  --sidebar-hover: #0c2d3a;
+  --color-sidebar: var(--sidebar-bg);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--color-primary);
+
+  --navbar-bg: var(--color-surface);
+  --card-bg: var(--color-surface);
+  --table-header-bg: transparent;
+  --table-row-hover: var(--color-surface-muted);
+  --input-bg: var(--color-surface);
+  --input-border: var(--color-border-input);
+  --btn-muted-bg: var(--color-surface-secondary);
+  --btn-outline-bg: var(--color-surface);
+  --btn-outline-text: #374151;
+  --btn-outline-border: var(--color-border-strong);
+  --modal-bg: var(--color-surface);
+  --modal-overlay: rgba(15, 23, 42, 0.45);
+  --dropdown-bg: var(--color-surface);
+  --dropdown-hover: var(--color-surface-secondary);
+  --search-bg: var(--color-surface);
+  --focus-ring: rgba(0, 168, 107, 0.18);
+  --scrollbar-track: #edf2f7;
+  --color-divider: var(--color-border);
+
+  /* Shadows — restrained elevation */
+  --color-shadow: rgba(15, 23, 42, 0.06);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 6px 16px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --shadow-primary: 0 6px 16px rgba(0, 168, 107, 0.18);
+
+  /* ==========================================
+     TYPOGRAPHY
+  ========================================== */
+
+  --font-family: "Poppins", sans-serif;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 17px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 26px;
+  --font-size-3xl: 32px;
+  --font-size-kpi: 26px;
+  --font-size-label: 13px;
+  --font-size-meta: 12px;
+
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-body: 1.55;
+
+  --font-light: 300;
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* ==========================================
+     SPACING (8px Grid System)
+  ========================================== */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 96px;
+
+  /* Layout rhythm (reuses spacing scale) */
+  --card-gap: var(--space-6);
+  --section-gap: var(--space-7);
+  --toolbar-gap: var(--space-5);
+
+  /* ==========================================
+     BORDER RADIUS — moderate, not pill-everywhere
+  ========================================== */
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+  --radius-card: var(--radius-lg);
+  --radius-control: var(--radius-md);
+  --radius-button: var(--radius-md);
+
+  /* ==========================================
+     MOTION — 150–220ms, subtle ease-out
+  ========================================== */
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: var(--ease-out);
+  --duration-fast: 150ms;
+  --duration-normal: 180ms;
+  --duration-slow: 220ms;
+  --transition-fast: var(--duration-fast) var(--ease-out);
+  --transition-normal: var(--duration-normal) var(--ease-out);
+  --transition-slow: var(--duration-slow) var(--ease-out);
+  --hover-lift: 0;
+  --hover-shadow: var(--shadow-sm);
+  --focus-outline-width: 2px;
+  --focus-outline-offset: 2px;
+
+  /* ==========================================
+     SIDEBAR
+  ========================================== */
+
+  --sidebar-width: 280px;
+  --sidebar-collapsed-width: 88px;
+  --sidebar-collapse: var(--sidebar-collapsed-width);
+
+  /* Slightly slower open/close for a smoother collapse feel */
+  --sidebar-transition-duration: 380ms;
+  --sidebar-label-transition-duration: 240ms;
+  --sidebar-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --sidebar-label-expand-delay: 90ms;
+
+  --sidebar-tooltip-bg: #0c2d3a;
+  --sidebar-tooltip-color: #ffffff;
+  --sidebar-tooltip-duration: 140ms;
+  --sidebar-tooltip-max-width: 220px;
+  --sidebar-tooltip-z: 1200;
+
+  --sidebar-profile-menu-duration: 170ms;
+
+  /* ==========================================
+     NAVBAR
+  ========================================== */
+
+  --navbar-height: 72px;
+  --control-height: 48px;
+  --control-height-sm: 44px;
+
+  /* ==========================================
+     CONTENT
+  ========================================== */
+
+  --content-padding: 30px;
+
+  /* ==========================================
+     Z INDEX
+  ========================================== */
+
+  --z-dropdown: 100;
+  --z-sticky: 500;
+  --z-sidebar: 700;
+  --z-navbar: 800;
+  --z-modal: 1000;
+}
+
+/* ==========================================
+   DARK THEME
+========================================== */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #0b1220;
+  --color-surface: #111827;
+  --color-surface-secondary: #1f2937;
+  --color-surface-hover: #374151;
+  --color-surface-muted: #1a2332;
+  --color-surface-soft: #151c2c;
+
+  --color-text: #f3f4f6;
+  --color-text-muted: #9ca3af;
+  --color-text-light: #6b7280;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #2d3748;
+  --color-border-subtle: #1f2937;
+  --color-border-strong: #4b5563;
+  --color-border-input: #374151;
+
+  /* Keep mint identity; slightly brighter for dark surfaces */
+  --color-primary: #12b87a;
+  --color-primary-hover: #34d399;
+  --color-primary-active: #059669;
+  --color-primary-soft: rgba(0, 168, 107, 0.16);
+  --color-primary-light: rgba(0, 168, 107, 0.26);
+  --color-primary-dark: #059669;
+
+  --color-success: #12b87a;
+  --color-success-strong: #22c55e;
+  --color-success-soft: rgba(22, 163, 74, 0.2);
+  --color-success-text: #86efac;
+
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(245, 158, 11, 0.18);
+  --color-warning-text: #fcd34d;
+
+  --color-danger: #f87171;
+  --color-danger-hover: #ef4444;
+  --color-danger-soft: rgba(220, 38, 38, 0.2);
+  --color-danger-text: #fca5a5;
+
+  --color-info: #60a5fa;
+  --color-info-soft: rgba(59, 130, 246, 0.2);
+  --color-info-text: #93c5fd;
+
+  --color-background: var(--color-bg);
+  --color-text-primary: var(--color-text);
+  --color-text-secondary: var(--color-text-muted);
+
+  --sidebar-bg: #050d12;
+  --sidebar-hover: #0c1a22;
+  --color-sidebar: var(--sidebar-bg);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--color-primary);
+
+  --navbar-bg: var(--color-surface);
+  --card-bg: var(--color-surface);
+  --table-header-bg: transparent;
+  --table-row-hover: var(--color-surface-muted);
+  --input-bg: var(--color-surface-secondary);
+  --input-border: var(--color-border-input);
+  --btn-muted-bg: var(--color-surface-secondary);
+  --btn-outline-bg: var(--color-surface-secondary);
+  --btn-outline-text: #e5e7eb;
+  --btn-outline-border: var(--color-border-strong);
+  --modal-bg: var(--color-surface);
+  --modal-overlay: rgba(2, 6, 23, 0.72);
+  --dropdown-bg: var(--color-surface-secondary);
+  --dropdown-hover: var(--color-surface-hover);
+  --search-bg: var(--color-surface-secondary);
+  --focus-ring: rgba(18, 184, 122, 0.28);
+  --scrollbar-track: #1f2937;
+  --color-divider: var(--color-border);   
+
+  --color-shadow: rgba(0, 0, 0, 0.35);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.38);
+  --shadow-primary: 0 6px 16px rgba(18, 184, 122, 0.18);
+
+  --sidebar-tooltip-bg: #1f2937;
+  --sidebar-tooltip-color: #f9fafb;
+}

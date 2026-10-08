@@ -1,0 +1,227 @@
+/* ==========================================================
+   SKELETON LOADING — pure CSS, reusable placeholders
+   Opt-in via HTML class; no timers or JS required
+========================================================== */
+
+.skeleton,
+.skeleton-line,
+.skeleton-block,
+.skeleton-circle {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 0%,
+    var(--color-surface-secondary) 45%,
+    var(--color-surface-muted) 90%
+  );
+  background-size: 200% 100%;
+  animation: fleetShimmer 1.2s linear infinite;
+  border-radius: var(--radius-sm);
+  color: transparent !important;
+  pointer-events: none;
+  user-select: none;
+}
+
+html[data-theme="dark"] .skeleton,
+html[data-theme="dark"] .skeleton-line,
+html[data-theme="dark"] .skeleton-block,
+html[data-theme="dark"] .skeleton-circle {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-secondary) 0%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface-secondary) 100%
+  );
+  background-size: 200% 100%;
+}
+
+.skeleton-line {
+  display: block;
+  height: 12px;
+  width: 100%;
+  margin: 0;
+}
+
+.skeleton-line.w-25 {
+  width: 25%;
+}
+.skeleton-line.w-40 {
+  width: 40%;
+}
+.skeleton-line.w-50 {
+  width: 50%;
+}
+.skeleton-line.w-60 {
+  width: 60%;
+}
+.skeleton-line.w-75 {
+  width: 75%;
+}
+.skeleton-line.w-90 {
+  width: 90%;
+}
+
+.skeleton-block {
+  display: block;
+  width: 100%;
+  height: 120px;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-circle {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+/* Compositions */
+
+.skeleton-kpi {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+  min-height: 108px;
+}
+
+.skeleton-kpi .skeleton-circle {
+  width: 48px;
+  height: 48px;
+}
+
+.skeleton-kpi-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-card {
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.skeleton-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skeleton-chart {
+  height: 220px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.skeleton-table {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.skeleton-table-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr 0.6fr 0.5fr;
+  gap: var(--space-4);
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-height: 56px;
+}
+
+.skeleton-table-row:last-child {
+  border-bottom: none;
+}
+
+.skeleton-table-row.is-head {
+  background: var(--color-surface-muted);
+}
+
+.skeleton-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-field .skeleton-line {
+  height: 10px;
+  width: 35%;
+}
+
+.skeleton-field .skeleton-input {
+  height: var(--control-height);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+}
+
+.skeleton-modal {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.skeleton-modal-header {
+  padding: var(--space-6) var(--space-7);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-modal-body {
+  padding: var(--space-6) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.skeleton-modal-footer {
+  padding: var(--space-5) var(--space-7);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.skeleton-btn {
+  width: 110px;
+  height: var(--control-height);
+  border-radius: var(--radius-button);
+}
+
+@media (max-width: 767px) {
+  .skeleton-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .skeleton-table-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

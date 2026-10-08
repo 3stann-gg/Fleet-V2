@@ -1,0 +1,368 @@
+/* =====================================
+   VEHICLE PAGE
+===================================== */
+
+/* Module shell — spacing from shared page-header / stats / toolbar / card margins */
+.vehicle-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Align with shared layout.css page-header (no local size drift) */
+.vehicle-page .page-header {
+  margin-bottom: var(--section-gap);
+}
+
+.vehicle-archived-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ===================================
+   Vehicle Info
+=================================== */
+
+.vehicle-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.vehicle-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--color-primary);
+  font-size: 22px;
+}
+
+.vehicle-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.vehicle-info small {
+  color: var(--color-text-light);
+}
+
+/* ===================================
+   Driver
+=================================== */
+
+.driver-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.driver-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  background: #00a86b;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.driver-avatar .driver-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.vehicle-energy-section-title {
+  margin-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ===================================
+   Fuel Progress
+=================================== */
+
+.fuel-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fuel-progress-bar {
+  width: 90px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 50px;
+  overflow: hidden;
+}
+
+.fuel-progress-fill {
+  height: 100%;
+  background: #00a86b;
+  border-radius: 50px;
+  transition: width 0.35s ease;
+}
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-state i {
+  font-size: 64px;
+  color: #cbd5e1;
+}
+
+.empty-state h4 {
+  margin-top: 20px;
+  font-size: 22px;
+}
+
+.empty-state p {
+  color: #6b7280;
+}
+/* ==========================================
+   Print Styles
+========================================== */
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  #sidebar,
+  #navbar,
+  .toolbar,
+  .page-header button,
+  .table-footer,
+  .action-buttons,
+  .bulk-toolbar,
+  .modal-overlay,
+  #toast {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+  }
+
+  .page-wrapper {
+    padding: 0;
+  }
+
+  .card {
+    box-shadow: none;
+    border: none;
+  }
+
+  .fleet-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .fleet-table th,
+  .fleet-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+  }
+
+  .fleet-table th {
+    background: #f3f4f6 !important;
+    color: #000;
+  }
+
+  .stats-grid {
+    display: none;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .page-header p {
+    color: #666;
+  }
+}
+/* ==========================================
+   Vehicle Image Upload
+========================================== */
+
+.image-upload {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 18px;
+}
+
+.image-upload img {
+  width: 170px;
+
+  height: 120px;
+
+  object-fit: cover;
+
+  border-radius: 14px;
+
+  border: 2px dashed #d1d5db;
+
+  background: #f8fafc;
+}
+
+.full-width {
+  grid-column: 1/-1;
+}
+
+/* ==========================================
+   Vehicle Image Upload
+========================================== */
+
+.vehicle-image-section {
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vehicle-image-label {
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 14px;
+}
+
+.vehicle-image-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.vehicle-image-upload img {
+  width: 170px;
+  height: 170px;
+
+  object-fit: cover;
+
+  border-radius: 18px;
+
+  border: 2px dashed #d7dde7;
+
+  background: #f8fafc;
+
+  transition: 0.3s;
+}
+
+.vehicle-image-upload img:hover {
+  border-color: var(--color-primary);
+}
+
+.upload-btn {
+  min-width: 170px;
+  justify-content: center;
+}
+/* ==========================================
+   Vehicle Photo
+========================================== */
+
+.vehicle-photo {
+  width: 56px;
+
+  height: 56px;
+
+  object-fit: cover;
+
+  border-radius: 12px;
+
+  border: 2px solid #e5e7eb;
+
+  background: #fff;
+
+  flex-shrink: 0;
+
+  transition: 0.25s;
+}
+
+.vehicle-photo:hover {
+  transform: scale(1.08);
+}
+.vehicle-profile {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  margin-bottom: 28px;
+}
+
+.vehicle-profile img {
+  width: 140px;
+
+  height: 140px;
+
+  border-radius: 18px;
+
+  object-fit: cover;
+
+  border: 3px solid #e5e7eb;
+
+  margin-bottom: 18px;
+}
+
+/* ==========================================
+   Vehicle Print
+========================================== */
+@media print {
+
+    body * {
+        visibility: hidden;
+    }
+
+    .table-responsive,
+    .table-responsive * {
+        visibility: visible;
+    }
+
+    .table-responsive {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+
+    .toolbar,
+    .bulk-toolbar,
+    .card-header .card-actions,
+    .action-buttons,
+    .pagination,
+    #pagination,
+    #paginationInfo {
+        display: none !important;
+    }
+
+}

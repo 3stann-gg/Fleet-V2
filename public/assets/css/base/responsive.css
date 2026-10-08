@@ -1,0 +1,774 @@
+/* ==========================================================
+   RESPONSIVE SYSTEM
+   Shared layout and component overrides
+========================================================== */
+
+/* Keep flex and grid children inside their available columns. */
+.app,
+.main-content,
+.page-wrapper,
+.container-fluid-custom,
+.vehicle-page,
+.driver-page,
+.dashboard,
+.dashboard-grid,
+.card,
+.card-header,
+.toolbar,
+.toolbar-left,
+.toolbar-right,
+.navbar-left,
+.navbar-center,
+.navbar-right {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app,
+.page-wrapper,
+.container-fluid-custom {
+  width: 100%;
+}
+
+/* The fixed sidebar is outside normal flow, so reserve its width explicitly. */
+.main-content {
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
+}
+
+/* Legacy class alias (prefer body.sidebar-collapsed) */
+.main-content.expanded {
+  width: calc(100% - var(--sidebar-collapsed-width));
+  max-width: calc(100% - var(--sidebar-collapsed-width));
+}
+
+/* Desktop collapsed shell: keep main content width in sync with sidebar */
+@media (min-width: 992px) {
+  body.sidebar-collapsed .main-content {
+    width: calc(100% - var(--sidebar-collapsed-width));
+    max-width: calc(100% - var(--sidebar-collapsed-width));
+  }
+}
+
+.stats-grid > *,
+.dashboard-grid > *,
+.form-grid > *,
+.card-header > *,
+.stat-card,
+.stat-content,
+.vehicle-info,
+.driver-info {
+  min-width: 0;
+}
+
+/* Compact dashboard status badges must retain their readable inline label. */
+.card-header > .badge-green {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Keep 5–6 card modules balanced after responsive base override */
+.stats-grid:has(> .stat-card:nth-child(5):last-child),
+.stats-grid:has(> .stat-card:nth-child(6):last-child) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.search-box,
+.search-box input,
+.navbar-center .search-box,
+.filter-select,
+.table-responsive,
+.custom-modal,
+.vehicle-image-upload,
+.image-upload {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.custom-modal,
+.modal-body {
+  min-height: 0;
+}
+
+.modal-body {
+  overscroll-behavior: contain;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Laptop and compact desktop */
+@media (max-width: 1199px) {
+  .page-wrapper {
+    padding: var(--space-5);
+  }
+
+  .stats-grid,
+  .stats-grid:has(> .stat-card:nth-child(5):last-child),
+  .stats-grid:has(> .stat-card:nth-child(6):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    margin-bottom: var(--space-6);
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  .dashboard {
+    gap: var(--space-6);
+  }
+
+  .dashboard + .dashboard-grid,
+  .dashboard-grid + .dashboard-grid {
+    margin-top: var(--space-6);
+  }
+
+  /* Dashboard owns vertical rhythm; do not reintroduce stats margin */
+  .dashboard .stats-grid {
+    margin: 0;
+  }
+
+  .navbar-custom {
+    height: auto;
+    min-height: 80px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 24px;
+  }
+
+  .navbar-left {
+    flex: 1 1 auto;
+  }
+
+  .navbar-center {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .navbar-center .search-box {
+    width: 100%;
+  }
+
+  .navbar-right,
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .toolbar {
+    align-items: flex-start;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    flex: 1 0 100%;
+  }
+
+  .toolbar-right {
+    justify-content: flex-start;
+  }
+}
+
+/* Tablet landscape and smaller: switch to an off-canvas navigation shell. */
+/*
+@media (max-width: 991px) {
+  .main-content,
+  .main-content.expanded,
+  body.sidebar-collapsed .main-content {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+*/
+@media (max-width: 991px) {
+    .app {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+    }
+
+    .main-content,
+    .main-content.expanded,
+    body.sidebar-collapsed .main-content {
+        display: flex;
+        flex-direction: column;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: none !important;
+        margin-left: 0 !important;
+    }
+
+  .sidebar,
+  body.sidebar-collapsed .sidebar {
+    width: min(var(--sidebar-width), calc(100vw - 48px));
+    height: 100vh;
+    height: 100dvh;
+    transform: translateX(-105%);
+    transition: transform var(--sidebar-transition-duration)
+      var(--sidebar-transition-easing);
+    overscroll-behavior: contain;
+    z-index: 1100;
+    overflow: visible;
+  }
+
+  .sidebar-panel {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .desktop-sidebar-toggle,
+  .sidebar-edge-toggle.desktop-sidebar-toggle {
+    display: none !important;
+  }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    display: block;
+    background: rgba(7, 30, 39, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--sidebar-transition-duration) var(--sidebar-transition-easing),
+      visibility var(--sidebar-transition-duration) var(--sidebar-transition-easing);
+    z-index: 1050;
+  }
+
+  body.sidebar-open {
+    overflow: hidden;
+  }
+
+  body.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .page-wrapper {
+    padding: var(--space-5);
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-header {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .dashboard-header h1,
+  .vehicle-page .page-header h1,
+  .driver-page .page-header h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+  }
+
+  .table-responsive .fleet-table {
+    min-width: 800px;
+  }
+
+  .fleet-table th,
+  .fleet-table td {
+    white-space: nowrap;
+  }
+
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: max-content;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .modal-overlay {
+    padding: 20px;
+  }
+
+  .custom-modal {
+    max-height: calc(100dvh - 40px);
+  }
+}
+
+/* Tablet portrait and large mobile */
+@media (max-width: 767px) {
+  .page-wrapper {
+    padding: var(--space-4);
+  }
+
+  .stats-grid,
+  .stats-grid:has(> .stat-card:nth-child(5):last-child),
+  .stats-grid:has(> .stat-card:nth-child(6):last-child) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+
+  .dashboard {
+    gap: var(--space-5);
+  }
+
+  .dashboard-grid {
+    gap: var(--space-4);
+  }
+
+  .dashboard + .dashboard-grid,
+  .dashboard-grid + .dashboard-grid {
+    margin-top: var(--space-5);
+  }
+
+  .dashboard .stats-grid {
+    margin: 0;
+  }
+
+  .page-header,
+  .vehicle-page .page-header,
+  .driver-page .page-header,
+  .dashboard-header,
+  .reports-page .page-header,
+  .cost-analysis-page .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .page-header > .btn-primary,
+  .vehicle-page .page-header > .btn-primary,
+  .driver-page .page-header > .btn-primary {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .toolbar .search-box {
+    max-width: none;
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .toolbar .filter-select,
+  .toolbar input[type="date"].filter-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .reports-presets-bar,
+  .cost-presets-bar,
+  .route-templates-bar,
+  .fleet-utility-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reports-presets-bar .filter-select,
+  .reports-presets-bar .btn-outline,
+  .cost-presets-bar .filter-select,
+  .cost-presets-bar .btn-outline,
+  .route-templates-bar .filter-select,
+  .route-templates-bar .btn-outline {
+    width: 100%;
+    max-width: none;
+  }
+
+  .dashboard-header h1,
+  .vehicle-page .page-header h1,
+  .driver-page .page-header h1 {
+    font-size: clamp(1.875rem, 8vw, 2.5rem);
+  }
+
+  .dashboard-header p,
+  .vehicle-page .page-header p,
+  .driver-page .page-header p {
+    font-size: 15px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .card-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .toolbar,
+  .toolbar-left,
+  .toolbar-right {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .toolbar {
+    gap: 16px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    gap: 12px;
+  }
+
+  .search-box,
+  .filter-select,
+  .toolbar-right .btn-outline,
+  .toolbar-right .btn-primary,
+  .toolbar-right .btn-danger {
+    width: 100%;
+    max-width: none;
+  }
+
+  .bulk-toolbar.show {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .bulk-toolbar > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+  }
+
+  .pagination button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modal-overlay {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .custom-modal {
+    width: 100%;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px);
+    border-radius: 16px;
+  }
+
+  .modal-header {
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .modal-header h2 {
+    font-size: clamp(1.375rem, 6vw, 1.75rem);
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .modal-footer {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 20px;
+  }
+
+  .modal-footer > .btn-primary,
+  .modal-footer > .btn-outline,
+  .modal-footer > .btn-danger {
+    flex: 1 1 160px;
+    min-height: 48px;
+  }
+
+  .vehicle-image-upload,
+  .image-upload {
+    width: 100%;
+  }
+
+  .vehicle-image-upload img,
+  .image-upload img {
+    width: min(170px, 100%);
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+
+  .upload-btn {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .chart-placeholder {
+    gap: 10px;
+  }
+
+  .bar {
+    width: 30px;
+  }
+
+  .map-placeholder {
+    height: 280px;
+    padding: 20px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 575px) {
+  .navbar-custom {
+    padding: 12px 16px;
+  }
+
+  .navbar-left {
+    gap: 12px;
+  }
+
+  .navbar-right {
+    gap: 8px;
+  }
+
+
+
+  .app-identity {
+    max-width: min(200px, 42vw);
+  }
+
+  .app-identity-title {
+    font-size: 15px;
+  }
+
+  .app-identity-subtitle {
+    display: none;
+  }
+
+  .page-wrapper {
+    padding: 16px;
+  }
+
+  .page-header > .btn-primary,
+  .vehicle-page .page-header > .btn-primary,
+  .driver-page .page-header > .btn-primary {
+    width: 100%;
+  }
+
+  .stat-card,
+  .stat-card.dashboard-kpi,
+  .stat-card.report-kpi-card {
+    padding: var(--space-4);
+    min-height: 100px;
+  }
+
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 20px;
+  }
+
+  .stat-content > h2,
+  .stat-content > h3,
+  .stat-content > .kpi-value {
+    font-size: 24px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .bulk-toolbar.show {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .bulk-toolbar > div {
+    width: 100%;
+  }
+
+  .bulk-toolbar .btn-outline,
+  .bulk-toolbar .btn-danger {
+    flex: 1 1 100%;
+  }
+
+  .table-footer {
+    align-items: center;
+    text-align: center;
+  }
+
+  .fleet-table th,
+  .fleet-table td {
+    padding: 14px 12px;
+  }
+
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .custom-modal {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .modal-header,
+  .modal-body {
+    padding: 18px;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-footer > .btn-primary,
+  .modal-footer > .btn-outline,
+  .modal-footer > .btn-danger,
+  .delete-modal .btn-outline,
+  .delete-modal .btn-danger {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .delete-modal {
+    padding: 28px 20px;
+  }
+
+  .delete-icon {
+    width: 68px;
+    height: 68px;
+    font-size: 34px;
+  }
+
+  .toast-container {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+  }
+
+  .toast-message {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .chart-placeholder {
+    gap: 8px;
+  }
+
+  .bar {
+    width: 24px;
+  }
+
+  .map-placeholder {
+    height: 240px;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 399px) {
+  .navbar-custom {
+    padding: 10px 12px;
+  }
+
+  .navbar-left {
+    gap: 8px;
+  }
+
+  .menu-toggle,
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .app-identity {
+    max-width: min(140px, 38vw);
+  }
+
+  .app-identity-title {
+    font-size: 14px;
+  }
+
+  .page-wrapper {
+    padding: 12px;
+  }
+
+  .modal-overlay {
+    padding: 8px;
+  }
+
+  .custom-modal {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .modal-header,
+  .modal-body {
+    padding: 16px;
+  }
+}
+
+@media print {
+  .table-responsive {
+    overflow: visible !important;
+  }
+
+  .table-responsive .fleet-table {
+    min-width: 0 !important;
+  }
+
+  .fleet-table th,
+  .fleet-table td {
+    white-space: normal;
+  }
+}

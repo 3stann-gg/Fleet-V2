@@ -1,0 +1,105 @@
+/* ==========================================================
+   LAYOUT
+   Fleet & Transportation Management System
+========================================================== */
+
+/* ===== Main Application Layout ===== */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+/* ===== Main Content ===== */
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+  transition:
+    margin-left var(--sidebar-transition-duration) var(--sidebar-transition-easing),
+    width var(--sidebar-transition-duration) var(--sidebar-transition-easing),
+    max-width var(--sidebar-transition-duration) var(--sidebar-transition-easing);
+}
+
+/* Desktop sidebar collapsed shell (viewport > 991px) */
+@media (min-width: 992px) {
+  body.sidebar-collapsed .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+  }
+}
+
+/* Legacy class alias (prefer body.sidebar-collapsed) */
+.main-content.expanded {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+/* ===== Page Wrapper ===== */
+
+.page-wrapper {
+  flex: 1;
+  padding: var(--space-7) var(--space-6) var(--space-8);
+}
+
+/* ===== Content Container ===== */
+
+.container-fluid-custom {
+  width: 100%;
+  margin: auto;
+}
+
+/* ===== Section ===== */
+
+.section {
+  margin-bottom: var(--space-8);
+}
+
+/* ===== Page Header ===== */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--section-gap);
+}
+
+.page-header h1,
+.page-title {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.2vw, 2rem);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.page-header p,
+.page-subtitle {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+  max-width: 52rem;
+}
+
+.page-header > .btn-primary,
+.page-header > .btn-outline {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.page-title {
+  margin-bottom: var(--space-2);
+}
+
+/* Keep layout motion aligned with sidebar; respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .main-content {
+    transition: none;
+  }
+}

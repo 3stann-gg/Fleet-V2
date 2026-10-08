@@ -1,0 +1,453 @@
+/* ==========================================
+   Fleet Settings — system configuration
+========================================== */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: var(--card-gap);
+  align-items: start;
+}
+
+.settings-section-nav {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.settings-section-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.settings-section-nav button i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.settings-section-nav button:hover,
+.settings-section-nav button:focus-visible {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  outline: none;
+}
+
+.settings-section-nav button.is-active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.settings-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  padding-bottom: 96px;
+}
+
+.settings-card {
+  margin: 0;
+}
+
+.settings-card .card-header {
+  margin-bottom: var(--space-5);
+}
+
+.settings-card .card-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-card .card-header h3 i {
+  color: var(--color-primary);
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.settings-form-grid--follow {
+  margin-top: var(--space-5);
+}
+
+.settings-form-grid .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.settings-check-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.settings-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.settings-check input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+}
+
+.settings-check span {
+  line-height: 1.4;
+}
+
+.settings-theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.settings-theme-option {
+  position: relative;
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.settings-theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-theme-option label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.settings-theme-option label i {
+  font-size: 22px;
+  color: var(--color-primary);
+}
+
+.settings-theme-option label strong {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.settings-theme-option label small {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.settings-theme-option input:focus-visible + label {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.settings-theme-option input:checked + label {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.settings-note {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.settings-action-bar.is-dirty {
+  border-color: var(--color-primary);
+}
+
+.settings-action-meta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.settings-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.settings-last-updated {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.settings-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.settings-inline-hint {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.settings-note--muted {
+  opacity: 0.95;
+}
+
+.settings-unsaved-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+#saveFleetSettings:disabled,
+#cancelFleetSettings:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#clearDemoData:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1199px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-section-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings-section-nav button {
+    width: auto;
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .settings-form-grid,
+  .settings-check-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-action-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-action-buttons .btn-primary,
+  .settings-action-buttons .btn-outline {
+    width: 100%;
+  }
+
+  .settings-theme-option {
+    max-width: none;
+  }
+}
+
+
+/* Account Management Toggle Eye */
+#accountManagementModal .account-password-wrapper {
+    position: relative !important;
+    width: 100% !important;
+}
+
+#accountManagementModal .account-password-wrapper > input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding-right: 48px !important;
+}
+
+#accountManagementModal .account-password-toggle {
+    position: absolute !important;
+
+    top: 50% !important;
+    right: 10px !important;
+
+    transform: translateY(-50%) !important;
+
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: 0 !important;
+    border-radius: 6px !important;
+
+    background: transparent !important;
+    box-shadow: none !important;
+
+    color: var(--color-text-muted) !important;
+
+    cursor: pointer;
+    z-index: 5;
+}
+
+#accountManagementModal .account-password-toggle:hover {
+    color: var(--color-text) !important;
+}
+
+#accountManagementModal .account-password-toggle:focus {
+    box-shadow: none !important;
+}
+
+#accountManagementModal .account-password-toggle:focus-visible {
+    outline: 2px solid var(--color-primary) !important;
+    outline-offset: 2px;
+}
+
+#accountManagementModal .account-password-toggle i {
+    display: block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    font-size: 18px !important;
+    line-height: 1 !important;
+
+    pointer-events: none;
+}
+
+/* Maintenance Settings spacing */
+
+.settings-subsection {
+    margin-top: var(--space-7);
+}
+
+.settings-subsection + .settings-subsection {
+    margin-top: var(--space-8);
+}
+
+.settings-subsection .settings-data-actions {
+    margin-top: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.settings-subsection .table-responsive {
+    margin-top: var(--space-2);
+}
+
+
+/* Maintenance Settings Editor Modal */
+
+.maintenance-settings-editor .modal-body {
+    padding-top: var(--space-7);
+    padding-bottom: var(--space-7);
+}
+
+.maintenance-settings-editor .form-group {
+    margin-bottom: var(--space-5);
+}
+
+.maintenance-settings-editor .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.maintenance-settings-editor .form-group label {
+    display: block;
+    margin-bottom: var(--space-2);
+}
+
+.maintenance-settings-editor .settings-check-list {
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.maintenance-settings-editor .modal-footer {
+    margin-top: var(--space-2);
+}

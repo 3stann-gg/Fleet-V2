@@ -1,0 +1,423 @@
+/* ==========================================
+   Cost Analysis
+========================================== */
+
+.cost-last-updated {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.cost-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.cost-custom-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.cost-section-card {
+  margin-top: var(--space-3);
+  margin-bottom: var(--section-gap);
+}
+
+.cost-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--card-gap);
+}
+
+.cost-chart-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+  min-height: 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cost-chart-card h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.cost-analysis-page .page-header h1 {
+  font-size: clamp(1.75rem, 2.2vw, 2rem);
+  font-weight: var(--font-semibold);
+}
+
+.cost-analysis-page .card-subtitle {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+}
+
+.cost-chart-empty {
+  margin: auto 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.cost-chart-body {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cost-donut-wrap {
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+}
+
+.cost-donut {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-border);
+  mask: radial-gradient(circle at center, transparent 48%, #000 49%);
+  -webkit-mask: radial-gradient(circle at center, transparent 48%, #000 49%);
+}
+
+.cost-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cost-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.cost-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.cost-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1;
+  min-height: 160px;
+  padding-top: 8px;
+}
+
+.cost-bars.is-horizontal {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.cost-bar-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+
+.cost-bar-col-track {
+  width: 100%;
+  max-width: 42px;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--color-surface);
+  border-radius: 8px 8px 4px 4px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  min-height: 100px;
+}
+
+.cost-bar-col-track.grouped {
+  max-width: 56px;
+  gap: 3px;
+  padding: 0 4px;
+}
+
+.cost-bar-fill {
+  border-radius: 6px 6px 0 0;
+  min-height: 4px;
+}
+
+.cost-bar-fill.vertical {
+  width: 100%;
+}
+
+.cost-bar-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cost-bar-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cost-bar-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 130px) 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.cost-bar-track {
+  height: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cost-bar-track .cost-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+}
+
+.cost-chart-key {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.cost-chart-key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+/* Sub-view KPI rows: shared .stat-card system; 4-col when 4 cards, 4-col for 8 */
+.cost-analysis-page .stats-grid.cost-sub-kpis {
+  margin: 0 0 var(--card-gap);
+}
+
+.cost-availability-note {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* cost-presets-bar chrome shared via toolbar.css */
+.cost-preset-name {
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.cost-section-card .card-header {
+  overflow: visible;
+}
+
+.cost-budget-panel {
+  margin-bottom: var(--card-gap);
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.cost-budget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cost-budget-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.cost-budget-mismatch {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cost-budget-table-section {
+  margin-top: var(--card-gap);
+}
+
+.cost-budget-table-section h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cost-budget-history-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cost-budget-history-header h4 {
+  margin: 0;
+}
+
+.cost-budget-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.cost-budget-status[data-status="Under Budget"] {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.cost-budget-status[data-status="Near Limit"] {
+  border-color: #d97706;
+  color: #d97706;
+}
+
+.cost-budget-status[data-status="Over Budget"] {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.cost-budget-status[data-status="Not Configured"],
+.cost-budget-status[data-status="No Cost Data"],
+.cost-budget-status[data-status="Period Mismatch"] {
+  color: var(--color-text-muted);
+}
+
+.cost-budget-modal .modal-body {
+  overflow-y: auto;
+}
+
+.cost-budget-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.cost-budget-modal .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.cost-table-toolbar {
+  margin-bottom: 16px;
+}
+
+.cost-page-size-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-right: 4px;
+}
+
+@media (max-width: 1199px) {
+  .cost-charts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cost-analysis-page .stats-grid.cost-sub-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .cost-filter-grid {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .cost-custom-dates,
+  .cost-budget-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cost-budget-actions .btn-primary,
+  .cost-budget-actions .btn-outline {
+    width: 100%;
+  }
+
+  .cost-preset-name {
+    max-width: none;
+  }
+
+  .cost-donut-wrap {
+    flex-direction: column;
+  }
+
+  .cost-bar-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .cost-budget-history-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cost-analysis-page .stats-grid.cost-sub-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

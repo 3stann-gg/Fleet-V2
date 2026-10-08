@@ -1,0 +1,61 @@
+/* ==========================================================
+   RESET CSS
+   Fleet & Transportation Management System
+========================================================== */
+
+/* Box Sizing */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Images */
+
+img,
+picture {
+  display: block;
+  max-width: 100%;
+}
+
+/* Inputs */
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Buttons */
+
+button {
+  border: none;
+  outline: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* Links */
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Lists */
+
+ul,
+ol {
+  list-style: none;
+}
+
+/* Tables */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}

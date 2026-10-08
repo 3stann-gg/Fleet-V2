@@ -1,0 +1,903 @@
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  line-height: var(--line-height-tight);
+}
+
+.modal-header p {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.custom-modal {
+  width: 960px;
+  max-width: 100%;
+  max-height: min(90vh, 900px);
+  background: var(--modal-bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  position: relative;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  background: var(--modal-overlay);
+  padding: var(--space-5);
+  z-index: var(--z-modal);
+}
+
+.modal-overlay.show {
+  display: flex;
+  animation: modalShow var(--transition-normal) var(--ease-standard, ease);
+}
+
+.modal-close {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--btn-muted-bg);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.modal-close:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.modal-body {
+  padding: var(--space-6) var(--space-7);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-7);
+  border-top: 1px solid var(--color-border);
+  margin-top: 0;
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.secure-export-modal {
+  width: min(100%, 620px);
+}
+
+.secure-export-modal .form-grid {
+  grid-template-columns: 1fr;
+}
+
+.secure-export-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.secure-export-checkbox input {
+  width: 18px;
+  height: 18px;
+}
+
+.secure-export-password-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.secure-export-password-fields[hidden] {
+  display: none;
+}
+
+.secure-export-modal .field-error {
+  min-height: 1.25rem;
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .secure-export-password-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Edit modal footers: center Cancel/Update to match View modal balance */
+[id^="edit"] .modal-footer {
+  justify-content: center;
+}
+@keyframes modalShow {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+/* ==========================================
+   Delete Modal
+========================================== */
+
+.delete-modal {
+  width: min(100% - 32px, 460px);
+  max-width: 460px;
+  padding: 40px;
+  text-align: center;
+}
+
+.delete-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+
+  font-size: 42px;
+}
+
+.delete-modal h2 {
+  margin: 0 0 12px;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.delete-modal p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+.delete-note {
+  margin-top: 12px !important;
+}
+
+.delete-modal strong {
+  color: var(--color-text);
+}
+
+.delete-note {
+  margin-top: 10px;
+  color: var(--color-text-light);
+  font-size: 15px;
+}
+
+.delete-modal .modal-footer {
+  margin-top: 30px;
+  padding-top: 24px;
+
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+
+  border-top: 1px solid var(--color-border);
+}
+
+.delete-modal .btn-outline,
+.delete-modal .btn-danger {
+  min-width: 140px;
+  height: var(--control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-button);
+}
+
+/* ==========================================
+   View Dispatch Modal - Compact Details
+========================================= */
+
+#viewDispatchModal .custom-modal {
+  width: min(100% - 32px, 760px);
+}
+
+#viewDispatchModal .modal-body {
+  padding: 24px;
+}
+
+#viewDispatchModal .view-dispatch-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 576px) {
+  #viewDispatchModal .view-dispatch-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+#viewDispatchModal .view-dispatch-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewDispatchModal .view-dispatch-summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+#viewDispatchModal .view-dispatch-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+#viewDispatchModal .view-dispatch-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 640px) {
+  #viewDispatchModal .view-dispatch-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#viewDispatchModal .view-dispatch-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewDispatchModal .view-dispatch-detail-item label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#viewDispatchModal .view-dispatch-detail-item p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+#viewDispatchModal .view-dispatch-notes {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+#viewDispatchModal .view-dispatch-notes label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+#viewDispatchModal .view-dispatch-notes p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#viewDispatchModal .modal-footer {
+  margin-top: 24px;
+  padding: 20px 24px;
+  justify-content: center;
+  gap: 12px;
+}
+
+@media (max-width: 575px) {
+  #viewDispatchModal .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ==========================================
+   View Modals - Shared Compact Layout
+   (Driver, Reservation, Vehicle follow Dispatch)
+   ========================================== */
+
+#viewDriverModal .custom-modal,
+#viewReservationModal .custom-modal,
+#viewVehicleModal .custom-modal {
+  width: min(100% - 32px, 760px);
+}
+
+#viewDriverModal .modal-body,
+#viewReservationModal .modal-body,
+#viewVehicleModal .modal-body {
+  padding: 24px;
+}
+
+#viewDriverModal .modal-footer,
+#viewReservationModal .modal-footer,
+#viewVehicleModal .modal-footer {
+  margin-top: 24px;
+  padding: 20px 24px;
+  justify-content: center;
+  gap: 12px;
+}
+
+@media (max-width: 575px) {
+  #viewDriverModal .modal-footer,
+  #viewReservationModal .modal-footer,
+  #viewVehicleModal .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Driver summary */
+#viewDriverModal .view-driver-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 576px) {
+  #viewDriverModal .view-driver-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+#viewDriverModal .view-driver-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewDriverModal .view-driver-summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+#viewDriverModal .view-driver-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+/* Driver details */
+#viewDriverModal .view-driver-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 640px) {
+  #viewDriverModal .view-driver-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#viewDriverModal .view-driver-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewDriverModal .view-driver-detail-item label,
+#viewDriverModal .view-driver-notes label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#viewDriverModal .view-driver-detail-item p,
+#viewDriverModal .view-driver-notes p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+#viewDriverModal .view-driver-notes {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Reservation summary */
+#viewReservationModal .view-reservation-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 576px) {
+  #viewReservationModal .view-reservation-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+#viewReservationModal .view-reservation-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewReservationModal .view-reservation-summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+#viewReservationModal .view-reservation-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+/* Reservation details */
+#viewReservationModal .view-reservation-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 640px) {
+  #viewReservationModal .view-reservation-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#viewReservationModal .view-reservation-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewReservationModal .view-reservation-detail-item label,
+#viewReservationModal .view-reservation-notes label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#viewReservationModal .view-reservation-detail-item p,
+#viewReservationModal .view-reservation-notes p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+#viewReservationModal .view-reservation-notes {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Vehicle summary */
+#viewVehicleModal .view-vehicle-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 576px) {
+  #viewVehicleModal .view-vehicle-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+#viewVehicleModal .view-vehicle-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewVehicleModal .view-vehicle-summary-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+#viewVehicleModal .view-vehicle-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+/* Vehicle details */
+#viewVehicleModal .view-vehicle-details {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 640px) {
+  #viewVehicleModal .view-vehicle-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#viewVehicleModal .view-vehicle-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#viewVehicleModal .view-vehicle-detail-item label,
+#viewVehicleModal .view-vehicle-notes label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#viewVehicleModal .view-vehicle-detail-item p,
+#viewVehicleModal .view-vehicle-notes p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+#viewVehicleModal .view-vehicle-notes {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.delete-modal .modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+
+/* Account Management */
+/* ==========================================
+   Account Management Modal
+========================================== */
+
+#accountManagementModal {
+  position: fixed;
+  inset: 0;
+
+  width: 100vw;
+  height: 100vh;
+
+  z-index: var(--z-modal, 10000);
+}
+
+#accountManagementModal.show {
+  display: flex;
+}
+
+#accountManagementModal .custom-modal {
+  position: relative;
+
+  width: min(calc(100vw - 32px), 960px);
+  max-width: 960px;
+
+  max-height: calc(100vh - 48px);
+
+  margin: auto;
+
+  background: var(--modal-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  z-index: 10001;
+}
+
+/* Header */
+#accountManagementModal .modal-header {
+  padding: 24px 32px;
+  flex-shrink: 0;
+}
+
+/* Body */
+#accountManagementModal .modal-body {
+  padding: 28px 32px 32px;
+
+  min-height: 0;
+
+  flex: 1 1 auto;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Action selector */
+#accountManagementModal #accountManagementAction {
+  width: 100%;
+}
+
+/* Dynamic area */
+#accountManagementModal #accountManagementContent {
+  margin-top: 28px;
+  min-width: 0;
+}
+
+/* Forms */
+#accountManagementModal .form-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  column-gap: 28px;
+  row-gap: 22px;
+}
+
+#accountManagementModal .form-group {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+
+  min-width: 0;
+}
+
+#accountManagementModal .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+#accountManagementModal .form-group label {
+  margin: 0;
+}
+
+#accountManagementModal input,
+#accountManagementModal select,
+#accountManagementModal textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  box-sizing: border-box;
+}
+
+/* Dynamic containers */
+#accountManagementModal #updateAccountFormContainer,
+#accountManagementModal #deleteAccountDetails {
+  margin-top: 28px;
+
+  min-width: 0;
+}
+
+/* Notes */
+#accountManagementModal .settings-note {
+  margin-top: 22px;
+
+  line-height: 1.6;
+}
+
+/* Empty state */
+#accountManagementModal .settings-empty-state {
+  min-height: 90px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  text-align: center;
+}
+
+#accountManagementModal .settings-empty-state i {
+  font-size: 24px;
+}
+
+/* Footer */
+#accountManagementModal .modal-footer {
+  width: 100%;
+
+  margin-top: 28px;
+
+  padding: 22px 0 0;
+
+  border-top:
+    1px solid var(--color-border);
+
+  background: transparent;
+
+  justify-content: flex-end;
+
+  gap: 12px;
+
+  box-sizing: border-box;
+}
+
+/* Delete section */
+#accountManagementModal .account-delete-summary {
+  width: 100%;
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+}
+
+#accountManagementModal .account-delete-summary strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  color: var(--color-text);
+}
+
+#accountManagementModal .account-delete-summary p {
+  margin: 4px 0 0;
+
+  color: var(--color-text-muted);
+
+  line-height: 1.5;
+}
+
+#accountManagementModal
+  .account-delete-confirmation {
+  width: 100%;
+  min-width: 0;
+}
+
+#accountManagementModal
+  .account-delete-confirmation label {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  cursor: pointer;
+
+  color: var(--color-text);
+
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+#accountManagementModal
+  .account-delete-confirmation
+  input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+
+  min-width: 16px;
+  min-height: 16px;
+
+  flex: 0 0 16px;
+
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #accountManagementModal {
+    padding: 10px;
+  }
+
+  #accountManagementModal .custom-modal {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+  }
+
+  #accountManagementModal .modal-header {
+    padding: 20px;
+  }
+
+  #accountManagementModal .modal-body {
+    padding: 20px;
+  }
+
+  #accountManagementModal .form-grid {
+    grid-template-columns: 1fr;
+
+    row-gap: 18px;
+  }
+
+  #accountManagementModal .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  #accountManagementModal .modal-footer button {
+    width: 100%;
+  }
+}

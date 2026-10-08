@@ -1,0 +1,145 @@
+.driver-performance-charts {
+  margin-bottom: var(--section-gap);
+}
+
+.driver-performance-records {
+  overflow: visible;
+}
+
+.driver-performance-records .toolbar {
+  margin-bottom: var(--space-5);
+}
+
+.driver-performance-records .table-responsive {
+  overflow-x: auto;
+}
+
+.driver-performance-driver {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 190px;
+}
+
+.driver-performance-avatar {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+}
+
+.driver-performance-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.driver-performance-driver-name {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.driver-performance-driver-status {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.driver-performance-modal {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.driver-performance-profile {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.driver-performance-photo-wrap {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  margin-bottom: var(--space-3);
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--color-surface);
+  background: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-semibold);
+}
+
+.driver-performance-photo-wrap img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.driver-performance-detail-section + .driver-performance-detail-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.driver-performance-detail-section > h3 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+}
+
+.driver-performance-summary strong {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+}
+
+.driver-performance-recent-table {
+  min-width: 720px;
+}
+
+.driver-performance-route {
+  min-width: 200px;
+  max-width: 300px;
+  white-space: normal;
+}
+
+@media (max-width: 767px) {
+  .driver-performance-modal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .driver-performance-records .toolbar-left,
+  .driver-performance-records .toolbar-right {
+    width: 100%;
+  }
+
+  .driver-performance-records .search-box,
+  .driver-performance-records .filter-select,
+  .driver-performance-records .btn-outline {
+    width: 100%;
+  }
+}

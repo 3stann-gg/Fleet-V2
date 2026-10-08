@@ -1,0 +1,229 @@
+/* ==========================================================
+   MOTION SYSTEM — subtle, enterprise, reduced-motion aware
+========================================================== */
+
+/* ----- Global interactive defaults ----- */
+
+button,
+a,
+input,
+select,
+textarea,
+.nav-link,
+.export-menu-toggle,
+.export-menu-item,
+.pagination button,
+.action-btn,
+.icon-btn,
+.table-btn,
+.btn-filter,
+.modal-close,
+.profile-menu-item {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+/* Focus ring language (does not shift layout) */
+:where(
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: var(--focus-outline-width) solid var(--color-primary);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Soften hover elevation on elevated surfaces */
+.card:hover,
+.analytics-card:hover,
+.stat-card:hover {
+  box-shadow: var(--hover-shadow);
+}
+
+/* Dropdown / export open feel */
+.export-menu {
+  transform-origin: top right;
+  animation: fleetFadeSlideDown var(--transition-normal) var(--ease-out);
+}
+
+.sidebar-profile-menu {
+  /* existing open class drives visibility; keep motion subtle */
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear var(--duration-normal);
+}
+
+.sidebar-profile-wrap.is-open .sidebar-profile-menu {
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    visibility 0s linear 0s;
+}
+
+/* Modal entrance */
+.modal-overlay.show .custom-modal {
+  animation: fleetModalIn var(--transition-normal) var(--ease-out);
+}
+
+/* Utility motion classes (opt-in) */
+.fleet-fade-in {
+  animation: fleetFadeIn var(--transition-normal) var(--ease-out) both;
+}
+
+.fleet-slide-up {
+  animation: fleetSlideUp var(--transition-normal) var(--ease-out) both;
+}
+
+/* Keyframes — no bounce / elastic */
+@keyframes fleetFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fleetFadeSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fleetSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fleetModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fleetShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes fleetToastIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fleetToastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* ----- Scrollbar (theme-aware, restrained) ----- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-light);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Modal body scroll isolation */
+.modal-body {
+  overscroll-behavior: contain;
+}
+
+/* Page content entrance (subtle, optional on wrappers) */
+.page-wrapper {
+  animation: fleetFadeIn var(--duration-slow) var(--ease-out) both;
+}
+
+/* ----- Reduced motion ----- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .page-wrapper,
+  .export-menu,
+  .modal-overlay.show .custom-modal,
+  .toast-message,
+  .toast-message.show,
+  .fleet-fade-in,
+  .fleet-slide-up {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .skeleton,
+  .skeleton-line,
+  .skeleton-block,
+  .skeleton-circle {
+    animation: none !important;
+  }
+}

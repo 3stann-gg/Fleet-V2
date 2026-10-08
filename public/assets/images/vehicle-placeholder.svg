@@ -1,0 +1,19 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 320 200"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Vehicle placeholder</title>
+  <desc id="description">A neutral fleet vehicle illustration.</desc>
+  <rect width="320" height="200" fill="#f8fafc" />
+  <path d="M70 124h180l-16-46a22 22 0 0 0-21-15h-106a22 22 0 0 0-21 15z" fill="#b9f2da" />
+  <path d="M55 122h210a20 20 0 0 1 20 20v12H35v-12a20 20 0 0 1 20-20Z" fill="#00a86b" />
+  <path d="M99 76h49v42H82l10-30a18 18 0 0 1 7-12Zm73 0h40a18 18 0 0 1 16 11l10 31h-66z" fill="#e6ffef" />
+  <circle cx="92" cy="156" r="22" fill="#24313f" />
+  <circle cx="92" cy="156" r="9" fill="#fff" />
+  <circle cx="228" cy="156" r="22" fill="#24313f" />
+  <circle cx="228" cy="156" r="9" fill="#fff" />
+  <rect x="53" y="132" width="28" height="12" rx="6" fill="#fef3c7" />
+  <rect x="239" y="132" width="28" height="12" rx="6" fill="#fee2e2" />
+</svg>

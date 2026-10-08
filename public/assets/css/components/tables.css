@@ -1,0 +1,183 @@
+/* ==========================================
+   Fleet Table — design system
+========================================== */
+
+.fleet-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.fleet-table thead th {
+  text-align: left;
+  height: 48px;
+  padding: 12px 16px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.fleet-table tbody td {
+  height: 56px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  vertical-align: middle;
+  line-height: var(--line-height-snug);
+}
+
+.fleet-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.fleet-table tbody tr:hover {
+  background: var(--table-row-hover);
+}
+
+.fleet-table tbody tr:last-child td {
+  border-bottom-color: transparent;
+}
+
+/* Selected / bulk */
+.fleet-table tbody tr.is-selected,
+.fleet-table tbody tr.selected {
+  background: var(--color-primary-soft);
+}
+
+.fleet-table tbody tr.is-selected:hover,
+.fleet-table tbody tr.selected:hover {
+  background: var(--color-primary-soft);
+}
+
+/* Action column */
+.fleet-table td:last-child,
+.fleet-table th:last-child {
+  white-space: nowrap;
+}
+
+.fleet-table .action-buttons,
+.fleet-table .table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ==========================================
+   Sortable headers
+========================================== */
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.sortable:hover {
+  color: var(--color-primary);
+}
+
+.sortable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sort-icon {
+  margin-left: 6px;
+  font-size: 13px;
+  opacity: 0.45;
+  transition: opacity var(--transition-fast);
+}
+
+.sortable.active {
+  color: var(--color-primary);
+  font-weight: var(--font-semibold);
+}
+
+.sortable.active .sort-icon {
+  opacity: 1;
+}
+
+/* ==========================================
+   Empty / helper rows
+========================================== */
+
+.fleet-table .helper-row td,
+.fleet-table .empty-state td,
+.fleet-table tr[data-helper-row="true"] td {
+  height: auto;
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  border-bottom: none;
+  background: transparent;
+  animation: fleetFadeIn var(--duration-normal) var(--ease-out);
+}
+
+.fleet-table .helper-row:hover td,
+.fleet-table .empty-state:hover td {
+  background: transparent;
+}
+
+/* Module empty state panels */
+.fleet-empty-state,
+.route-empty-state,
+.empty-state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-9) var(--space-6);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.fleet-empty-state i,
+.route-empty-state i,
+.empty-state-panel i {
+  font-size: 40px;
+  color: var(--color-primary);
+  opacity: 0.9;
+}
+
+.fleet-empty-state h3,
+.route-empty-state h3,
+.empty-state-panel h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.fleet-empty-state p,
+.route-empty-state p,
+.empty-state-panel p {
+  margin: 0;
+  max-width: 28rem;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+  color: var(--color-text-muted);
+}
+
+/* Checkbox column */
+.fleet-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}

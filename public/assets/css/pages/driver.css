@@ -1,0 +1,95 @@
+/* ==========================================
+   Driver Print Report
+========================================== */
+
+.driver-print-header {
+  display: none;
+}
+
+.status-badge.out {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+@media print {
+  #sidebar,
+  #navbar,
+  .page-header,
+  .toolbar,
+  .bulk-toolbar,
+  .stats-grid,
+  .card-header,
+  .table-footer,
+  .action-buttons,
+  #add-driver-modal,
+  #view-driver-modal,
+  #edit-driver-modal,
+  #delete-driver-modal,
+  #toast,
+  #toastContainer {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+  }
+
+  .page-wrapper {
+    padding: 0 !important;
+  }
+
+  .table-responsive {
+    overflow: visible !important;
+  }
+
+  .card {
+    border: none;
+    box-shadow: none;
+  }
+
+  .driver-print-header {
+    display: block;
+    margin: 0 0 20px;
+    text-align: center;
+  }
+
+  .driver-print-header h1,
+  .driver-print-header h2,
+  .driver-print-header p {
+    margin: 0 0 6px;
+  }
+
+  .driver-print-header h1 {
+    font-size: 22px;
+  }
+
+  .driver-print-header h2 {
+    font-size: 18px;
+  }
+
+  .driver-print-header p {
+    color: #444;
+    font-size: 12px;
+  }
+
+  .fleet-table th:first-child,
+  .fleet-table td:first-child,
+  .fleet-table th:last-child,
+  .fleet-table td:last-child,
+  .driver-no-results,
+  .helper-row,
+  .empty-state {
+    display: none !important;
+  }
+}
+
+.driver-archived-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+

@@ -1,0 +1,925 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\VehicleController;
+use App\Http\Controllers\DriverController;
+use App\Http\Controllers\DriverPerformanceController;
+use App\Http\Controllers\ReservationController;
+use App\Http\Controllers\DispatchController;
+use App\Http\Controllers\MaintenanceController;
+use App\Http\Controllers\FuelLogController;
+use App\Http\Controllers\ChargingLogController;
+use App\Http\Controllers\RoutePlanController;
+use App\Http\Controllers\CostBudgetController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\FleetNotificationController;
+use App\Http\Controllers\FleetSearchController;
+use App\Http\Controllers\CostAnalysisController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\UserAccountController;
+use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\VehicleTrackingController;
+use App\Http\Controllers\HospitalFacilityController;
+use App\Http\Controllers\TripLogController;
+use App\Http\Controllers\PreTripChecklistController;
+use App\Http\Controllers\PostTripChecklistController;
+use App\Http\Controllers\SanitationLogController;
+use App\Http\Controllers\SecureReportExportController;
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC ROUTES
+|--------------------------------------------------------------------------
+*/  
+Route::get('/', function () {
+    return auth()->check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| AUTH ROUTES
+|--------------------------------------------------------------------------
+*/
+require __DIR__.'/auth.php';
+
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION ACTIVITY
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('auth')->post(
+        '/session/activity',
+        function (Request $request) {
+            $request->session()->put(
+                'last_user_activity',
+                now()->timestamp
+            );
+
+            return response()->json([
+                'success' => true,
+            ]);
+        }
+    )->name('session.activity');
+
+/*
+|--------------------------------------------------------------------------
+| AUTHENTICATED FLEET ROUTES
+|--------------------------------------------------------------------------
+*/
+Route::middleware([
+    'auth',
+    'verified',
+    'prevent.back.history',
+    'session.security',
+])->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | GLOBAL SERVICES
+    |--------------------------------------------------------------------------
+    |
+    | These are shared across Fleet pages and should not be tied to one
+    | specific module.
+    |
+    */
+    Route::get(
+        '/notifications',
+        [FleetNotificationController::class, 'index']
+    )->name('notifications.index');
+
+    Route::patch(
+        '/notifications/read-all',
+        [FleetNotificationController::class, 'markAllRead']
+    )->name('notifications.readAll');
+
+    Route::patch(
+        '/notifications/{notification}/read',
+        [FleetNotificationController::class, 'markRead']
+    )->name('notifications.read');
+
+    Route::get(
+        '/fleet-search',
+        [FleetSearchController::class, 'search']
+    )->name('fleet.search');
+
+    Route::post(
+        '/reports/secure-export/authorize',
+        [SecureReportExportController::class, 'authorizeExport']
+    )->name('reports.export.authorize');
+
+    Route::post(
+        '/reports/secure-export/csv',
+        [SecureReportExportController::class, 'downloadCsv']
+    )->name('reports.export.csv');
+
+    Route::get(
+        '/settings/data',
+        [SettingsController::class, 'show']
+    )->name('settings.data');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DASHBOARD
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:dashboard')->group(function () {
+
+        Route::get(
+            '/dashboard',
+            [DashboardController::class, 'index']
+        )->name('dashboard');
+
+        Route::get(
+            '/dashboard/data',
+            [DashboardController::class, 'data']
+        )->name('dashboard.data');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | PROFILE
+    |--------------------------------------------------------------------------
+    |
+    | All approved roles have at least Limited Access to Profile.
+    | Ownership / administrative rules will be enforced by policy.
+    |
+    */
+    Route::get(
+        '/profile',
+        [ProfileController::class, 'edit']
+    )->name('profile.edit');
+
+    Route::patch(
+        '/profile',
+        [ProfileController::class, 'update']
+    )->name('profile.update');
+
+    Route::put(
+        '/profile/password',
+        [ProfileController::class, 'updatePassword']
+    )->name('profile.password.update');
+
+    Route::delete(
+        '/profile',
+        [ProfileController::class, 'destroy']
+    )->name('profile.destroy');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | VEHICLE MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:vehicles')->group(function () {
+
+        Route::get(
+            '/fleet/search',
+            [VehicleController::class, 'index']
+        );
+
+        Route::get(
+            '/fleet/stats',
+            [VehicleController::class, 'stats']
+        )->name('vehicles.stats');
+
+        Route::post(
+            '/fleet/bulk-archive',
+            [VehicleController::class, 'bulkArchive']
+        )->name('vehicles.bulkArchive');
+
+        Route::get(
+            '/fleet',
+            [VehicleController::class, 'index']
+        )->name('fleet');
+
+        Route::get(
+            '/fleet/available',
+            [VehicleController::class, 'available']
+        );
+
+        Route::get(
+            '/fleet/capabilities',
+            [VehicleController::class, 'capabilities']
+        )->name('vehicles.capabilities');
+
+        Route::post(
+            '/fleet',
+            [VehicleController::class, 'store']
+        )->name('vehicles.store');
+
+        Route::get(
+            '/fleet/{vehicle}',
+            [VehicleController::class, 'show']
+        )->name('vehicles.show');
+
+        Route::put(
+            '/fleet/{vehicle}',
+            [VehicleController::class, 'update']
+        )->name('vehicles.update');
+
+        Route::post(
+            '/fleet/{vehicle}/archive',
+            [VehicleController::class, 'archive']
+        )->name('vehicles.archive');
+
+        Route::post(
+            '/fleet/{vehicle}/restore',
+            [VehicleController::class, 'restore']
+        )->name('vehicles.restore');
+
+        Route::get(
+            '/sanitation',
+            [SanitationLogController::class, 'index']
+        )->name('sanitation.index');
+
+        Route::post(
+            '/sanitation',
+            [SanitationLogController::class, 'store']
+        )->name('sanitation.store');
+
+        Route::get(
+            '/sanitation/{sanitationLog}',
+            [SanitationLogController::class, 'show']
+        )->name('sanitation.show');
+
+        Route::put(
+            '/sanitation/{sanitationLog}',
+            [SanitationLogController::class, 'update']
+        )->name('sanitation.update');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESERVATION MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:reservations')->group(function () {
+
+        Route::get(
+            '/reservation/stats',
+            [ReservationController::class, 'stats']
+        )->name('reservation.stats');
+
+        Route::get(
+            '/reservation/next-number',
+            [ReservationController::class, 'nextNumber']
+        )->name('reservation.next-number');
+
+        Route::get(
+            '/reservation/capabilities',
+            [ReservationController::class, 'capabilities']
+        )->name('reservation.capabilities');
+
+        Route::post(
+            '/reservation/bulk-archive',
+            [ReservationController::class, 'bulkArchive']
+        )->name('reservation.bulkArchive');
+
+        Route::get(
+            '/reservation/supply-delivery-shipments',
+            [ReservationController::class, 'supplyDeliveryShipments']
+        )->name('reservation.supply-delivery-shipments');
+
+        Route::get(
+            '/reservation/hospital-facilities',
+            [ReservationController::class, 'hospitalFacilities']
+        )->name('reservation.hospital-facilities');
+
+        Route::get(
+            '/reservation',
+            [ReservationController::class, 'index']
+        )->name('reservation.index');
+
+        Route::post(
+            '/reservation',
+            [ReservationController::class, 'store']
+        )->name('reservation.store');
+
+        Route::post(
+            '/reservation/{reservation}/approve',
+            [ReservationController::class, 'approve']
+        )->name('reservation.approve');
+
+        Route::post(
+            '/reservation/{reservation}/reject',
+            [ReservationController::class, 'reject']
+        )->name('reservation.reject');
+
+        Route::post(
+            '/reservation/{reservation}/archive',
+            [ReservationController::class, 'archive']
+        )->name('reservation.archive');
+
+        Route::post(
+            '/reservation/{reservation}/restore',
+            [ReservationController::class, 'restore']
+        )->name('reservation.restore');
+
+        Route::put(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'update']
+        )->name('reservation.update');
+
+        Route::get(
+            '/reservation/{reservation}',
+            [ReservationController::class, 'show']
+        )->name('reservation.show');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DISPATCH MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:dispatch')->group(function () {
+
+        Route::get(
+            '/dispatch',
+            [DispatchController::class, 'index']
+        )->name('dispatch');
+
+        Route::get(
+            '/dispatch/available-reservations',
+            [DispatchController::class, 'availableReservations']
+        )->name('dispatch.availableReservations');
+
+        Route::get(
+            '/dispatch/candidate-vehicles/{reservation}',
+            [DispatchController::class, 'candidateVehicles']
+        )->name('dispatch.candidate-vehicles');
+
+        Route::get(
+            '/dispatch/next-number',
+            [DispatchController::class, 'nextNumber']
+        )->name('dispatch.next-number');
+
+        Route::post(
+            '/dispatch',
+            [DispatchController::class, 'store']
+        )->name('dispatch.store');
+
+        Route::post(
+            '/dispatch/pre-trip-checklists',
+            [PreTripChecklistController::class, 'store']
+        )->name('dispatch.pre-trip.store');
+
+        Route::get(
+            '/dispatch/pre-trip-checklists/{preTripChecklist}',
+            [PreTripChecklistController::class, 'show']
+        )->name('dispatch.pre-trip.show');
+
+        Route::post(
+            '/dispatch/post-trip-checklists',
+            [PostTripChecklistController::class, 'store']
+        )->name('dispatch.post-trip.store');
+
+        Route::get(
+            '/dispatch/post-trip-checklists/{postTripChecklist}',
+            [PostTripChecklistController::class, 'show']
+        )->name('dispatch.post-trip.show');
+
+        Route::post(
+            '/dispatch/{dispatch}/accept',
+            [DispatchController::class, 'accept']
+        )->name('dispatch.accept');
+
+        Route::post(
+            '/dispatch/{dispatch}/request-reassignment',
+            [DispatchController::class, 'requestReassignment']
+        )->name('dispatch.request-reassignment');
+
+        Route::get(
+            '/dispatch/reassignments/{reassignment}/available-pairs',
+            [DispatchController::class, 'availableReassignmentPairs']
+        )->name('dispatch.reassignments.available-pairs');
+
+        Route::post(
+            '/dispatch/reassignments/{reassignment}/approve',
+            [DispatchController::class, 'approveReassignment']
+        )->name('dispatch.reassignments.approve');
+
+        Route::post(
+            '/dispatch/reassignments/{reassignment}/reject',
+            [DispatchController::class, 'rejectReassignment']
+        )->name('dispatch.reassignments.reject');
+
+        Route::post(
+            '/dispatch/bulk-archive',
+            [DispatchController::class, 'bulkArchive']
+        )->name('dispatch.bulkArchive');
+
+        Route::get(
+            '/dispatch/{dispatch}',
+            [DispatchController::class, 'show']
+        )->name('dispatch.show');
+
+        Route::put(
+            '/dispatch/{dispatch}',
+            [DispatchController::class, 'update']
+        )->name('dispatch.update');
+
+        Route::post(
+            '/dispatch/{dispatch}/archive',
+            [DispatchController::class, 'archive']
+        )->name('dispatch.archive');
+
+        Route::post(
+            '/dispatch/{dispatch}/restore',
+            [DispatchController::class, 'restore']
+        )->name('dispatch.restore');
+        
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DRIVER MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:drivers')->group(function () {
+
+        Route::get(
+            '/driver',
+            [DriverController::class, 'index']
+        )->name('driver');
+
+        Route::get(
+            '/drivers',
+            [DriverController::class, 'getDrivers']
+        )->name('drivers');
+
+        Route::get(
+            '/drivers/available',
+            [DriverController::class, 'available']
+        )->name('drivers.available');
+
+        Route::post(
+            '/drivers/{driver}/create-account',
+            [DriverController::class, 'createAccount']
+        )->name('drivers.create-account');
+
+        Route::post(
+            '/drivers',
+            [DriverController::class, 'store']
+        )->name('drivers.store');
+
+        Route::get(
+            '/drivers/{driver}',
+            [DriverController::class, 'show']
+        )->name('drivers.show');
+
+        Route::put(
+            '/drivers/{driver}',
+            [DriverController::class, 'update']
+        )->name('drivers.update');
+
+        Route::post(
+            '/drivers/bulk-archive',
+            [DriverController::class, 'bulkArchive']
+        )->name('drivers.bulkArchive');
+
+        Route::post(
+            '/drivers/{driver}/archive',
+            [DriverController::class, 'archive']
+        )->name('drivers.archive');
+
+        Route::post(
+            '/drivers/{driver}/restore',
+            [DriverController::class, 'restore']
+        )->name('drivers.restore');
+        
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DRIVER PERFORMANCE MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:driver_performance')->group(function () {
+
+        Route::get(
+            '/driver-performance',
+            [DriverPerformanceController::class, 'index']
+        )->name('driver-performance');
+
+        Route::get(
+            '/driver-performance/data',
+            [DriverPerformanceController::class, 'data']
+        )->name('driver-performance.data');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAINTENANCE MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:maintenance')->group(function () {
+
+        Route::get(
+            '/maintenance',
+            [MaintenanceController::class, 'index']
+        )->name('maintenance');
+
+        Route::get(
+            '/maintenance/available-vehicles',
+            [MaintenanceController::class, 'availableVehicles']
+        )->name('maintenance.availableVehicles');
+
+        Route::get(
+            '/maintenance/next-number',
+            [MaintenanceController::class, 'nextNumber']
+        )->name('maintenance.next-number');
+
+        Route::post(
+            '/maintenance',
+            [MaintenanceController::class, 'store']
+        )->name('maintenance.store');
+
+        Route::get(
+            '/maintenance/{maintenance}',
+            [MaintenanceController::class, 'show']
+        )->name('maintenance.show');
+
+        Route::put(
+            '/maintenance/{maintenance}',
+            [MaintenanceController::class, 'update']
+        )->name('maintenance.update');
+
+        Route::post(
+            '/maintenance/bulk-archive',
+            [MaintenanceController::class, 'bulkArchive']
+        )->name('maintenance.bulkArchive');
+
+        Route::post(
+            '/maintenance/{maintenance}/archive',
+            [MaintenanceController::class, 'archive']
+        )->name('maintenance.archive');
+
+        Route::post(
+            '/maintenance/{maintenance}/restore',
+            [MaintenanceController::class, 'restore']
+        )->name('maintenance.restore');
+        
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FUEL MANAGEMENT MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:fuel')->group(function () {
+
+        Route::get(
+            '/fuel',
+            [FuelLogController::class, 'page']
+        )->name('fuel');
+
+        Route::get(
+            '/fuel-records',
+            [FuelLogController::class, 'index']
+        )->name('fuel.index');
+
+        Route::get(
+            '/fuel-records/next-number',
+            [FuelLogController::class, 'nextNumber']
+        )->name('fuel.next-number');
+
+        Route::post(
+            '/fuel-records',
+            [FuelLogController::class, 'store']
+        )->name('fuel.store');
+
+        Route::delete(
+            '/fuel-records/bulk-delete',
+            [FuelLogController::class, 'bulkDelete']
+        )->name('fuel.bulk-delete');
+
+        Route::get(
+            '/fuel-records/{fuelLog}',
+            [FuelLogController::class, 'show']
+        )->name('fuel.show');
+
+        Route::put(
+            '/fuel-records/{fuelLog}',
+            [FuelLogController::class, 'update']
+        )->name('fuel.update');
+
+        Route::delete(
+            '/fuel-records/{fuelLog}',
+            [FuelLogController::class, 'destroy']
+        )->name('fuel.destroy');
+
+        Route::get(
+            '/charging-records',
+            [ChargingLogController::class, 'index']
+        )->name('charging.index');
+
+        Route::post(
+            '/charging-records',
+            [ChargingLogController::class, 'store']
+        )->name('charging.store');
+
+        Route::get(
+            '/charging-records/{chargingLog}',
+            [ChargingLogController::class, 'show']
+        )->name('charging.show');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROUTE PLANNING MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:route_planning')->group(function () {
+
+        Route::get(
+            '/route-planning',
+            [RoutePlanController::class, 'index']
+        )->name('route-planning');
+
+        Route::get(
+            '/route-planning/available-reservations',
+            [RoutePlanController::class, 'availableReservations']
+        )->name('route-planning.availableReservations');
+
+        Route::get(
+            '/route-planning/map-overview',
+            [RoutePlanController::class, 'mapOverview']
+        )->name('route-planning.map-overview');
+
+        Route::get(
+            '/route-planning/stats',
+            [RoutePlanController::class, 'stats']
+        )->name('route-planning.stats');
+
+        Route::get(
+            '/route-planning/next-number',
+            [RoutePlanController::class, 'nextNumber']
+        )->name('route-planning.nextNumber');
+
+        Route::post(
+            '/route-planning/traffic-route',
+            [RoutePlanController::class, 'trafficRoute']
+        )->name('route-planning.traffic-route');
+        
+        Route::get(
+            '/route-planning/{routePlan}',
+            [RoutePlanController::class, 'show']
+        )->name('route-planning.show');
+
+        Route::post(
+            '/route-planning',
+            [RoutePlanController::class, 'store']
+        )->name('route-planning.store');
+
+        Route::put(
+            '/route-planning/{routePlan}',
+            [RoutePlanController::class, 'update']
+        )->name('route-planning.update');
+
+        Route::post(
+            '/route-planning/{routePlan}/archive',
+            [RoutePlanController::class, 'archive']
+        )->name('route-planning.archive');
+
+        Route::post(
+            '/route-planning/{routePlan}/restore',
+            [RoutePlanController::class, 'restore']
+        )->name('route-planning.restore');
+
+        Route::post(
+            '/route-planning/{routePlan}/duplicate',
+            [RoutePlanController::class, 'duplicate']
+        )->name('route-planning.duplicate');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | COST ANALYSIS MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:cost_analysis')->group(function () {
+
+        Route::get(
+            '/cost-analysis',
+            [CostAnalysisController::class, 'index']
+        )->name('cost-analysis');
+
+        Route::get(
+            '/cost-analysis/data',
+            [CostAnalysisController::class, 'data']
+        )->name('cost-analysis.data');
+
+        Route::get(
+            '/cost-analysis/energy-analytics',
+            [CostAnalysisController::class, 'energyAnalytics']
+        )->name('cost-analysis.energy-analytics');
+
+        Route::get(
+            '/cost-analysis/budget',
+            [CostBudgetController::class, 'show']
+        )->name('cost-analysis.budget.show');
+
+        Route::put(
+            '/cost-analysis/budget',
+            [CostBudgetController::class, 'save']
+        )->name('cost-analysis.budget.save');
+
+        Route::delete(
+            '/cost-analysis/budget',
+            [CostBudgetController::class, 'clear']
+        )->name('cost-analysis.budget.clear');
+
+        Route::get(
+            '/cost-analysis/budget/history',
+            [CostBudgetController::class, 'history']
+        )->name('cost-analysis.budget.history');
+
+        Route::delete(
+            '/cost-analysis/budget/history',
+            [CostBudgetController::class, 'clearHistory']
+        )->name('cost-analysis.budget.history.clear');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPORTS
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:reports')->group(function () {
+
+        Route::get(
+            '/reports',
+            [ReportController::class, 'index']
+        )->name('reports');
+
+        Route::get(
+            '/reports/data',
+            [ReportController::class, 'data']
+        )->name('reports.data');
+
+        Route::post(
+            '/reports/audit-export',
+            [SecureReportExportController::class, 'authorizeExport']
+        )->name('reports.audit-export');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIT LOGS
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:audit_logs')->group(function () {
+
+        Route::get(
+            '/audit-logs',
+            [AuditLogController::class, 'index']
+        )->name('audit-logs.index');
+
+        Route::get(
+            '/audit-logs/{auditLog}',
+            [AuditLogController::class, 'show']
+        )->name('audit-logs.show');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | SETTINGS
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:settings')->group(function () {
+
+        Route::get(
+            '/settings',
+            [SettingsController::class, 'index']
+        )->name('settings');
+
+        Route::get(
+            '/settings/accounts',
+            [UserAccountController::class, 'index']
+        )->name('settings.accounts.index');
+
+        Route::post(
+            '/settings/accounts',
+            [UserAccountController::class, 'store']
+        )->name('settings.accounts.store');
+
+        Route::get(
+            '/settings/accounts/{user}',
+            [UserAccountController::class, 'show']
+        )->name('settings.accounts.show');
+
+        Route::patch(
+            '/settings/accounts/{user}',
+            [UserAccountController::class, 'update']
+        )->name('settings.accounts.update');
+
+        Route::put(
+            '/settings',
+            [SettingsController::class, 'update']
+        )->name('settings.update');
+
+        Route::post(
+            '/settings/reset',
+            [SettingsController::class, 'reset']
+        )->name('settings.reset');
+
+        Route::post(
+            '/settings/accounts/{user}/reset-password',
+            [UserAccountController::class, 'resetPassword']
+        )->name('settings.accounts.reset-password');
+
+        Route::delete(
+            '/settings/accounts/{user}',
+            [UserAccountController::class, 'destroy']
+        )->name('settings.accounts.destroy');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRACKING LOCATION
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/tracking/location', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'store',
+    ])
+        ->middleware('throttle:120,1')
+        ->name('tracking.location.store');
+
+    Route::get('/tracking/vehicles', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'vehicles',
+    ])
+        ->name('tracking.vehicles');
+
+    Route::get('/tracking/active-dispatch', [
+        \App\Http\Controllers\VehicleTrackingController::class,
+        'activeDispatch',
+    ])
+        ->name('tracking.active-dispatch');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | HOSPITAL FACILITIES
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/hospital-facilities/search', [HospitalFacilityController::class, 'search'])
+        ->name('hospital-facilities.search');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRIP LOG MODULE
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:dispatch')->group(function () {
+        Route::get(
+            '/trip-logs',
+            [TripLogController::class, 'index']
+        )->name('trip-logs');
+
+        Route::get(
+            '/trip-logs/{tripLog}',
+            [TripLogController::class, 'show']
+        )->name('trip-logs.show');
+
+        Route::post(
+            '/trip-logs/{dispatch}',
+            [TripLogController::class, 'store']
+        )->name('trip-logs.store');
+    });
+
+
+});

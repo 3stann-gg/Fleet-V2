@@ -1,0 +1,319 @@
+/* ==========================================
+   User Profile page
+========================================== */
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: var(--card-gap);
+  align-items: start;
+}
+
+.profile-overview-card {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.profile-overview-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+}
+
+.profile-avatar-preview {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 36px;
+  font-weight: var(--font-semibold);
+}
+
+.profile-avatar-preview.has-photo {
+  border-color: var(--color-primary);
+}
+
+.profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-overview-name {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  line-height: var(--line-height-tight);
+}
+
+.profile-overview-meta {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-snug);
+}
+
+.profile-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.profile-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  padding-bottom: 96px;
+}
+
+.profile-card .card-header {
+  margin-bottom: var(--space-5);
+}
+
+.profile-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+.profile-readonly-item label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-readonly-item p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text);
+}
+
+.profile-field-error {
+  margin-top: 6px;
+  font-size: var(--font-size-meta);
+  color: var(--color-danger-text);
+  font-weight: var(--font-medium);
+}
+
+.profile-field-error[hidden] {
+  display: none !important;
+}
+
+.profile-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.profile-action-bar.is-dirty,
+.profile-action-bar:has(#profileSaveBtn:not(:disabled)) {
+  border-color: var(--color-primary);
+}
+
+.profile-action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.profile-unsaved-badge {
+  display: inline-flex;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.profile-last-updated {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* Sidebar footer avatar photo support */
+.profile-avatar.has-photo {
+  background-color: transparent !important;
+  color: transparent !important;
+  background-repeat: no-repeat;
+}
+
+@media (max-width: 1199px) {
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-overview-card {
+    position: static;
+  }
+}
+
+@media (max-width: 767px) {
+  .profile-readonly-grid,
+  .profile-page .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-action-buttons {
+    flex-direction: column;
+  }
+
+  .profile-action-buttons .btn-primary,
+  .profile-action-buttons .btn-outline {
+    width: 100%;
+  }
+}
+
+/* Sidebar profile photo */
+.profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  object-fit: cover;
+  object-position: center;
+
+  border-radius: 50%;
+}
+
+
+/* Change Password Modal */
+.profile-password-modal {
+    width: min(100%, 720px);
+}
+
+.profile-password-modal .modal-body {
+    overflow-y: auto;
+}
+
+.profile-password-modal .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-password-modal .form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.profile-password-modal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .profile-password-modal .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-password-modal .form-group.full-width {
+        grid-column: auto;
+    }
+}
+
+/* Change Password Inputs */
+#changePasswordModal .password-input-wrapper {
+    position: relative !important;
+    width: 100%;
+}
+
+#changePasswordModal .password-input-wrapper input {
+    width: 100%;
+    padding-right: 46px !important;
+    box-sizing: border-box;
+}
+
+#changePasswordModal .password-toggle-btn {
+    position: absolute !important;
+
+    top: 50% !important;
+    right: 12px !important;
+
+    transform: translateY(-50%) !important;
+
+    width: 32px !important;
+    height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+
+    color: var(--color-text-muted);
+    cursor: pointer;
+
+    z-index: 5;
+}
+
+#changePasswordModal .password-toggle-btn i {
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+#changePasswordModal .password-toggle-btn:hover {
+    color: var(--color-text);
+}
+
+#changePasswordModal .password-toggle-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+}

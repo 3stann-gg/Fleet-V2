@@ -1,0 +1,164 @@
+/* ==========================================================
+   Export / action dropdowns (list card headers)
+========================================================== */
+
+.export-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  z-index: calc(var(--z-dropdown) + 1);
+}
+
+.export-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--control-height-sm);
+  height: var(--control-height-sm);
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.export-menu-toggle .export-menu-chevron {
+  font-size: 14px;
+  line-height: 1;
+  transition: transform var(--transition-fast);
+}
+
+.export-dropdown.is-open .export-menu-toggle .export-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.export-dropdown.is-open .export-menu-toggle {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface-secondary);
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: var(--z-dropdown);
+
+  display: none;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 6px;
+  margin: 0;
+
+  background: var(--dropdown-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+
+  list-style: none;
+}
+
+.export-dropdown.is-open .export-menu {
+  display: flex;
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.export-menu-item i {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.export-menu-item:hover,
+.export-menu-item:focus-visible {
+  background: var(--dropdown-hover);
+  color: var(--color-text);
+  outline: none;
+}
+
+.export-menu-item:hover i,
+.export-menu-item:focus-visible i {
+  color: var(--color-text);
+}
+
+.export-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* Card header action slot */
+.card-header {
+  overflow: visible;
+}
+
+.card-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.card-actions {
+  position: relative;
+  z-index: calc(var(--z-dropdown) + 1);
+  overflow: visible;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Keep list cards from clipping the floating menu (table scroll stays on .table-responsive) */
+.card:has(> .card-header .export-dropdown) {
+  overflow: visible;
+}
+
+@media (max-width: 767px) {
+  .card-header .card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .export-dropdown {
+    width: 100%;
+  }
+
+  .export-menu-toggle {
+    width: 100%;
+  }
+
+  .export-menu {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .export-menu-toggle .export-menu-chevron,
+  .export-menu-item {
+    transition: none;
+  }
+}
