@@ -109,6 +109,7 @@ function createDispatchCandidateRow(prefix, candidate, allowSelection) {
         candidate.readiness,
         candidate.capabilities,
         candidate.driver_match,
+        candidate.driver_license,
         candidate.energy,
         candidate.operational_health,
     ].forEach((check) => {

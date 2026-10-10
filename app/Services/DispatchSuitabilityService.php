@@ -18,13 +18,14 @@ class DispatchSuitabilityService
 
     public function __construct(
         private VehicleOperationalHealthService $operationalHealth,
+        private DriverLicenseCompatibilityService $driverLicenseCompatibility,
     ) {}
 
     /** @return array<string, mixed> */
     public function compare(Reservation $reservation, ?Driver $driver = null): array
     {
         $reservation->loadMissing(['requiredCapabilities', 'routePlan']);
-        $driver?->loadMissing('qualifications');
+        $driver?->loadMissing(['qualifications', 'licenseCodes']);
 
         $candidates = Vehicle::query()
             ->whereNull('archived_at')
@@ -76,7 +77,7 @@ class DispatchSuitabilityService
             'latestPostTripChecklist',
             'activeSanitationLog',
         ]);
-        $driver?->loadMissing('qualifications');
+        $driver?->loadMissing(['qualifications', 'licenseCodes']);
 
         $reasons = collect();
         $warnings = collect();
@@ -100,6 +101,14 @@ class DispatchSuitabilityService
         $driverCheck = $this->driverCheck($driver, $vehicle);
         $this->collectCheck($driverCheck, $reasons, $warnings, $blockingConcerns, $informationGaps);
         $essentialInformationMissing = $essentialInformationMissing || ($driverCheck['essential_gap'] ?? false);
+
+        $driverLicense = $this->driverLicenseCompatibility->evaluate($driver, $vehicle);
+        $this->collectCheck($driverLicense, $reasons, $warnings, $blockingConcerns, $informationGaps);
+        $reasons->push(...($driverLicense['reasons'] ?? []));
+        $warnings->push(...($driverLicense['warnings'] ?? []));
+        $blockingConcerns->push(...($driverLicense['blocking_concerns'] ?? []));
+        $informationGaps->push(...($driverLicense['information_gaps'] ?? []));
+        $essentialInformationMissing = $essentialInformationMissing || ($driverLicense['essential_gap'] ?? false);
 
         $energy = $this->energyCheck($reservation, $vehicle);
         $this->collectCheck($energy, $reasons, $warnings, $blockingConcerns, $informationGaps);
@@ -147,6 +156,7 @@ class DispatchSuitabilityService
             'lifecycle' => $lifecycle,
             'capabilities' => $capability,
             'driver_match' => $driverCheck,
+            'driver_license' => $driverLicense,
             'energy' => $energy,
             'registration' => $registration,
             'insurance' => $insurance,
@@ -207,39 +217,23 @@ class DispatchSuitabilityService
                 'neutral',
                 'Not Evaluated - No Driver Selected',
                 'Driver qualification was not evaluated because no driver is selected.',
-            ) + ['qualification' => null, 'license' => null];
+            ) + ['qualification' => null];
         }
 
         $qualification = $driver->qualificationAdvisory($vehicle->vehicle_type);
-        $license = $this->operationalHealth->driverLicenseAdvisory($driver);
-
-        if ($license['state'] === 'expired') {
-            return $this->check('blocking', 'License Expired', "Selected driver's license has expired.")
-                + compact('qualification', 'license');
-        }
 
         if ($qualification['state'] === 'warning') {
             return $this->check('blocking', $qualification['label'], $qualification['message'])
-                + compact('qualification', 'license');
+                + compact('qualification');
         }
 
         if ($qualification['is_qualified'] === null) {
             return $this->check('gap', 'Qualification Information Unavailable', $qualification['message'], true)
-                + compact('qualification', 'license');
-        }
-
-        if (str_starts_with($license['state'], 'expiring_')) {
-            return $this->check('warning', 'Qualified - License Expiring Soon', "Driver is qualified; license is {$license['label']}.")
-                + compact('qualification', 'license');
-        }
-
-        if ($license['state'] === 'not_recorded') {
-            return $this->check('neutral', 'Qualified - License Expiry Not Recorded', $qualification['message'])
-                + compact('qualification', 'license');
+                + compact('qualification');
         }
 
         return $this->check('suitable', 'Qualified', $qualification['message'])
-            + compact('qualification', 'license');
+            + compact('qualification');
     }
 
     /** @return array<string, mixed> */
@@ -293,7 +287,7 @@ class DispatchSuitabilityService
     /** @param array<string, mixed> $advisory */
     private function registrationCheck(Vehicle $vehicle, array $advisory): array
     {
-        if (!$vehicle->isMotorcycle() && $vehicle->registration_expiry === null) {
+        if (! $vehicle->isMotorcycle() && $vehicle->registration_expiry === null) {
             return $this->check('neutral', 'Not Applicable', 'Registration expiry is not structurally required for this legacy non-motorcycle vehicle.')
                 + ['state' => 'not_applicable', 'days_remaining' => null, 'date' => null];
         }

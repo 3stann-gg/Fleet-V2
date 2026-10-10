@@ -237,6 +237,15 @@ async function initDriverAdd() {
           document.getElementById("driverLicenseExpiry").value,
       );
       formData.append(
+          "clutch_authorization",
+          document.getElementById("driverClutchAuthorization")?.value || "",
+      );
+      document
+          .querySelectorAll('#driverDlCodeOptions input[type="checkbox"]:checked')
+          .forEach((checkbox) => {
+              formData.append("dl_codes[]", checkbox.value);
+          });
+      formData.append(
           "contact_number",
           document.getElementById("driverPhone").value,
       );

@@ -322,6 +322,10 @@ async function initVehicleAdd() {
             plate_number:
                 document.getElementById("vehiclePlate")?.value.trim() || "",
             vehicle_type: document.getElementById("vehicleType")?.value || "",
+            lto_vehicle_category:
+                document.getElementById("vehicleLtoCategory")?.value || null,
+            transmission_type:
+                document.getElementById("vehicleTransmissionType")?.value || null,
             department:
                 document.getElementById("vehicleDepartment")?.value || null,
             brand: document.getElementById("vehicleBrand")?.value.trim() || "",
@@ -351,8 +355,6 @@ async function initVehicleAdd() {
         if (formData.vehicle_type === "Motorcycle") {
             formData.engine_displacement_cc =
                 document.getElementById("vehicleEngineDisplacement")?.value || null;
-            formData.transmission_type =
-                document.getElementById("vehicleTransmissionType")?.value || null;
             formData.helmet_available =
                 document.getElementById("vehicleHelmetAvailable")?.value || null;
             formData.cargo_box_available =

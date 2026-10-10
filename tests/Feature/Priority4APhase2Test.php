@@ -19,6 +19,7 @@ function p42Vehicle(array $attributes = []): Vehicle
     return Vehicle::query()->create(array_merge([
         'plate_number' => fake()->unique()->bothify('P42-####'),
         'vehicle_type' => 'Service Vehicle',
+        'lto_vehicle_category' => 'M1',
         'department' => 'Logistics',
         'brand' => 'Test',
         'model' => 'Candidate',
@@ -28,6 +29,7 @@ function p42Vehicle(array $attributes = []): Vehicle
         'tank_capacity' => 50,
         'current_fuel' => 30,
         'current_odometer' => 100,
+        'transmission_type' => 'automatic',
         'insurance_expiry' => now()->addYear()->toDateString(),
         'status' => 'Available',
         'readiness_status' => 'ready',
@@ -36,15 +38,20 @@ function p42Vehicle(array $attributes = []): Vehicle
 
 function p42Driver(array $attributes = []): Driver
 {
-    return Driver::query()->create(array_merge([
+    $driver = Driver::query()->create(array_merge([
         'first_name' => 'Phase',
         'last_name' => fake()->unique()->lastName(),
         'license_number' => fake()->unique()->bothify('P42-LIC-####'),
         'license_class' => 'Professional',
+        'clutch_authorization' => 'MT',
         'license_expiry' => now()->addYear()->toDateString(),
         'contact_number' => '09170000000',
         'status' => 'Available',
     ], $attributes));
+
+    $driver->licenseCodes()->create(['code' => 'B']);
+
+    return $driver;
 }
 
 function p42Reservation(array $attributes = [], ?float $distance = 20): Reservation
@@ -181,7 +188,12 @@ it('maps readiness and lifecycle concerns without changing them', function (arra
     'in use lifecycle' => [['status' => 'On Trip', 'readiness_status' => 'in_use'], 'not_recommended'],
 ]);
 
-it('evaluates driver qualification and license separately', function (string $case, string $expectedLabel, string $expectedStatus) {
+it('evaluates driver qualification and legal license separately', function (
+    string $case,
+    string $expectedQualification,
+    string $expectedLicense,
+    string $expectedStatus,
+) {
     $vehicle = p42Vehicle(['vehicle_type' => 'Ambulance']);
     $driver = p42Driver([
         'license_expiry' => $case === 'expired'
@@ -194,14 +206,15 @@ it('evaluates driver qualification and license separately', function (string $ca
 
     $result = p42Evaluate(p42Reservation(), $vehicle, $driver);
 
-    expect($result['driver_match']['label'])->toBe($expectedLabel)
+    expect($result['driver_match']['label'])->toBe($expectedQualification)
+        ->and($result['driver_license']['license_expiry_status']['label'])->toBe($expectedLicense)
         ->and($result['status'])->toBe($expectedStatus);
 })->with([
-    'qualified' => ['qualified', 'Qualified', 'suitable'],
-    'mismatch' => ['mismatch', 'Qualification Mismatch', 'not_recommended'],
-    'expired license' => ['expired', 'License Expired', 'not_recommended'],
-    'null license expiry' => ['null_license', 'Qualified - License Expiry Not Recorded', 'suitable'],
-    'unknown qualification' => ['unknown_qualification', 'Qualification Information Unavailable', 'insufficient_information'],
+    'qualified' => ['qualified', 'Qualified', 'Valid', 'suitable_with_advisory'],
+    'mismatch' => ['mismatch', 'Qualification Mismatch', 'Valid', 'not_recommended'],
+    'expired license' => ['expired', 'Qualified', 'Expired', 'not_recommended'],
+    'null license expiry' => ['null_license', 'Qualified', 'Not Recorded', 'insufficient_information'],
+    'unknown qualification' => ['unknown_qualification', 'Qualification Information Unavailable', 'Valid', 'insufficient_information'],
 ]);
 
 it('does not fail candidates when no driver is selected', function () {

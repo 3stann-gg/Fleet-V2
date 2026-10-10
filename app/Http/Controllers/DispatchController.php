@@ -3,25 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\Dispatch;
-use App\Models\Reservation;
-use App\Models\FleetSetting;
 use App\Models\DispatchReassignment;
-use App\Models\User;
 use App\Models\Driver;
+use App\Models\FleetSetting;
+use App\Models\Reservation;
+use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\FleetNotificationService;
 use App\Services\AuditLogService;
 use App\Services\DispatchRecommendationService;
 use App\Services\DispatchSuitabilityService;
+use App\Services\FleetNotificationService;
 use App\Services\GeminiDispatchExplanationService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-
 
 class DispatchController extends Controller
-{   
+{
     use AuthorizesRequests;
 
     private function getDispatchSettings(): array
@@ -33,20 +32,21 @@ class DispatchController extends Controller
             $record?->settings ?? [];
         $dispatchSettings =
             $settings['dispatch'] ?? [];
+
         return [
-            'showCompletedDays' =>
-                max(
-                    1,
-                    min(
-                        90,
-                        (int) (
-                            $dispatchSettings['showCompletedDays']
-                            ?? 7
-                        )
+            'showCompletedDays' => max(
+                1,
+                min(
+                    90,
+                    (int) (
+                        $dispatchSettings['showCompletedDays']
+                        ?? 7
                     )
-                ),
+                )
+            ),
         ];
     }
+
     /**
      * Set vehicle and driver statuses when the trip starts.
      */
@@ -75,8 +75,7 @@ class DispatchController extends Controller
         ) {
             $reservation->vehicle->update([
                 'status' => 'Available',
-                'readiness_status' =>
-                    $reservation->vehicle->readiness_status === 'in_use'
+                'readiness_status' => $reservation->vehicle->readiness_status === 'in_use'
                         ? 'ready'
                         : $reservation->vehicle->readiness_status,
             ]);
@@ -106,7 +105,7 @@ class DispatchController extends Controller
         | Vehicle Validation
         |--------------------------------------------------------------------------
         */
-        if (!$vehicle) {
+        if (! $vehicle) {
             throw new \Exception(
                 'No vehicle is assigned to this reservation.'
             );
@@ -123,7 +122,7 @@ class DispatchController extends Controller
         | Driver Validation
         |--------------------------------------------------------------------------
         */
-        if (!$driver) {
+        if (! $driver) {
             throw new \Exception(
                 'No driver is assigned to this reservation.'
             );
@@ -131,7 +130,7 @@ class DispatchController extends Controller
 
         if ($driver->status !== 'Available') {
             $driverName = trim(
-                ($driver->first_name ?? '') . ' ' .
+                ($driver->first_name ?? '').' '.
                 ($driver->last_name ?? '')
             );
 
@@ -159,6 +158,7 @@ class DispatchController extends Controller
         $query = Dispatch::with([
             'reservation.vehicle.capabilities',
             'reservation.driver.qualifications',
+            'reservation.driver.licenseCodes',
             'reservation.requiredCapabilities',
             'reservation.routePlan.stops',
 
@@ -231,7 +231,7 @@ class DispatchController extends Controller
         | Completed dispatches are shown only within the number
         | of days configured in Fleet Settings.
         */
-        if (!$request->boolean('show_archived')) {
+        if (! $request->boolean('show_archived')) {
             $query->where(function ($query) use ($completedCutoff) {
                 $query
                     ->where(
@@ -281,31 +281,25 @@ class DispatchController extends Controller
                 'dispatches' => $dispatches,
 
                 'settings' => [
-                    'show_completed_days' =>
-                        $dispatchSettings['showCompletedDays'],
+                    'show_completed_days' => $dispatchSettings['showCompletedDays'],
                 ],
             ]);
         }
 
         $dispatchPermissions = [
-            'role' =>
-                $user->role,
-            'canCreate' =>
-                $user->can(
-                    'create',
-                    Dispatch::class
-                ),
-            'canUpdate' =>
-                $user->hasPermission('dispatch.update')
-                    && !$user->hasRole('driver'),
-            'canArchive' =>
-                $user->hasPermission('dispatch.archive'),
-            'canBulkArchive' =>
-                $user->hasPermission('dispatch.archive'),
-            'canRestore' =>
-                $user->hasPermission('dispatch.archive'),
+            'role' => $user->role,
+            'canCreate' => $user->can(
+                'create',
+                Dispatch::class
+            ),
+            'canUpdate' => $user->hasPermission('dispatch.update')
+                    && ! $user->hasRole('driver'),
+            'canArchive' => $user->hasPermission('dispatch.archive'),
+            'canBulkArchive' => $user->hasPermission('dispatch.archive'),
+            'canRestore' => $user->hasPermission('dispatch.archive'),
             'canReviewReassignment' => $user->hasRole('dispatcher'),
         ];
+
         return view(
             'dispatch.index',
             compact('dispatchPermissions')
@@ -313,9 +307,9 @@ class DispatchController extends Controller
     }
 
     /**
-    * Generate an explainable AI-based dispatch recommendation
-    * for an approved Reservation.
-    */
+     * Generate an explainable AI-based dispatch recommendation
+     * for an approved Reservation.
+     */
     public function recommendation(
         Reservation $reservation,
         DispatchRecommendationService $recommendationService,
@@ -332,16 +326,14 @@ class DispatchController extends Controller
         if ($reservation->status !== 'Approved') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Only Approved reservations can receive a dispatch recommendation.',
+                'message' => 'Only Approved reservations can receive a dispatch recommendation.',
             ], 422);
         }
 
-        if (!$reservation->routePlan) {
+        if (! $reservation->routePlan) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'A Route Plan is required before generating a dispatch recommendation.',
+                'message' => 'A Route Plan is required before generating a dispatch recommendation.',
             ], 422);
         }
 
@@ -351,16 +343,14 @@ class DispatchController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'The Route Plan must be Ready For Dispatch before generating a dispatch recommendation.',
+                'message' => 'The Route Plan must be Ready For Dispatch before generating a dispatch recommendation.',
             ], 422);
         }
 
         if ($reservation->dispatch()->exists()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation already has a Dispatch.',
+                'message' => 'This reservation already has a Dispatch.',
             ], 422);
         }
 
@@ -386,107 +376,83 @@ class DispatchController extends Controller
         $recommendation['gemini_available'] = false;
         $recommendation['gemini_explanation'] = null;
 
-        if (!empty($recommendation['recommended'])) {
+        if (! empty($recommendation['recommended'])) {
             $recommended =
                 $recommendation['recommended'];
 
             try {
                 $recommendation['gemini_explanation'] =
                     $geminiService->explain([
-                        'reservation_number' =>
-                            $reservation->reservation_number,
+                        'reservation_number' => $reservation->reservation_number,
 
-                        'priority' =>
-                            $reservation->priority,
+                        'priority' => $reservation->priority,
 
-                        'vehicle_label' =>
-                            $recommended['vehicle_label']
+                        'vehicle_label' => $recommended['vehicle_label']
                                 ?? 'Unavailable',
 
-                        'driver_name' =>
-                            $recommended['driver_name']
+                        'driver_name' => $recommended['driver_name']
                                 ?? 'Unavailable',
 
-                        'score' =>
-                            $recommended['score']
+                        'score' => $recommended['score']
                                 ?? 0,
 
-                        'availability_score' =>
-                            25,
+                        'availability_score' => 25,
 
-                        'proximity_score' =>
-                            $recommended['proximity_score']
+                        'proximity_score' => $recommended['proximity_score']
                                 ?? 0,
 
-                        'assigned_fit_score' =>
-                            $recommended['assigned_fit_score']
+                        'assigned_fit_score' => $recommended['assigned_fit_score']
                                 ?? 0,
 
-                        'priority_score' =>
-                            $recommended['priority_score']
+                        'priority_score' => $recommended['priority_score']
                                 ?? 0,
 
-                        'gps_freshness_score' =>
-                            $recommended['gps_freshness_score']
+                        'gps_freshness_score' => $recommended['gps_freshness_score']
                                 ?? 0,
 
-                        'traffic_score' =>
-                            $recommended['traffic_score']
+                        'traffic_score' => $recommended['traffic_score']
                                 ?? 0,
 
-                        'fuel_score' =>
-                            $recommended['fuel_score']
+                        'fuel_score' => $recommended['fuel_score']
                                 ?? 0,
 
-                        'fuel_percentage' =>
-                            $recommended['fuel_percentage']
+                        'fuel_percentage' => $recommended['fuel_percentage']
                                 ?? null,
 
-                        'vehicle_suitability_score' =>
-                            $recommended['vehicle_suitability_score']
+                        'vehicle_suitability_score' => $recommended['vehicle_suitability_score']
                                 ?? 0,
 
-                        'maintenance_score' =>
-                            $recommended['maintenance_score']
+                        'maintenance_score' => $recommended['maintenance_score']
                                 ?? 0,
 
-                        'maintenance_status' =>
-                            $recommended['maintenance_status']
+                        'maintenance_status' => $recommended['maintenance_status']
                                 ?? 'Unavailable',
 
-                        'maintenance_next_schedule' =>
-                            $recommended['maintenance_next_schedule']
+                        'maintenance_next_schedule' => $recommended['maintenance_next_schedule']
                                 ?? null,
 
-                        'distance_to_pickup_km' =>
-                            $recommended['distance_to_pickup_km']
+                        'distance_to_pickup_km' => $recommended['distance_to_pickup_km']
                                 ?? 'Unavailable',
 
-                        'traffic_eta_minutes' =>
-                            $recommended['traffic_eta_minutes']
+                        'traffic_eta_minutes' => $recommended['traffic_eta_minutes']
                                 ?? 'Unavailable',
 
-                        'traffic_delay_minutes' =>
-                            $recommended['traffic_delay_minutes']
+                        'traffic_delay_minutes' => $recommended['traffic_delay_minutes']
                                 ?? 'Unavailable',
 
-                        'traffic_provider' =>
-                            $recommended['traffic_provider']
+                        'traffic_provider' => $recommended['traffic_provider']
                                 ?? 'Unavailable',
 
-                        'has_live_location' =>
-                            $recommended['has_live_location']
+                        'has_live_location' => $recommended['has_live_location']
                                 ?? false,
 
-                        'location_age_seconds' =>
-                            $recommended['location_age_seconds']
+                        'location_age_seconds' => $recommended['location_age_seconds']
                                 ?? null,
 
-                        'reasons' =>
-                            $recommended['reasons']
+                        'reasons' => $recommended['reasons']
                                 ?? [],
                     ]);
-                
+
                 $recommendation['gemini_summary'] =
                     $recommendation['gemini_explanation']['summary']
                         ?? null;
@@ -519,7 +485,7 @@ class DispatchController extends Controller
         );
     }
 
-   public function reassignmentRecommendation(
+    public function reassignmentRecommendation(
         Request $request,
         DispatchReassignment $reassignment,
         DispatchRecommendationService $recommendationService,
@@ -553,50 +519,44 @@ class DispatchController extends Controller
         if ($dispatch->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived dispatch cannot receive a reassignment recommendation.',
+                'message' => 'Archived dispatch cannot receive a reassignment recommendation.',
             ], 422);
         }
 
         if ($lockedReassignment->status !== 'Requested') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reassignment request has already been reviewed.',
+                'message' => 'This reassignment request has already been reviewed.',
             ], 422);
         }
 
         if ($dispatch->trip_status !== 'Pending') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'AI reassignment recommendation is only available while the dispatch is Pending.',
+                'message' => 'AI reassignment recommendation is only available while the dispatch is Pending.',
             ], 422);
         }
 
         $reservation = $dispatch->reservation;
 
-        if (!$reservation) {
+        if (! $reservation) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'The reservation associated with this dispatch was not found.',
+                'message' => 'The reservation associated with this dispatch was not found.',
             ], 422);
         }
 
         if ($reservation->status !== 'Approved') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Only Approved reservations can receive a reassignment recommendation.',
+                'message' => 'Only Approved reservations can receive a reassignment recommendation.',
             ], 422);
         }
 
-        if (!$reservation->vehicle) {
+        if (! $reservation->vehicle) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'The reservation has no assigned vehicle.',
+                'message' => 'The reservation has no assigned vehicle.',
             ], 422);
         }
 
@@ -605,8 +565,7 @@ class DispatchController extends Controller
         if ($currentDriverId <= 0) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'The dispatch does not have a valid current driver assignment.',
+                'message' => 'The dispatch does not have a valid current driver assignment.',
             ], 422);
         }
 
@@ -636,7 +595,7 @@ class DispatchController extends Controller
         $recommendation['gemini_factors'] = [];
         $recommendation['gemini_limitations'] = [];
 
-        if (!empty($recommendation['recommended'])) {
+        if (! empty($recommendation['recommended'])) {
             $recommended = $recommendation['recommended'];
             /*
             |--------------------------------------------------------------------------
@@ -647,107 +606,81 @@ class DispatchController extends Controller
             | even after the reassignment request has already been approved.
             */
             $lockedReassignment->update([
-                'recommended_vehicle_id' =>
-                    $recommended['vehicle_id'] ?? null,
-                'recommended_driver_id' =>
-                    $recommended['driver_id'] ?? null,
+                'recommended_vehicle_id' => $recommended['vehicle_id'] ?? null,
+                'recommended_driver_id' => $recommended['driver_id'] ?? null,
             ]);
 
             try {
                 $recommendation['gemini_explanation'] =
                     $geminiService->explain([
-                        'reservation_number' =>
-                            $reservation->reservation_number,
+                        'reservation_number' => $reservation->reservation_number,
 
-                        'priority' =>
-                            $reservation->priority,
+                        'priority' => $reservation->priority,
 
-                        'vehicle_label' =>
-                            $recommended['vehicle_label']
+                        'vehicle_label' => $recommended['vehicle_label']
                                 ?? 'Unavailable',
 
-                        'driver_name' =>
-                            $recommended['driver_name']
+                        'driver_name' => $recommended['driver_name']
                                 ?? 'Unavailable',
 
-                        'score' =>
-                            $recommended['score']
+                        'score' => $recommended['score']
                                 ?? 0,
 
-                        'availability_score' =>
-                            $recommended['availability_score']
+                        'availability_score' => $recommended['availability_score']
                                 ?? 25,
 
-                        'proximity_score' =>
-                            $recommended['proximity_score']
+                        'proximity_score' => $recommended['proximity_score']
                                 ?? 0,
 
-                        'assigned_fit_score' =>
-                            $recommended['assigned_fit_score']
+                        'assigned_fit_score' => $recommended['assigned_fit_score']
                                 ?? 0,
 
-                        'priority_score' =>
-                            $recommended['priority_score']
+                        'priority_score' => $recommended['priority_score']
                                 ?? 0,
 
-                        'gps_freshness_score' =>
-                            $recommended['gps_freshness_score']
+                        'gps_freshness_score' => $recommended['gps_freshness_score']
                                 ?? 0,
 
-                        'traffic_score' =>
-                            $recommended['traffic_score']
+                        'traffic_score' => $recommended['traffic_score']
                                 ?? 0,
 
-                        'fuel_score' =>
-                            $recommended['fuel_score']
+                        'fuel_score' => $recommended['fuel_score']
                                 ?? 0,
 
-                        'fuel_percentage' =>
-                            $recommended['fuel_percentage']
+                        'fuel_percentage' => $recommended['fuel_percentage']
                                 ?? null,
 
-                        'vehicle_suitability_score' =>
-                            $recommended['vehicle_suitability_score']
+                        'vehicle_suitability_score' => $recommended['vehicle_suitability_score']
                                 ?? 0,
 
-                        'maintenance_score' =>
-                            $recommended['maintenance_score']
+                        'maintenance_score' => $recommended['maintenance_score']
                                 ?? 0,
 
-                        'maintenance_status' =>
-                            $recommended['maintenance_status']
+                        'maintenance_status' => $recommended['maintenance_status']
                                 ?? 'Unavailable',
 
-                        'maintenance_next_schedule' =>
-                            $recommended['maintenance_next_schedule']
+                        'maintenance_next_schedule' => $recommended['maintenance_next_schedule']
                                 ?? null,
 
-                        'distance_to_pickup_km' =>
-                            $recommended['distance_to_pickup_km']
+                        'distance_to_pickup_km' => $recommended['distance_to_pickup_km']
                                 ?? 'Unavailable',
 
-                        'traffic_eta_minutes' =>
-                            $recommended['traffic_eta_minutes']
+                        'traffic_eta_minutes' => $recommended['traffic_eta_minutes']
                                 ?? 'Unavailable',
 
-                        'traffic_delay_minutes' =>
-                            $recommended['traffic_delay_minutes']
+                        'traffic_delay_minutes' => $recommended['traffic_delay_minutes']
                                 ?? 'Unavailable',
 
-                        'traffic_provider' =>
-                            $recommended['traffic_provider']
+                        'traffic_provider' => $recommended['traffic_provider']
                                 ?? 'Unavailable',
 
-                        'has_live_location' =>
-                            $recommended['has_live_location']
+                        'has_live_location' => $recommended['has_live_location']
                                 ?? false,
 
-                        'location_age_seconds' =>
-                            $recommended['location_age_seconds']
+                        'location_age_seconds' => $recommended['location_age_seconds']
                                 ?? null,
 
-                        'reasons' =>
-                            $recommended['reasons']
+                        'reasons' => $recommended['reasons']
                                 ?? [],
                     ]);
 
@@ -786,7 +719,6 @@ class DispatchController extends Controller
             $recommendation
         );
     }
-    
 
     /**
      * Get reservations available for dispatch.
@@ -946,7 +878,7 @@ class DispatchController extends Controller
                 */
                 $routePlan = $reservation->routePlan;
 
-                if (!$routePlan) {
+                if (! $routePlan) {
                     throw new \Exception(
                         'This reservation does not have a route plan yet.'
                     );
@@ -974,7 +906,7 @@ class DispatchController extends Controller
                     );
                 }
 
-                if (!empty($validated['vehicle_id'])) {
+                if (! empty($validated['vehicle_id'])) {
                     $vehicle = Vehicle::query()
                         ->whereNull('archived_at')
                         ->findOrFail($validated['vehicle_id']);
@@ -992,20 +924,20 @@ class DispatchController extends Controller
                 | That only happens when Dispatch becomes En Route.
                 |
                 */
-                if (!$reservation->vehicle) {
+                if (! $reservation->vehicle) {
                     throw new \Exception(
                         'No vehicle is assigned to this reservation.'
                     );
                 }
 
-                if (!$reservation->driver) {
+                if (! $reservation->driver) {
                     throw new \Exception(
                         'No driver is assigned to this reservation.'
                     );
                 }
 
                 $dispatchNumber = $validated['dispatch_number']
-                    ?? $this->generateDispatchNumber();    
+                    ?? $this->generateDispatchNumber();
 
                 /*
                 |--------------------------------------------------------------------------
@@ -1052,13 +984,11 @@ class DispatchController extends Controller
                 AuditLogService::log(
                     module: 'Dispatch Management',
                     action: 'Created',
-                    description:
-                        "Created dispatch {$dispatch->dispatch_number}.",
+                    description: "Created dispatch {$dispatch->dispatch_number}.",
                     record: $dispatch,
-                    newValues:
-                        $this->getDispatchAuditValues(
-                            $dispatch
-                        )
+                    newValues: $this->getDispatchAuditValues(
+                        $dispatch
+                    )
                 );
 
                 return $dispatch;
@@ -1079,8 +1009,7 @@ class DispatchController extends Controller
                     'fleet_manager',
                 ],
                 title: 'Dispatch Created',
-                message:
-                    "Dispatch {$dispatch->dispatch_number} was created and is currently Pending.",
+                message: "Dispatch {$dispatch->dispatch_number} was created and is currently Pending.",
                 default: true,
                 link: route('dispatch'),
                 excludeUserId: $request->user()->id
@@ -1112,10 +1041,8 @@ class DispatchController extends Controller
                     user: $assignedDriverUser,
                     settingKey: 'dispatchUpdates',
                     title: 'New Dispatch Assigned',
-                    message:
-                        "You have been assigned Dispatch {$dispatch->dispatch_number}. Please review and accept the dispatch.",
-                    eventKey:
-                        "dispatch:{$dispatch->id}:created",
+                    message: "You have been assigned Dispatch {$dispatch->dispatch_number}. Please review and accept the dispatch.",
+                    eventKey: "dispatch:{$dispatch->id}:created",
                     default: true,
                     link: route('dispatch')
                 );
@@ -1174,7 +1101,7 @@ class DispatchController extends Controller
 
                 $reservation = $dispatch->reservation;
 
-                if (!$reservation) {
+                if (! $reservation) {
                     throw new \Exception(
                         'Reservation associated with this dispatch was not found.'
                     );
@@ -1183,7 +1110,7 @@ class DispatchController extends Controller
                 $driverId =
                     $request->user()->driverProfile?->id;
 
-                if (!$driverId) {
+                if (! $driverId) {
                     throw new \Exception(
                         'Driver profile was not found.'
                     );
@@ -1284,8 +1211,7 @@ class DispatchController extends Controller
                     'fleet_manager',
                 ],
                 title: 'Dispatch Accepted',
-                message:
-                    "Dispatch {$result->dispatch_number} was accepted by the assigned driver.",
+                message: "Dispatch {$result->dispatch_number} was accepted by the assigned driver.",
                 default: true,
                 link: route('dispatch'),
                 excludeUserId: $request->user()->id
@@ -1304,26 +1230,21 @@ class DispatchController extends Controller
                 user: $request->user(),
                 settingKey: 'dispatchUpdates',
                 title: 'Dispatch Accepted',
-                message:
-                    "You accepted Dispatch {$result->dispatch_number}. The dispatch is now Assigned.",
-                eventKey:
-                    "dispatch:{$result->id}:accepted",
+                message: "You accepted Dispatch {$result->dispatch_number}. The dispatch is now Assigned.",
+                eventKey: "dispatch:{$result->id}:accepted",
                 default: true,
                 link: route('dispatch')
             );
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Dispatch accepted successfully.',
-                'dispatch' =>
-                    $result,
+                'message' => 'Dispatch accepted successfully.',
+                'dispatch' => $result,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1351,20 +1272,16 @@ class DispatchController extends Controller
                 ],
             ],
             [
-                'reason.required' =>
-                    'Please provide a reason for the reassignment request.',
-                'reason.min' =>
-                    'The reassignment reason must be at least 10 characters.',
+                'reason.required' => 'Please provide a reason for the reassignment request.',
+                'reason.min' => 'The reassignment reason must be at least 10 characters.',
             ]
         );
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please provide a valid reassignment reason.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please provide a valid reassignment reason.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -1372,8 +1289,8 @@ class DispatchController extends Controller
             $reassignment = DB::transaction(
                 function () use (
                     $request,
-                    $dispatch,
-                    $validator
+                    $dispatch
+
                 ) {
                     $dispatch = Dispatch::with([
                         'reservation.driver',
@@ -1403,7 +1320,7 @@ class DispatchController extends Controller
                     $reservation =
                         $dispatch->reservation;
 
-                    if (!$reservation) {
+                    if (! $reservation) {
                         throw new \Exception(
                             'Reservation associated with this dispatch was not found.'
                         );
@@ -1412,7 +1329,7 @@ class DispatchController extends Controller
                     $driverId =
                         $request->user()->driverProfile?->id;
 
-                    if (!$driverId) {
+                    if (! $driverId) {
                         throw new \Exception(
                             'Driver profile was not found.'
                         );
@@ -1451,10 +1368,8 @@ class DispatchController extends Controller
                         'requested_by' => $request->user()->id,
                         'reason' => $request->string('reason')->trim(),
                         'status' => 'Requested',
-                        'original_vehicle_id' =>
-                            $dispatch->reservation->vehicle_id,
-                        'original_driver_id' =>
-                            $dispatch->reservation->driver_id,
+                        'original_vehicle_id' => $dispatch->reservation->vehicle_id,
+                        'original_driver_id' => $dispatch->reservation->driver_id,
                     ]);
 
                     return $reassignment;
@@ -1473,8 +1388,7 @@ class DispatchController extends Controller
                     'fleet_manager',
                 ],
                 title: 'Dispatch Reassignment Requested',
-                message:
-                    "A reassignment was requested for Dispatch {$dispatch->dispatch_number}.",
+                message: "A reassignment was requested for Dispatch {$dispatch->dispatch_number}.",
                 default: true,
                 link: route('dispatch'),
                 excludeUserId: $request->user()->id
@@ -1489,26 +1403,21 @@ class DispatchController extends Controller
                 user: $request->user(),
                 settingKey: 'dispatchUpdates',
                 title: 'Reassignment Request Submitted',
-                message:
-                    "Your reassignment request for Dispatch {$dispatch->dispatch_number} has been submitted for review.",
-                eventKey:
-                    "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:requester:{$request->user()->id}",
+                message: "Your reassignment request for Dispatch {$dispatch->dispatch_number} has been submitted for review.",
+                eventKey: "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:requester:{$request->user()->id}",
                 default: true,
                 link: route('dispatch')
             );
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Reassignment request submitted successfully.',
-                'reassignment' =>
-                    $reassignment,
+                'message' => 'Reassignment request submitted successfully.',
+                'reassignment' => $reassignment,
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1527,8 +1436,7 @@ class DispatchController extends Controller
         if ($dispatch->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived dispatches cannot be modified.',
+                'message' => 'Archived dispatches cannot be modified.',
             ], 422);
         }
 
@@ -1545,7 +1453,7 @@ class DispatchController extends Controller
                     'required',
                     'string',
                     'max:50',
-                    'unique:dispatch,dispatch_number,' .
+                    'unique:dispatch,dispatch_number,'.
                         $dispatch->id,
                 ],
                 'trip_status' => [
@@ -1578,8 +1486,8 @@ class DispatchController extends Controller
             $result = DB::transaction(function () use (
                 $validator,
                 $dispatch,
-                $isDriver,
-                $request
+                $isDriver
+
             ) {
                 $validated = $validator->validated();
 
@@ -1600,7 +1508,7 @@ class DispatchController extends Controller
 
                 $reservation = $dispatch->reservation;
 
-                if (!$reservation) {
+                if (! $reservation) {
                     throw new \Exception(
                         'Reservation associated with this dispatch was not found.'
                     );
@@ -1658,7 +1566,7 @@ class DispatchController extends Controller
                     ];
 
                     if (
-                        !isset($driverTransitions[$currentStatus]) ||
+                        ! isset($driverTransitions[$currentStatus]) ||
                         $driverTransitions[$currentStatus] !== $newStatus
                     ) {
                         throw new \Exception(
@@ -1673,8 +1581,8 @@ class DispatchController extends Controller
                     );
 
                 if (
-                    !$isDriver &&
-                    !empty($validated['vehicle_id']) &&
+                    ! $isDriver &&
+                    ! empty($validated['vehicle_id']) &&
                     (int) $validated['vehicle_id'] !== (int) $reservation->vehicle_id
                 ) {
                     if ($currentStatus !== 'Pending') {
@@ -1698,7 +1606,7 @@ class DispatchController extends Controller
                 */
                 if (
                     $currentStatus !== $newStatus &&
-                    !in_array(
+                    ! in_array(
                         $newStatus,
                         $allowedTransitions[$currentStatus] ?? [],
                         true
@@ -1882,12 +1790,9 @@ class DispatchController extends Controller
                 ]);
 
                 return [
-                    'dispatch' =>
-                        $dispatch,
-                    'previousStatus' =>
-                        $currentStatus,
-                    'newStatus' =>
-                        $newStatus,
+                    'dispatch' => $dispatch,
+                    'previousStatus' => $currentStatus,
+                    'newStatus' => $newStatus,
                 ];
             });
 
@@ -1914,8 +1819,7 @@ class DispatchController extends Controller
                         'fleet_manager',
                     ],
                     title: 'Dispatch Status Updated',
-                    message:
-                        "Dispatch {$updatedDispatch->dispatch_number} changed from {$previousStatus} to {$newStatus}.",
+                    message: "Dispatch {$updatedDispatch->dispatch_number} changed from {$previousStatus} to {$newStatus}.",
                     default: true,
                     link: route('dispatch'),
                     excludeUserId: $request->user()->id
@@ -1951,10 +1855,8 @@ class DispatchController extends Controller
                         user: $driverUser,
                         settingKey: 'dispatchUpdates',
                         title: 'Dispatch Status Updated',
-                        message:
-                            "Dispatch {$updatedDispatch->dispatch_number} changed from {$previousStatus} to {$newStatus}.",
-                        eventKey:
-                            "dispatch:{$updatedDispatch->id}:status:{$newStatus}",
+                        message: "Dispatch {$updatedDispatch->dispatch_number} changed from {$previousStatus} to {$newStatus}.",
+                        eventKey: "dispatch:{$updatedDispatch->id}:status:{$newStatus}",
                         default: true,
                         link: route('dispatch')
                     );
@@ -1963,10 +1865,8 @@ class DispatchController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Dispatch updated successfully.',
-                'dispatch' =>
-                    $updatedDispatch,
+                'message' => 'Dispatch updated successfully.',
+                'dispatch' => $updatedDispatch,
             ]);
 
         } catch (\Exception $e) {
@@ -2002,7 +1902,7 @@ class DispatchController extends Controller
                 $reservation =
                     $dispatch->reservation;
 
-                if (!$reservation) {
+                if (! $reservation) {
                     throw new \Exception(
                         'Reservation associated with this dispatch was not found.'
                     );
@@ -2014,7 +1914,7 @@ class DispatchController extends Controller
                 |--------------------------------------------------------------------------
                 */
                 if (
-                    !in_array(
+                    ! in_array(
                         $dispatch->trip_status,
                         [
                             'Pending',
@@ -2038,8 +1938,7 @@ class DispatchController extends Controller
 
                 $dispatch->update([
                     'archived_at' => now(),
-                    'archived_by' =>
-                        $request->user()->id,
+                    'archived_by' => $request->user()->id,
                 ]);
 
                 /*
@@ -2054,38 +1953,31 @@ class DispatchController extends Controller
                 AuditLogService::log(
                     module: 'Dispatch Management',
                     action: 'Archived',
-                    description:
-                        "Archived dispatch {$dispatch->dispatch_number}.",
+                    description: "Archived dispatch {$dispatch->dispatch_number}.",
                     record: $dispatch,
                     oldValues: $oldValues,
                     newValues: [
-                        'archived_at' =>
-                            $dispatch->archived_at
-                                ?->toDateTimeString(),
+                        'archived_at' => $dispatch->archived_at
+                            ?->toDateTimeString(),
 
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
 
-                        'reservation_status_before' =>
-                            $oldReservationStatus,
+                        'reservation_status_before' => $oldReservationStatus,
 
-                        'reservation_status_after' =>
-                            'Approved',
+                        'reservation_status_after' => 'Approved',
                     ]
                 );
             });
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Dispatch archived successfully.',
+                'message' => 'Dispatch archived successfully.',
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -2101,7 +1993,7 @@ class DispatchController extends Controller
 
         try {
             DB::transaction(function () use (
-                $request,
+
                 $dispatch
             ) {
                 $dispatch = Dispatch::with([
@@ -2112,7 +2004,7 @@ class DispatchController extends Controller
                         $dispatch->id
                     );
 
-                if (!$dispatch->archived_at) {
+                if (! $dispatch->archived_at) {
                     throw new \Exception(
                         'Dispatch is not archived.'
                     );
@@ -2121,7 +2013,7 @@ class DispatchController extends Controller
                 $reservation =
                     $dispatch->reservation;
 
-                if (!$reservation) {
+                if (! $reservation) {
                     throw new \Exception(
                         'Reservation associated with this dispatch was not found.'
                     );
@@ -2145,12 +2037,10 @@ class DispatchController extends Controller
                         : 'Approved';
 
                 $oldValues = [
-                    'archived_at' =>
-                        $dispatch->archived_at
-                            ?->toDateTimeString(),
+                    'archived_at' => $dispatch->archived_at
+                        ?->toDateTimeString(),
 
-                    'archived_by' =>
-                        $dispatch->archived_by,
+                    'archived_by' => $dispatch->archived_by,
                 ];
 
                 $dispatch->update([
@@ -2159,22 +2049,19 @@ class DispatchController extends Controller
                 ]);
 
                 $reservation->update([
-                    'status' =>
-                        $reservationStatus,
+                    'status' => $reservationStatus,
                 ]);
 
                 AuditLogService::log(
                     module: 'Dispatch Management',
                     action: 'Restored',
-                    description:
-                        "Restored dispatch {$dispatch->dispatch_number}.",
+                    description: "Restored dispatch {$dispatch->dispatch_number}.",
                     record: $dispatch,
                     oldValues: $oldValues,
                     newValues: [
                         'archived_at' => null,
                         'archived_by' => null,
-                        'reservation_status' =>
-                            $reservationStatus,
+                        'reservation_status' => $reservationStatus,
                     ]
                 );
             });
@@ -2189,17 +2076,14 @@ class DispatchController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Dispatch restored successfully.',
-                'dispatch' =>
-                    $dispatch,
+                'message' => 'Dispatch restored successfully.',
+                'dispatch' => $dispatch,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -2233,10 +2117,8 @@ class DispatchController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please select valid dispatches.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please select valid dispatches.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -2255,18 +2137,18 @@ class DispatchController extends Controller
                     Dispatch::with([
                         'reservation',
                     ])
-                    ->whereIn(
-                        'id',
-                        $dispatchIds
-                    )
-                    ->whereNull('archived_at')
-                    ->lockForUpdate()
-                    ->get();
+                        ->whereIn(
+                            'id',
+                            $dispatchIds
+                        )
+                        ->whereNull('archived_at')
+                        ->lockForUpdate()
+                        ->get();
 
                 foreach ($dispatches as $dispatch) {
 
                     if (
-                        !in_array(
+                        ! in_array(
                             $dispatch->trip_status,
                             [
                                 'Pending',
@@ -2288,8 +2170,7 @@ class DispatchController extends Controller
 
                     $dispatch->update([
                         'archived_at' => now(),
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
                     ]);
 
                     if ($dispatch->reservation) {
@@ -2301,23 +2182,18 @@ class DispatchController extends Controller
                     AuditLogService::log(
                         module: 'Dispatch Management',
                         action: 'Archived',
-                        description:
-                            "Archived dispatch {$dispatch->dispatch_number}.",
+                        description: "Archived dispatch {$dispatch->dispatch_number}.",
                         record: $dispatch,
                         oldValues: $oldValues,
                         newValues: [
-                            'archived_at' =>
-                                $dispatch->archived_at
-                                    ?->toDateTimeString(),
+                            'archived_at' => $dispatch->archived_at
+                                ?->toDateTimeString(),
 
-                            'archived_by' =>
-                                $request->user()->id,
+                            'archived_by' => $request->user()->id,
 
-                            'reservation_status_before' =>
-                                $oldReservationStatus,
+                            'reservation_status_before' => $oldReservationStatus,
 
-                            'reservation_status_after' =>
-                                $dispatch->reservation
+                            'reservation_status_after' => $dispatch->reservation
                                     ? 'Approved'
                                     : null,
                         ]
@@ -2331,30 +2207,25 @@ class DispatchController extends Controller
             if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Only Pending or Assigned dispatches can be archived.',
+                    'message' => 'Only Pending or Assigned dispatches can be archived.',
                     'archived_ids' => [],
                 ], 422);
             }
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    count($archivedIds) === 1
+                'message' => count($archivedIds) === 1
                         ? 'Dispatch archived successfully.'
-                        : count($archivedIds) .
+                        : count($archivedIds).
                             ' dispatches archived successfully.',
-                'archived_ids' =>
-                    $archivedIds,
+                'archived_ids' => $archivedIds,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Failed to archive dispatches.',
-                'error' =>
-                    $e->getMessage(),
+                'message' => 'Failed to archive dispatches.',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -2597,16 +2468,11 @@ class DispatchController extends Controller
             |--------------------------------------------------------------------------
             */
             $lockedReassignment->update([
-                'status' =>
-                    'Approved',
-                'reviewed_by' =>
-                    $request->user()->id,
-                'reviewed_at' =>
-                    now(),
-                'new_vehicle_id' =>
-                    $newVehicle->id,
-                'new_driver_id' =>
-                    $newDriver->id,
+                'status' => 'Approved',
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
+                'new_vehicle_id' => $newVehicle->id,
+                'new_driver_id' => $newDriver->id,
             ]);
 
             /*
@@ -2619,14 +2485,11 @@ class DispatchController extends Controller
             |
             */
             $reservation->update([
-                'vehicle_id' =>
-                    $newVehicle->id,
+                'vehicle_id' => $newVehicle->id,
 
-                'driver_id' =>
-                    $newDriver->id,
+                'driver_id' => $newDriver->id,
 
-                'status' =>
-                    'Approved',
+                'status' => 'Approved',
             ]);
 
             /*
@@ -2639,14 +2502,11 @@ class DispatchController extends Controller
             |
             */
             $dispatch->update([
-                'trip_status' =>
-                    'Pending',
+                'trip_status' => 'Pending',
 
-                'accepted_at' =>
-                    null,
+                'accepted_at' => null,
 
-                'accepted_by' =>
-                    null,
+                'accepted_by' => null,
             ]);
 
             /*
@@ -2655,23 +2515,19 @@ class DispatchController extends Controller
             |--------------------------------------------------------------------------
             */
             return [
-                'dispatch' =>
-                    $dispatch->fresh([
-                        'reservation.vehicle',
-                        'reservation.driver',
-                    ]),
+                'dispatch' => $dispatch->fresh([
+                    'reservation.vehicle',
+                    'reservation.driver',
+                ]),
 
-                'reassignment' =>
-                    $lockedReassignment->fresh([
-                        'requestedBy',
-                        'reviewedBy',
-                    ]),
+                'reassignment' => $lockedReassignment->fresh([
+                    'requestedBy',
+                    'reviewedBy',
+                ]),
 
-                'old_driver_user' =>
-                    $oldDriverUser,
+                'old_driver_user' => $oldDriverUser,
 
-                'new_driver_user' =>
-                    $newDriver->user,
+                'new_driver_user' => $newDriver->user,
             ];
         });
 
@@ -2699,12 +2555,10 @@ class DispatchController extends Controller
                 'fleet_manager',
             ],
             title: 'Dispatch Reassignment Approved',
-            message:
-                "Reassignment for Dispatch {$dispatch->dispatch_number} was approved.",
+            message: "Reassignment for Dispatch {$dispatch->dispatch_number} was approved.",
             default: true,
             link: route('dispatch'),
-            excludeUserId:
-                $request->user()->id
+            excludeUserId: $request->user()->id
         );
 
         /*
@@ -2717,10 +2571,8 @@ class DispatchController extends Controller
                 user: $oldDriverUser,
                 settingKey: 'dispatchUpdates',
                 title: 'Reassignment Approved',
-                message:
-                    "Your reassignment request for Dispatch {$dispatch->dispatch_number} was approved. The dispatch has been reassigned to another vehicle and driver.",
-                eventKey:
-                    "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:requester:{$oldDriverUser->id}",
+                message: "Your reassignment request for Dispatch {$dispatch->dispatch_number} was approved. The dispatch has been reassigned to another vehicle and driver.",
+                eventKey: "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:requester:{$oldDriverUser->id}",
                 default: true,
                 link: route('dispatch')
             );
@@ -2736,10 +2588,8 @@ class DispatchController extends Controller
                 user: $newDriverUser,
                 settingKey: 'dispatchUpdates',
                 title: 'New Dispatch Assignment',
-                message:
-                    "Dispatch {$dispatch->dispatch_number} has been assigned to you with vehicle {$dispatch->reservation->vehicle?->brand} {$dispatch->reservation->vehicle?->model}. Please review and accept the dispatch.",
-                eventKey:
-                    "dispatch:{$dispatch->id}:reassignment-approved:new-driver",
+                message: "Dispatch {$dispatch->dispatch_number} has been assigned to you with vehicle {$dispatch->reservation->vehicle?->brand} {$dispatch->reservation->vehicle?->model}. Please review and accept the dispatch.",
+                eventKey: "dispatch:{$dispatch->id}:reassignment-approved:new-driver",
                 default: true,
                 link: route('dispatch')
             );
@@ -2748,12 +2598,9 @@ class DispatchController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Reassignment approved successfully.',
-                'dispatch' =>
-                    $dispatch,
-                'reassignment' =>
-                    $reassignment,
+                'message' => 'Reassignment approved successfully.',
+                'dispatch' => $dispatch,
+                'reassignment' => $reassignment,
             ]);
         }
 
@@ -2824,27 +2671,22 @@ class DispatchController extends Controller
 
             $lockedReassignment->update([
                 'status' => 'Rejected',
-                'reviewed_by' =>
-                    $request->user()->id,
-                'reviewed_at' =>
-                    now(),
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
             ]);
 
             return [
-                'dispatch' =>
-                    $dispatch->fresh([
-                        'reservation.vehicle',
-                        'reservation.driver',
-                    ]),
+                'dispatch' => $dispatch->fresh([
+                    'reservation.vehicle',
+                    'reservation.driver',
+                ]),
 
-                'reassignment' =>
-                    $lockedReassignment->fresh([
-                        'requestedBy',
-                        'reviewedBy',
-                    ]),
+                'reassignment' => $lockedReassignment->fresh([
+                    'requestedBy',
+                    'reviewedBy',
+                ]),
 
-                'requesting_driver_user' =>
-                    $requestingDriverUser,
+                'requesting_driver_user' => $requestingDriverUser,
             ];
         });
 
@@ -2869,8 +2711,7 @@ class DispatchController extends Controller
                 'fleet_manager',
             ],
             title: 'Dispatch Reassignment Rejected',
-            message:
-                "The reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
+            message: "The reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
             default: true,
             link: route('dispatch'),
             excludeUserId: $request->user()->id
@@ -2886,10 +2727,8 @@ class DispatchController extends Controller
                 user: $requestingDriverUser,
                 settingKey: 'dispatchUpdates',
                 title: 'Reassignment Request Rejected',
-                message:
-                    "Your reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
-                eventKey:
-                    "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:rejected:{$requestingDriverUser->id}",
+                message: "Your reassignment request for Dispatch {$dispatch->dispatch_number} was rejected.",
+                eventKey: "dispatch_reassignment_request:{$dispatch->id}:{$reassignment->id}:rejected:{$requestingDriverUser->id}",
                 default: true,
                 link: route('dispatch')
             );
@@ -2898,12 +2737,9 @@ class DispatchController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Reassignment request rejected.',
-                'dispatch' =>
-                    $dispatch,
-                'reassignment' =>
-                    $reassignment,
+                'message' => 'Reassignment request rejected.',
+                'dispatch' => $dispatch,
+                'reassignment' => $reassignment,
             ]);
         }
 
@@ -2921,8 +2757,7 @@ class DispatchController extends Controller
     public function show(
         Dispatch $dispatch,
         DispatchSuitabilityService $suitabilityService
-    )
-    {
+    ) {
         $dispatch->load([
             'reservation.vehicle.capabilities',
             'reservation.vehicle.lastCompletedMaintenance',
@@ -2982,11 +2817,11 @@ class DispatchController extends Controller
             ->where(
                 'dispatch_number',
                 'like',
-                $prefix . '%'
+                $prefix.'%'
             )
             ->orderByDesc('id')
             ->first();
-        if (!$latestDispatch) {
+        if (! $latestDispatch) {
             $nextSequence = 1;
         } else {
             $lastNumber = $latestDispatch->dispatch_number;
@@ -2996,7 +2831,8 @@ class DispatchController extends Controller
             );
             $nextSequence = $lastSequence + 1;
         }
-        return $prefix . str_pad(
+
+        return $prefix.str_pad(
             $nextSequence,
             3,
             '0',
@@ -3004,14 +2840,13 @@ class DispatchController extends Controller
         );
     }
 
-
     /**
      * Preview the next dispatch number.
      */
     public function nextNumber()
     {
         $this->authorize('create', Dispatch::class);
-        
+
         return response()->json([
             'success' => true,
             'dispatch_number' => $this->generateDispatchNumber(),
@@ -3022,38 +2857,28 @@ class DispatchController extends Controller
         Dispatch $dispatch
     ): array {
         return [
-            'dispatch_number' =>
-                $dispatch->dispatch_number,
+            'dispatch_number' => $dispatch->dispatch_number,
 
-            'reservation_id' =>
-                $dispatch->reservation_id,
+            'reservation_id' => $dispatch->reservation_id,
 
-            'dispatch_date' =>
-                $dispatch->dispatch_date
+            'dispatch_date' => $dispatch->dispatch_date
                     ? (string) $dispatch->dispatch_date
                     : null,
 
-            'departure_time' =>
-                $dispatch->departure_time,
+            'departure_time' => $dispatch->departure_time,
 
-            'arrival_time' =>
-                $dispatch->arrival_time,
+            'arrival_time' => $dispatch->arrival_time,
 
-            'trip_status' =>
-                $dispatch->trip_status,
+            'trip_status' => $dispatch->trip_status,
 
-            'accepted_at' =>
-                $dispatch->accepted_at
-                    ?->toDateTimeString(),
+            'accepted_at' => $dispatch->accepted_at
+                ?->toDateTimeString(),
 
-            'accepted_by' =>
-                $dispatch->accepted_by,
+            'accepted_by' => $dispatch->accepted_by,
 
-            'vehicle_id' =>
-                $dispatch->reservation?->vehicle_id,
+            'vehicle_id' => $dispatch->reservation?->vehicle_id,
 
-            'driver_id' =>
-                $dispatch->reservation?->driver_id,
+            'driver_id' => $dispatch->reservation?->driver_id,
         ];
     }
 
@@ -3095,44 +2920,32 @@ class DispatchController extends Controller
             $newStatus
         ) {
             $action = match ($newStatus) {
-                'Assigned' =>
-                    'Assigned',
+                'Assigned' => 'Assigned',
 
-                'En Route' =>
-                    'En Route',
+                'En Route' => 'En Route',
 
-                'Arrived' =>
-                    'Arrived',
+                'Arrived' => 'Arrived',
 
-                'Completed' =>
-                    'Completed',
+                'Completed' => 'Completed',
 
-                'Cancelled' =>
-                    'Cancelled',
+                'Cancelled' => 'Cancelled',
 
-                default =>
-                    'Updated',
+                default => 'Updated',
             };
         }
 
         $description = match ($action) {
-            'Assigned' =>
-                "Assigned dispatch {$dispatch->dispatch_number}.",
+            'Assigned' => "Assigned dispatch {$dispatch->dispatch_number}.",
 
-            'En Route' =>
-                "Dispatch {$dispatch->dispatch_number} started the trip.",
+            'En Route' => "Dispatch {$dispatch->dispatch_number} started the trip.",
 
-            'Arrived' =>
-                "Dispatch {$dispatch->dispatch_number} arrived at its destination.",
+            'Arrived' => "Dispatch {$dispatch->dispatch_number} arrived at its destination.",
 
-            'Completed' =>
-                "Completed dispatch {$dispatch->dispatch_number}.",
+            'Completed' => "Completed dispatch {$dispatch->dispatch_number}.",
 
-            'Cancelled' =>
-                "Cancelled dispatch {$dispatch->dispatch_number}.",
+            'Cancelled' => "Cancelled dispatch {$dispatch->dispatch_number}.",
 
-            default =>
-                "Updated dispatch {$dispatch->dispatch_number}.",
+            default => "Updated dispatch {$dispatch->dispatch_number}.",
         };
 
         AuditLogService::log(
@@ -3181,8 +2994,7 @@ class DispatchController extends Controller
         if ($dispatch->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived dispatch cannot receive replacement options.',
+                'message' => 'Archived dispatch cannot receive replacement options.',
             ], 422);
         }
 
@@ -3192,8 +3004,7 @@ class DispatchController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reassignment request has already been reviewed.',
+                'message' => 'This reassignment request has already been reviewed.',
             ], 422);
         }
 
@@ -3203,8 +3014,7 @@ class DispatchController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Replacement options are only available while the dispatch is Pending.',
+                'message' => 'Replacement options are only available while the dispatch is Pending.',
             ], 422);
         }
 
@@ -3285,74 +3095,58 @@ class DispatchController extends Controller
                             ) {
                                 $driverName =
                                     trim(
-                                        ($driver->first_name ?? '') .
-                                        ' ' .
+                                        ($driver->first_name ?? '').
+                                        ' '.
                                         ($driver->last_name ?? '')
                                     );
 
                                 $vehicleLabel =
                                     trim(
-                                        ($vehicle->brand ?? '') .
-                                        ' ' .
+                                        ($vehicle->brand ?? '').
+                                        ' '.
                                         ($vehicle->model ?? '')
                                     );
 
                                 return [
-                                    'vehicle_id' =>
-                                        $vehicle->id,
+                                    'vehicle_id' => $vehicle->id,
 
-                                    'vehicle_label' =>
-                                        $vehicleLabel !== ''
+                                    'vehicle_label' => $vehicleLabel !== ''
                                             ? $vehicleLabel
                                             : "Vehicle #{$vehicle->id}",
 
-                                    'driver_id' =>
-                                        $driver->id,
+                                    'driver_id' => $driver->id,
 
-                                    'driver_name' =>
-                                        $driverName !== ''
+                                    'driver_name' => $driverName !== ''
                                             ? $driverName
                                             : "Driver #{$driver->id}",
 
-                                    'license_number' =>
-                                        $driver->license_number,
+                                    'license_number' => $driver->license_number,
 
-                                    'vehicle_status' =>
-                                        $vehicle->status,
+                                    'vehicle_status' => $vehicle->status,
 
-                                    'readiness_status' =>
-                                        $vehicle->readiness_status,
+                                    'readiness_status' => $vehicle->readiness_status,
 
-                                    'readiness_label' =>
-                                        $vehicle->readiness_label,
+                                    'readiness_label' => $vehicle->readiness_label,
 
-                                    'powertrain_label' =>
-                                        $vehicle->powertrain_label,
+                                    'powertrain_label' => $vehicle->powertrain_label,
 
-                                    'fuel_level_percent' =>
-                                        $vehicle->fuel_level_percent,
+                                    'fuel_level_percent' => $vehicle->fuel_level_percent,
 
-                                    'battery_level_percent' =>
-                                        $vehicle->battery_level_percent,
+                                    'battery_level_percent' => $vehicle->battery_level_percent,
 
-                                    'estimated_range_km' =>
-                                        $vehicle->estimated_range_km,
+                                    'estimated_range_km' => $vehicle->estimated_range_km,
 
-                                    'energy_advisory' =>
-                                        $vehicle->energyAdvisory(null),
+                                    'energy_advisory' => $vehicle->energyAdvisory(null),
 
-                                    'capability_advisory' =>
-                                        $vehicle->capabilityAdvisory(
-                                            $dispatch->reservation?->requiredCapabilities
-                                        ),
+                                    'capability_advisory' => $vehicle->capabilityAdvisory(
+                                        $dispatch->reservation?->requiredCapabilities
+                                    ),
 
-                                    'driver_advisory' =>
-                                        $driver->qualificationAdvisory(
-                                            $vehicle->vehicle_type
-                                        ),
+                                    'driver_advisory' => $driver->qualificationAdvisory(
+                                        $vehicle->vehicle_type
+                                    ),
 
-                                    'driver_status' =>
-                                        $driver->status,
+                                    'driver_status' => $driver->status,
                                 ];
                             }
                         );
@@ -3363,14 +3157,11 @@ class DispatchController extends Controller
         return response()->json([
             'success' => true,
 
-            'current_vehicle_id' =>
-                $dispatch->reservation?->vehicle_id,
+            'current_vehicle_id' => $dispatch->reservation?->vehicle_id,
 
-            'current_driver_id' =>
-                $currentDriverId,
+            'current_driver_id' => $currentDriverId,
 
-            'pairs' =>
-                $pairs,
+            'pairs' => $pairs,
         ]);
     }
 

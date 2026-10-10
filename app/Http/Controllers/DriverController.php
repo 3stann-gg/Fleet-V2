@@ -3,28 +3,27 @@
 namespace App\Http\Controllers;
 
 use App\Models\Driver;
-use App\Models\User;
 use App\Models\FleetSetting;
-use App\Services\FleetNotificationService;
-use App\Services\AuditLogService;
+use App\Models\User;
 use App\Notifications\AccountCreatedNotification;
 use App\Notifications\AccountUpdatedNotification;
-use App\Notifications\AccountDeletedNotification;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use App\Services\AuditLogService;
+use App\Services\FleetNotificationService;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\Rule;
 
 class DriverController extends Controller
 {
     use AuthorizesRequests;
-    
+
     private function getDriverSettings(): array
     {
         $record = FleetSetting::query()
@@ -42,7 +41,7 @@ class DriverController extends Controller
             $driverSettings['defaultStatus']
             ?? 'Available';
         if (
-            !in_array(
+            ! in_array(
                 $defaultStatus,
                 $allowedDefaultStatuses,
                 true
@@ -50,22 +49,20 @@ class DriverController extends Controller
         ) {
             $defaultStatus = 'Available';
         }
+
         return [
-            'requireLicenseExpiry' =>
-                $driverSettings['requireLicenseExpiry'] ?? true,
-            'warnLicenseDays' =>
-                max(
-                    1,
-                    min(
-                        180,
-                        (int) (
-                            $driverSettings['warnLicenseDays']
-                            ?? 30
-                        )
+            'requireLicenseExpiry' => $driverSettings['requireLicenseExpiry'] ?? true,
+            'warnLicenseDays' => max(
+                1,
+                min(
+                    180,
+                    (int) (
+                        $driverSettings['warnLicenseDays']
+                        ?? 30
                     )
-                ),
-            'defaultStatus' =>
-                $defaultStatus,
+                )
+            ),
+            'defaultStatus' => $defaultStatus,
         ];
     }
 
@@ -73,7 +70,7 @@ class DriverController extends Controller
         ?string $expiryDate,
         int $warningDays
     ): bool {
-        if (!$expiryDate) {
+        if (! $expiryDate) {
             return false;
         }
 
@@ -99,7 +96,7 @@ class DriverController extends Controller
         int $warningDays
     ): void {
         if (
-            !$this->isLicenseExpiringSoon(
+            ! $this->isLicenseExpiringSoon(
                 $driver->license_expiry
                     ? Carbon::parse(
                         $driver->license_expiry
@@ -124,8 +121,8 @@ class DriverController extends Controller
                 );
 
         $driverName = trim(
-            ($driver->first_name ?? '') .
-            ' ' .
+            ($driver->first_name ?? '').
+            ' '.
             ($driver->last_name ?? '')
         );
 
@@ -136,13 +133,13 @@ class DriverController extends Controller
         $dayLabel =
             $daysUntilExpiry === 0
                 ? 'today'
-                : "in {$daysUntilExpiry} day" .
+                : "in {$daysUntilExpiry} day".
                     ($daysUntilExpiry === 1 ? '' : 's');
 
         $eventKey =
-            'driver_license_expiring:' .
-            $driver->id .
-            ':' .
+            'driver_license_expiring:'.
+            $driver->id.
+            ':'.
             $expiry->format('Y-m-d');
 
         FleetNotificationService::createUniqueWhenEnabled(
@@ -162,21 +159,15 @@ class DriverController extends Controller
         $user = $request->user();
 
         $driverPermissions = [
-            'role' =>
-                $user->role,
-            'canCreate' =>
-                $user->can(
-                    'create',
-                    Driver::class
-                ),
-            'canUpdate' =>
-                $user->hasPermission('drivers.update'),
-            'canArchive' =>
-                $user->hasPermission('drivers.archive'),
-            'canBulkArchive' =>
-                $user->hasPermission('drivers.archive'),
-            'canRestore' =>
-                $user->hasPermission('drivers.archive'),
+            'role' => $user->role,
+            'canCreate' => $user->can(
+                'create',
+                Driver::class
+            ),
+            'canUpdate' => $user->hasPermission('drivers.update'),
+            'canArchive' => $user->hasPermission('drivers.archive'),
+            'canBulkArchive' => $user->hasPermission('drivers.archive'),
+            'canRestore' => $user->hasPermission('drivers.archive'),
         ];
 
         return view(
@@ -197,36 +188,33 @@ class DriverController extends Controller
             ];
 
         if (
-            !$request->filled(
+            ! $request->filled(
                 'status'
             )
         ) {
             $request->merge([
-                'status' =>
-                    $driverSettings[
+                'status' => $driverSettings[
                         'defaultStatus'
                     ],
             ]);
         }
 
         $request->merge([
-            'license_number' =>
-                trim(
-                    (string)
-                    $request->input(
-                        'license_number',
-                        ''
-                    )
-                ),
+            'license_number' => trim(
+                (string)
+                $request->input(
+                    'license_number',
+                    ''
+                )
+            ),
 
-            'email' =>
-                trim(
-                    (string)
-                    $request->input(
-                        'email',
-                        ''
-                    )
-                ),
+            'email' => trim(
+                (string)
+                $request->input(
+                    'email',
+                    ''
+                )
+            ),
         ]);
 
         $validator =
@@ -259,7 +247,26 @@ class DriverController extends Controller
 
                     'license_class' => [
                         'required',
+                        Rule::in([
+                            'Professional',
+                            'Non-Professional',
+                        ]),
+                    ],
+
+                    'dl_codes' => [
+                        'nullable',
+                        'array',
+                    ],
+
+                    'dl_codes.*' => [
                         'string',
+                        'distinct',
+                        Rule::in(Driver::DL_CODES),
+                    ],
+
+                    'clutch_authorization' => [
+                        'nullable',
+                        Rule::in(Driver::CLUTCH_AUTHORIZATIONS),
                     ],
 
                     'license_expiry' => [
@@ -346,8 +353,7 @@ class DriverController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'errors' =>
-                    $validator->errors(),
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -355,7 +361,8 @@ class DriverController extends Controller
             $validator->validated();
 
         $qualifications = $validated['qualifications'] ?? [];
-        unset($validated['qualifications']);
+        $dlCodes = $validated['dl_codes'] ?? [];
+        unset($validated['qualifications'], $validated['dl_codes']);
 
         /*
         |--------------------------------------------------------------------------
@@ -386,7 +393,8 @@ class DriverController extends Controller
                 DB::transaction(
                     function () use (
                         $validated,
-                        $qualifications
+                        $qualifications,
+                        $dlCodes,
                     ) {
                         /*
                         |--------------------------------------------------------------------------
@@ -413,7 +421,7 @@ class DriverController extends Controller
                         |--------------------------------------------------------------------------
                         */
                         $driverNumber =
-                            'DRV-' .
+                            'DRV-'.
                             str_pad(
                                 (string)
                                 $driver->id,
@@ -423,8 +431,7 @@ class DriverController extends Controller
                             );
 
                         $driver->forceFill([
-                            'driver_number' =>
-                                $driverNumber,
+                            'driver_number' => $driverNumber,
                         ])->save();
 
                         /*
@@ -436,7 +443,7 @@ class DriverController extends Controller
                         |--------------------------------------------------------------------------
                         */
                         $temporaryPassword =
-                            '#' .
+                            '#'.
                             strtolower(
                                 str_replace(
                                     '-',
@@ -451,35 +458,27 @@ class DriverController extends Controller
                         |--------------------------------------------------------------------------
                         */
                         $user = User::query()->forceCreate([
-                            'first_name' =>
-                                $validated['first_name'],
+                            'first_name' => $validated['first_name'],
 
-                            'last_name' =>
-                                $validated['last_name'],
+                            'last_name' => $validated['last_name'],
 
-                            'name' =>
-                                trim(
-                                    $validated['first_name'] .
-                                    ' ' .
-                                    $validated['last_name']
-                                ),
+                            'name' => trim(
+                                $validated['first_name'].
+                                ' '.
+                                $validated['last_name']
+                            ),
 
-                            'email' =>
-                                $validated['email'],
-                            
-                            'mobile_number' =>
-                                $validated['contact_number'],
+                            'email' => $validated['email'],
 
-                            'password' =>
-                                Hash::make(
-                                    $temporaryPassword
-                                ),
+                            'mobile_number' => $validated['contact_number'],
 
-                            'role' =>
-                                'driver',
+                            'password' => Hash::make(
+                                $temporaryPassword
+                            ),
 
-                            'job_title' =>
-                                'Driver',
+                            'role' => 'driver',
+
+                            'job_title' => 'Driver',
                         ]);
 
                         /*
@@ -488,41 +487,37 @@ class DriverController extends Controller
                         |--------------------------------------------------------------------------
                         */
                         $driver->forceFill([
-                            'user_id' =>
-                                $user->id,
+                            'user_id' => $user->id,
                         ])->save();
 
                         $driver->refresh();
 
                         $this->syncQualifications($driver, $qualifications);
+                        $this->syncLicenseCodes($driver, $dlCodes);
 
                         $driver->load([
                             'user',
                             'vehicle',
                             'qualifications',
+                            'licenseCodes',
                         ]);
 
                         AuditLogService::log(
                             module: 'Driver Management',
                             action: 'Created',
-                            description:
-                                "Created driver {$driver->driver_number}.",
+                            description: "Created driver {$driver->driver_number}.",
                             record: $driver,
-                            newValues:
-                                $this->getDriverAuditValues(
-                                    $driver
-                                )
+                            newValues: $this->getDriverAuditValues(
+                                $driver
+                            )
                         );
 
                         return [
-                            'driver' =>
-                                $driver,
+                            'driver' => $driver,
 
-                            'user' =>
-                                $user,
+                            'user' => $user,
 
-                            'plainPassword' =>
-                                $temporaryPassword,
+                            'plainPassword' => $temporaryPassword,
                         ];
                     }
                 );
@@ -571,14 +566,11 @@ class DriverController extends Controller
             }
 
             return response()->json([
-                'success' =>
-                    true,
+                'success' => true,
 
-                'message' =>
-                    'Driver and driver account created successfully!',
+                'message' => 'Driver and driver account created successfully!',
 
-                'driver' =>
-                    $driver,
+                'driver' => $driver,
             ], 201);
 
         } catch (\Throwable $e) {
@@ -603,11 +595,9 @@ class DriverController extends Controller
             }
 
             return response()->json([
-                'success' =>
-                    false,
+                'success' => false,
 
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -615,7 +605,8 @@ class DriverController extends Controller
     public function show(Driver $driver)
     {
         $this->authorize('view', $driver);
-        $driver->load(['vehicle', 'qualifications']);
+        $driver->load(['vehicle', 'qualifications', 'licenseCodes']);
+
         return response()->json(
             $driver
         );
@@ -623,7 +614,7 @@ class DriverController extends Controller
 
     public function update(Request $request, Driver $driver)
     {
-        $this->authorize( 'update',$driver);
+        $this->authorize('update', $driver);
 
         $oldAuditValues =
             $this->getDriverAuditValues(
@@ -648,33 +639,47 @@ class DriverController extends Controller
             );
 
         $previousAccountDetails = [
-            'first_name' =>
-                $driver->first_name,
+            'first_name' => $driver->first_name,
 
-            'last_name' =>
-                $driver->last_name,
+            'last_name' => $driver->last_name,
 
-            'email' =>
-                $driver->email,
+            'email' => $driver->email,
 
-            'contact_number' =>
-                $driver->contact_number,
+            'contact_number' => $driver->contact_number,
         ];
 
         $validated = $request->validate([
-            'first_name'         => 'required|string|max:255',
-            'last_name'          => 'required|string|max:255',
-            'license_number'     => ['required', 'string',
-                                        Rule::unique('drivers')->ignore($driver->id),
-                                    ],
-            'license_class'      => 'required|string',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'license_number' => ['required', 'string',
+                Rule::unique('drivers')->ignore($driver->id),
+            ],
+            'license_class' => [
+                'required',
+                Rule::in(array_values(array_unique([
+                    'Professional',
+                    'Non-Professional',
+                    $driver->license_class,
+                ]))),
+            ],
+            'dl_codes_present' => ['sometimes', 'boolean'],
+            'dl_codes' => ['nullable', 'array'],
+            'dl_codes.*' => [
+                'string',
+                'distinct',
+                Rule::in(Driver::DL_CODES),
+            ],
+            'clutch_authorization' => [
+                'nullable',
+                Rule::in(Driver::CLUTCH_AUTHORIZATIONS),
+            ],
             'license_expiry' => [
                 $requireLicenseExpiry
                     ? 'required'
                     : 'nullable',
                 'date',
             ],
-            'contact_number'     => 'required|string|max:20',
+            'contact_number' => 'required|string|max:20',
             'email' => [
                 'required',
                 'email',
@@ -686,12 +691,12 @@ class DriverController extends Controller
                 Rule::unique('users', 'email')
                     ->ignore($driver->user_id),
             ],
-            'experience'         => 'nullable|integer|min:0',
-            'address'            => 'nullable|string',
-            'emergency_contact'  => 'nullable|string|max:20',
-            'notes'              => 'nullable|string',
-            'photo'              => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'assigned_vehicle_id'=> 'nullable|exists:vehicles,id',
+            'experience' => 'nullable|integer|min:0',
+            'address' => 'nullable|string',
+            'emergency_contact' => 'nullable|string|max:20',
+            'notes' => 'nullable|string',
+            'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'assigned_vehicle_id' => 'nullable|exists:vehicles,id',
             'status' => [
                 'required',
                 Rule::in(
@@ -714,7 +719,10 @@ class DriverController extends Controller
         ]);
 
         $qualifications = $validated['qualifications'] ?? null;
-        unset($validated['qualifications']);
+        $dlCodes = array_key_exists('dl_codes_present', $validated)
+            ? ($validated['dl_codes'] ?? [])
+            : null;
+        unset($validated['qualifications'], $validated['dl_codes'], $validated['dl_codes_present']);
 
         if ($request->hasFile('photo')) {
             $validated['photo'] = $request
@@ -725,7 +733,8 @@ class DriverController extends Controller
         DB::transaction(function () use (
             $driver,
             $validated,
-            $qualifications
+            $qualifications,
+            $dlCodes,
         ) {
             /*
             |--------------------------------------------------------------------------
@@ -738,6 +747,10 @@ class DriverController extends Controller
 
             if ($qualifications !== null) {
                 $this->syncQualifications($driver, $qualifications);
+            }
+
+            if ($dlCodes !== null) {
+                $this->syncLicenseCodes($driver, $dlCodes);
             }
 
             /*
@@ -753,21 +766,17 @@ class DriverController extends Controller
                 $user->role === 'driver'
             ) {
                 $userUpdates = [
-                    'first_name' =>
-                        $driver->first_name,
+                    'first_name' => $driver->first_name,
 
-                    'last_name' =>
-                        $driver->last_name,
+                    'last_name' => $driver->last_name,
 
-                    'name' =>
-                        trim(
-                            $driver->first_name .
-                            ' ' .
-                            $driver->last_name
-                        ),
-                    
-                    'mobile_number' =>
-                        $driver->contact_number,
+                    'name' => trim(
+                        $driver->first_name.
+                        ' '.
+                        $driver->last_name
+                    ),
+
+                    'mobile_number' => $driver->contact_number,
                 ];
 
                 if (
@@ -787,7 +796,7 @@ class DriverController extends Controller
 
         $driver->refresh()->load('qualifications');
 
-                $newAuditValues =
+        $newAuditValues =
             $this->getDriverAuditValues(
                 $driver
             );
@@ -796,8 +805,7 @@ class DriverController extends Controller
         $changedNewValues = [];
 
         foreach (
-            $newAuditValues
-            as $field => $newValue
+            $newAuditValues as $field => $newValue
         ) {
             $oldValue =
                 $oldAuditValues[$field]
@@ -815,7 +823,7 @@ class DriverController extends Controller
             }
         }
 
-        if (!empty($changedNewValues)) {
+        if (! empty($changedNewValues)) {
             $action = 'Updated';
 
             if (
@@ -853,16 +861,11 @@ class DriverController extends Controller
             }
 
             $description = match ($action) {
-                'Vehicle Assigned' =>
-                    "Assigned a vehicle to driver {$driver->driver_number}.",
-                'Vehicle Unassigned' =>
-                    "Unassigned the vehicle from driver {$driver->driver_number}.",
-                'Vehicle Reassigned' =>
-                    "Reassigned the vehicle for driver {$driver->driver_number}.",
-                'Status Changed' =>
-                    "Changed the status of driver {$driver->driver_number}.",
-                default =>
-                    "Updated driver {$driver->driver_number}.",
+                'Vehicle Assigned' => "Assigned a vehicle to driver {$driver->driver_number}.",
+                'Vehicle Unassigned' => "Unassigned the vehicle from driver {$driver->driver_number}.",
+                'Vehicle Reassigned' => "Reassigned the vehicle for driver {$driver->driver_number}.",
+                'Status Changed' => "Changed the status of driver {$driver->driver_number}.",
+                default => "Updated driver {$driver->driver_number}.",
             };
 
             AuditLogService::log(
@@ -870,10 +873,8 @@ class DriverController extends Controller
                 action: $action,
                 description: $description,
                 record: $driver,
-                oldValues:
-                    $changedOldValues,
-                newValues:
-                    $changedNewValues
+                oldValues: $changedOldValues,
+                newValues: $changedNewValues
             );
         }
 
@@ -897,7 +898,7 @@ class DriverController extends Controller
         ) {
             try {
                 $driver->user->notify(
-                    new AccountUpdatedNotification()
+                    new AccountUpdatedNotification
                 );
             } catch (\Throwable $e) {
                 report($e);
@@ -934,7 +935,7 @@ class DriverController extends Controller
         if (
             $isExpiringSoon &&
             (
-                !$wasExpiringSoon ||
+                ! $wasExpiringSoon ||
                 $expiryChanged
             )
         ) {
@@ -986,43 +987,35 @@ class DriverController extends Controller
                     );
 
                 $driver->update([
-                    'archived_at' =>
-                        now(),
+                    'archived_at' => now(),
 
-                    'archived_by' =>
-                        $request->user()->id,
+                    'archived_by' => $request->user()->id,
                 ]);
 
                 AuditLogService::log(
                     module: 'Driver Management',
                     action: 'Archived',
-                    description:
-                        "Archived driver {$driver->driver_number}.",
+                    description: "Archived driver {$driver->driver_number}.",
                     record: $driver,
-                    oldValues:
-                        $oldValues,
+                    oldValues: $oldValues,
                     newValues: [
-                        'archived_at' =>
-                            $driver->archived_at
-                                ?->toDateTimeString(),
+                        'archived_at' => $driver->archived_at
+                            ?->toDateTimeString(),
 
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
                     ]
                 );
             });
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Driver archived successfully.',
+                'message' => 'Driver archived successfully.',
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1044,19 +1037,17 @@ class DriverController extends Controller
                     ->lockForUpdate()
                     ->findOrFail($driver->id);
 
-                if (!$driver->archived_at) {
+                if (! $driver->archived_at) {
                     throw new \Exception(
                         'Driver is not archived.'
                     );
                 }
 
                 $oldValues = [
-                    'archived_at' =>
-                        $driver->archived_at
-                            ?->toDateTimeString(),
+                    'archived_at' => $driver->archived_at
+                        ?->toDateTimeString(),
 
-                    'archived_by' =>
-                        $driver->archived_by,
+                    'archived_by' => $driver->archived_by,
                 ];
 
                 $driver->update([
@@ -1067,11 +1058,9 @@ class DriverController extends Controller
                 AuditLogService::log(
                     module: 'Driver Management',
                     action: 'Restored',
-                    description:
-                        "Restored driver {$driver->driver_number}.",
+                    description: "Restored driver {$driver->driver_number}.",
                     record: $driver,
-                    oldValues:
-                        $oldValues,
+                    oldValues: $oldValues,
                     newValues: [
                         'archived_at' => null,
                         'archived_by' => null,
@@ -1083,17 +1072,14 @@ class DriverController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Driver restored successfully.',
-                'driver' =>
-                    $driver,
+                'message' => 'Driver restored successfully.',
+                'driver' => $driver,
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1146,28 +1132,22 @@ class DriverController extends Controller
                         );
 
                     $driver->update([
-                        'archived_at' =>
-                            now(),
+                        'archived_at' => now(),
 
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
                     ]);
 
                     AuditLogService::log(
                         module: 'Driver Management',
                         action: 'Archived',
-                        description:
-                            "Archived driver {$driver->driver_number}.",
+                        description: "Archived driver {$driver->driver_number}.",
                         record: $driver,
-                        oldValues:
-                            $oldValues,
+                        oldValues: $oldValues,
                         newValues: [
-                            'archived_at' =>
-                                $driver->archived_at
-                                    ?->toDateTimeString(),
+                            'archived_at' => $driver->archived_at
+                                ?->toDateTimeString(),
 
-                            'archived_by' =>
-                                $request->user()->id,
+                            'archived_by' => $request->user()->id,
                         ]
                     );
 
@@ -1179,38 +1159,32 @@ class DriverController extends Controller
             if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Only drivers who are not On Duty can be archived.',
+                    'message' => 'Only drivers who are not On Duty can be archived.',
                     'archived_ids' => [],
                 ], 422);
             }
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    count($archivedIds) === 1
+                'message' => count($archivedIds) === 1
                         ? 'Driver archived successfully.'
-                        : count($archivedIds) .
+                        : count($archivedIds).
                             ' drivers archived successfully.',
-                'archived_ids' =>
-                    $archivedIds,
+                'archived_ids' => $archivedIds,
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Failed to archive drivers.',
-                'error' =>
-                    $e->getMessage(),
+                'message' => 'Failed to archive drivers.',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
 
     public function getDrivers(
         Request $request
-    )
-    {
+    ) {
         $this->authorize('viewAny', Driver::class);
 
         $user = $request->user();
@@ -1223,6 +1197,7 @@ class DriverController extends Controller
             'vehicle',
             'user',
             'qualifications',
+            'licenseCodes',
         ])
             ->latest();
 
@@ -1264,7 +1239,7 @@ class DriverController extends Controller
                     $licenseExpired =
                         $daysUntilExpiry < 0;
                     $licenseExpiringSoon =
-                        !$licenseExpired &&
+                        ! $licenseExpired &&
                         $daysUntilExpiry <=
                             $warningDays;
                 }
@@ -1286,6 +1261,7 @@ class DriverController extends Controller
                         ? asset('storage/'.Str::of($driver->photo)->trim('/'))
                         : null
                 );
+
                 return $driver;
             });
 
@@ -1295,7 +1271,7 @@ class DriverController extends Controller
     public function available()
     {
         $this->authorize('create', Driver::class);
-        
+
         $drivers = Driver::whereNull('assigned_vehicle_id')
             ->orderBy('first_name')
             ->get([
@@ -1303,7 +1279,7 @@ class DriverController extends Controller
                 'driver_number',
                 'first_name',
                 'last_name',
-                'license_number'
+                'license_number',
             ]);
 
         return response()->json($drivers);
@@ -1320,7 +1296,7 @@ class DriverController extends Controller
             ], 422);
         }
 
-        if (!$driver->email) {
+        if (! $driver->email) {
             return response()->json([
                 'success' => false,
                 'message' => 'Driver email is required before creating an account.',
@@ -1342,7 +1318,7 @@ class DriverController extends Controller
         $driverNumber =
             $driver->driver_number;
 
-        if (!$driverNumber) {
+        if (! $driverNumber) {
             return response()->json([
                 'success' => false,
                 'message' => 'Driver number is missing.',
@@ -1350,7 +1326,7 @@ class DriverController extends Controller
         }
 
         $temporaryPassword =
-            '#' .
+            '#'.
             strtolower(
                 str_replace(
                     '-',
@@ -1367,40 +1343,31 @@ class DriverController extends Controller
                 ) {
                     $user =
                         User::query()->forceCreate([
-                            'first_name' =>
-                                $driver->first_name,
+                            'first_name' => $driver->first_name,
 
-                            'last_name' =>
-                                $driver->last_name,
+                            'last_name' => $driver->last_name,
 
-                            'name' =>
-                                trim(
-                                    $driver->first_name .
-                                    ' ' .
-                                    $driver->last_name
-                                ),
+                            'name' => trim(
+                                $driver->first_name.
+                                ' '.
+                                $driver->last_name
+                            ),
 
-                            'email' =>
-                                $driver->email,
+                            'email' => $driver->email,
 
-                            'mobile_number' =>
-                                $driver->contact_number,
+                            'mobile_number' => $driver->contact_number,
 
-                            'password' =>
-                                Hash::make(
-                                    $temporaryPassword
-                                ),
+                            'password' => Hash::make(
+                                $temporaryPassword
+                            ),
 
-                            'role' =>
-                                'driver',
+                            'role' => 'driver',
 
-                            'job_title' =>
-                                'Driver',
+                            'job_title' => 'Driver',
                         ]);
 
                     $driver->forceFill([
-                        'user_id' =>
-                            $user->id,
+                        'user_id' => $user->id,
                     ])->save();
 
                     $driver->refresh();
@@ -1408,16 +1375,13 @@ class DriverController extends Controller
                     AuditLogService::log(
                         module: 'Driver Management',
                         action: 'Account Created',
-                        description:
-                            "Created and linked an account for driver {$driver->driver_number}.",
+                        description: "Created and linked an account for driver {$driver->driver_number}.",
                         record: $driver,
                         oldValues: [
-                            'user_id' =>
-                                null,
+                            'user_id' => null,
                         ],
                         newValues: [
-                            'user_id' =>
-                                $user->id,
+                            'user_id' => $user->id,
                         ]
                     );
 
@@ -1425,75 +1389,65 @@ class DriverController extends Controller
                 }
             );
 
-            try {
-                $createdUser->notify(
-                    new AccountCreatedNotification(
-                        $temporaryPassword
-                    )
-                );
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        try {
+            $createdUser->notify(
+                new AccountCreatedNotification(
+                    $temporaryPassword
+                )
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Driver account created and linked successfully.',
+            'message' => 'Driver account created and linked successfully.',
         ]);
     }
 
     private function getDriverAuditValues(
         Driver $driver
     ): array {
-        $driver->loadMissing('qualifications');
+        $driver->loadMissing(['qualifications', 'licenseCodes']);
 
         return [
-            'driver_number' =>
-                $driver->driver_number,
+            'driver_number' => $driver->driver_number,
 
-            'first_name' =>
-                $driver->first_name,
+            'first_name' => $driver->first_name,
 
-            'last_name' =>
-                $driver->last_name,
+            'last_name' => $driver->last_name,
 
-            'license_number' =>
-                $driver->license_number,
+            'license_number' => $driver->license_number,
 
-            'license_class' =>
-                $driver->license_class,
+            'license_class' => $driver->license_class,
 
-            'license_expiry' =>
-                $driver->license_expiry
+            'dl_codes' => implode(', ', $driver->dl_codes),
+
+            'clutch_authorization' => $driver->clutch_authorization,
+
+            'license_expiry' => $driver->license_expiry
                     ? Carbon::parse(
                         $driver->license_expiry
                     )->format('Y-m-d')
                     : null,
 
-            'email' =>
-                $driver->email,
+            'email' => $driver->email,
 
-            'contact_number' =>
-                $driver->contact_number,
+            'contact_number' => $driver->contact_number,
 
-            'experience' =>
-                $driver->experience,
+            'experience' => $driver->experience,
 
-            'assigned_vehicle_id' =>
-                $driver->assigned_vehicle_id,
+            'assigned_vehicle_id' => $driver->assigned_vehicle_id,
 
-            'status' =>
-                $driver->status,
+            'status' => $driver->status,
 
-            'user_id' =>
-                $driver->user_id,
+            'user_id' => $driver->user_id,
 
-            'authorized_vehicle_types' =>
-                $driver->qualifications
-                    ->pluck('vehicle_type')
-                    ->sort()
-                    ->values()
-                    ->implode(', '),
+            'authorized_vehicle_types' => $driver->qualifications
+                ->pluck('vehicle_type')
+                ->sort()
+                ->values()
+                ->implode(', '),
         ];
     }
 
@@ -1511,6 +1465,24 @@ class DriverController extends Controller
 
         $types->each(fn ($type) => $driver->qualifications()->firstOrCreate([
             'vehicle_type' => $type,
+        ]));
+    }
+
+    /** @param array<int, string> $codes */
+    private function syncLicenseCodes(Driver $driver, array $codes): void
+    {
+        $codes = collect($codes)
+            ->map(fn ($code) => trim((string) $code))
+            ->filter(fn ($code) => in_array($code, Driver::DL_CODES, true))
+            ->unique()
+            ->values();
+
+        $driver->licenseCodes()
+            ->whereNotIn('code', $codes)
+            ->delete();
+
+        $codes->each(fn ($code) => $driver->licenseCodes()->firstOrCreate([
+            'code' => $code,
         ]));
     }
 }

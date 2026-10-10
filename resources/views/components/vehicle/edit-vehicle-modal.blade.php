@@ -81,6 +81,17 @@
           </div>
 
           <div class="form-group">
+            <label for="editVehicleLtoCategory">LTO Vehicle Category</label>
+            <select id="editVehicleLtoCategory" name="lto_vehicle_category">
+              <option value="">Not Recorded</option>
+              @foreach(\App\Models\Vehicle::LTO_VEHICLE_CATEGORY_LABELS as $category => $description)
+                <option value="{{ $category }}">{{ $category }} — {{ $description }}</option>
+              @endforeach
+            </select>
+            <small class="form-hint">Record the category from the vehicle registration; it is not inferred from Vehicle Type.</small>
+          </div>
+
+          <div class="form-group">
               <label for="editVehicleDepartment">
                   Department
                   <span
@@ -242,7 +253,7 @@
             <input type="number" id="editVehicleEngineDisplacement" min="0" step="1" />
           </div>
 
-          <div class="form-group" data-motorcycle-field>
+          <div class="form-group">
             <label for="editVehicleTransmissionType">Transmission</label>
             <select id="editVehicleTransmissionType">
               <option value="">Not recorded</option>

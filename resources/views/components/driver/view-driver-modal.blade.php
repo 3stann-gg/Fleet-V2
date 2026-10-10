@@ -70,6 +70,16 @@
         </div>
 
         <div class="view-driver-detail-item">
+          <label>Driver's License Codes</label>
+          <p id="viewDriverDlCodes"></p>
+        </div>
+
+        <div class="view-driver-detail-item">
+          <label>Clutch Authorization</label>
+          <p id="viewDriverClutchAuthorization"></p>
+        </div>
+
+        <div class="view-driver-detail-item">
           <label>Contact Number</label>
           <p id="viewDriverPhone"></p>
         </div>
@@ -100,7 +110,7 @@
         </div>
 
         <div class="view-driver-detail-item">
-          <label>Authorized Vehicle Types</label>
+          <label>Hospital Authorized Vehicle Types</label>
           <p id="viewDriverQualifications"></p>
         </div>
       </div>
