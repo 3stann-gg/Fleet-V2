@@ -116,6 +116,28 @@
             
           </div>
 
+          <div class="form-group full-width">
+            <label>Driver's License Codes</label>
+            <div class="checklist-options" id="editDriverDlCodeOptions">
+              @foreach(\App\Models\Driver::DL_CODE_LABELS as $code => $description)
+                <label title="{{ $description }}">
+                  <input type="checkbox" name="dl_codes[]" value="{{ $code }}">
+                  <span>{{ $code }} — {{ $description }}</span>
+                </label>
+              @endforeach
+            </div>
+            <small class="form-hint">Modern LTO Driver's License Codes. Leave blank when not recorded.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="editDriverClutchAuthorization">Clutch Authorization</label>
+            <select id="editDriverClutchAuthorization" name="clutch_authorization">
+              <option value="">Not Recorded</option>
+              <option value="MT">Manual Transmission (MT) — permits MT and AT</option>
+              <option value="AT">Automatic Transmission (AT) only</option>
+            </select>
+          </div>
+
           <div class="form-group">
             <label for="editDriverPhone">Phone Number *</label>
             <input

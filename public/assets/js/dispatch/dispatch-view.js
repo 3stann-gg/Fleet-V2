@@ -133,7 +133,12 @@ function renderCurrentSuitabilityReview(review) {
     [
         ["Readiness", review?.readiness?.label],
         ["Capabilities", review?.capabilities?.label],
-        ["Driver Match", review?.driver_match?.label],
+        ["Hospital Qualification", review?.driver_match?.label],
+        ["LTO DL Code", review?.driver_license?.dl_code_status?.label],
+        ["Transmission Compatibility", review?.driver_license?.transmission_status?.label],
+        ["License Validity", review?.driver_license?.license_expiry_status?.label],
+        ["Professional Classification", review?.driver_license?.license_classification_status?.label],
+        ["Special Purpose", review?.driver_license?.special_purpose_status?.label],
         ["Energy", review?.energy?.label],
         ["Compliance", `${review?.registration?.label || "N/A"} / ${review?.insurance?.label || "N/A"}`],
         ["Maintenance", review?.maintenance?.label],

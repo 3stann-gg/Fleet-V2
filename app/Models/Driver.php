@@ -3,21 +3,46 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Reservation;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Driver extends Model
 {
+    public const DL_CODES = [
+        'A',
+        'A1',
+        'B',
+        'B1',
+        'B2',
+        'C',
+        'D',
+        'BE',
+        'CE',
+    ];
+
+    public const DL_CODE_LABELS = [
+        'A' => 'Motorcycle (L1, L2, L3)',
+        'A1' => 'Tricycle / related L-category (L4-L7)',
+        'B' => 'Passenger vehicle (M1)',
+        'B1' => 'Passenger van / jeepney (M2)',
+        'B2' => 'Light commercial vehicle (N1)',
+        'C' => 'Heavy goods vehicle (N2, N3)',
+        'D' => 'Heavy passenger vehicle (M3)',
+        'BE' => 'Light trailer / articulated vehicle (O1, O2)',
+        'CE' => 'Heavy trailer / articulated vehicle (O3, O4)',
+    ];
+
+    public const CLUTCH_AUTHORIZATIONS = ['MT', 'AT'];
+
     public const VEHICLE_TYPE_OPTIONS = Vehicle::TYPE_OPTIONS;
 
     protected $fillable = [
-        //'driver_number',
+        // 'driver_number',
         'user_id',
         'first_name',
         'last_name',
         'license_number',
         'license_class',
+        'clutch_authorization',
         'license_expiry',
         'contact_number',
         'email',
@@ -72,6 +97,24 @@ class Driver extends Model
         return $this->hasMany(DriverVehicleQualification::class);
     }
 
+    public function licenseCodes(): HasMany
+    {
+        return $this->hasMany(DriverLicenseCode::class);
+    }
+
+    /** @return array<int, string> */
+    public function getDlCodesAttribute(): array
+    {
+        $codes = $this->relationLoaded('licenseCodes')
+            ? $this->licenseCodes->pluck('code')
+            : $this->licenseCodes()->pluck('code');
+        $order = array_flip(self::DL_CODES);
+
+        return $codes->sortBy(
+            fn (string $code): int => $order[$code] ?? PHP_INT_MAX
+        )->values()->all();
+    }
+
     public function preTripChecklists(): HasMany
     {
         return $this->hasMany(PreTripChecklist::class);
@@ -94,7 +137,6 @@ class Driver extends Model
     public function qualificationAdvisory(?string $targetVehicleType): array
     {
         $licenseStatus = $this->license_status;
-        $licenseWarning = $this->license_expiry !== null && $this->license_expiry->isPast();
 
         $qualifications = $this->relationLoaded('qualifications')
             ? $this->qualifications->pluck('vehicle_type')->all()
@@ -102,17 +144,6 @@ class Driver extends Model
 
         $isQualified = $targetVehicleType !== null
             && in_array($targetVehicleType, $qualifications, true);
-
-        if ($licenseWarning) {
-            return [
-                'state' => 'warning',
-                'label' => 'License Expired',
-                'message' => "Driver's license expired on " . $this->license_expiry->format('Y-m-d') . '.',
-                'is_qualified' => $isQualified,
-                'license_status' => $licenseStatus,
-                'authorized_types' => $qualifications,
-            ];
-        }
 
         if ($targetVehicleType === null) {
             return [
@@ -136,7 +167,7 @@ class Driver extends Model
             ];
         }
 
-        if (!$isQualified) {
+        if (! $isQualified) {
             return [
                 'state' => 'warning',
                 'label' => 'Qualification Mismatch',
@@ -150,9 +181,7 @@ class Driver extends Model
         return [
             'state' => 'suitable',
             'label' => 'Qualified',
-            'message' => $this->license_expiry === null
-                ? 'Driver is authorized for this vehicle type; license expiry is not recorded.'
-                : 'Driver is authorized for this vehicle type and the license is valid.',
+            'message' => 'Driver is internally authorized for this vehicle type.',
             'is_qualified' => true,
             'license_status' => $licenseStatus,
             'authorized_types' => $qualifications,

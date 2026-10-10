@@ -395,6 +395,19 @@ function populateEditDriverModal(modal, row) {
       .forEach((checkbox) => {
           checkbox.checked = qualifications.has(checkbox.value);
       });
+
+  const dlCodes = new Set(
+      (row.dataset.dlCodes || "").split("|").filter(Boolean),
+  );
+  document
+      .querySelectorAll('#editDriverDlCodeOptions input[type="checkbox"]')
+      .forEach((checkbox) => {
+          checkbox.checked = dlCodes.has(checkbox.value);
+      });
+  setEditDriverSelectValue(
+      "editDriverClutchAuthorization",
+      row.dataset.clutchAuthorization || "",
+  );
 }
 
 async function initEditDriverModal() {
@@ -542,6 +555,16 @@ async function initEditDriverModal() {
     formData.append(
         "license_expiry",
         document.getElementById("editDriverLicenseExpiry").value
+    );
+    formData.append("dl_codes_present", "1");
+    document
+        .querySelectorAll('#editDriverDlCodeOptions input[type="checkbox"]:checked')
+        .forEach((checkbox) => {
+            formData.append("dl_codes[]", checkbox.value);
+        });
+    formData.append(
+        "clutch_authorization",
+        document.getElementById("editDriverClutchAuthorization")?.value || "",
     );
     formData.append(
         "contact_number",

@@ -175,6 +175,18 @@ function populateViewVehicleModal(modal, vehicle) {
     );
     setViewVehicleText(
         modal,
+        "viewLtoVehicleCategory",
+        vehicle.lto_vehicle_category,
+        "Not Recorded",
+    );
+    setViewVehicleText(
+        modal,
+        "viewRequiredDlCode",
+        vehicle.required_dl_code,
+        "Not Determined - Vehicle Category Not Recorded",
+    );
+    setViewVehicleText(
+        modal,
         "viewVehicleSanitation",
         (vehicle.sanitation_logs || []).length
             ? vehicle.sanitation_logs

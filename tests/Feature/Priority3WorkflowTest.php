@@ -9,6 +9,7 @@ use App\Models\TripLog;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCapability;
+use App\Services\VehicleOperationalHealthService;
 use Illuminate\Database\QueryException;
 
 function priority3User(string $role = 'driver'): User
@@ -290,9 +291,12 @@ it('enforces unique qualifications and reports driver advisories', function () {
         ->and($driver->fresh()->qualificationAdvisory('SUV')['state'])->toBe('warning');
 });
 
-it('warns for expired licenses and treats missing qualification history neutrally', function () {
+it('keeps legal expiry separate from missing hospital qualification history', function () {
     $expired = priority3Driver(['license_expiry' => now()->subDay()->toDateString()]);
-    expect($expired->qualificationAdvisory('Ambulance')['label'])->toBe('License Expired');
+    expect($expired->qualificationAdvisory('Ambulance')['label'])
+        ->toBe('Qualification Information Unavailable')
+        ->and(app(VehicleOperationalHealthService::class)->driverLicenseAdvisory($expired)['state'])
+        ->toBe('expired');
 
     $legacy = priority3Driver(['license_expiry' => null]);
     $advisory = $legacy->qualificationAdvisory('Ambulance');

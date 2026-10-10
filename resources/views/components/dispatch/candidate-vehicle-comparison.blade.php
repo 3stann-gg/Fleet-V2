@@ -29,7 +29,8 @@
                     <th>Vehicle</th>
                     <th>Readiness</th>
                     <th>Capabilities</th>
-                    <th>Driver Match</th>
+                    <th>Hospital Qualification</th>
+                    <th>Driver License</th>
                     <th>Energy</th>
                     <th>Operational Health</th>
                     <th>Result</th>

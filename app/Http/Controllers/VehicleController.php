@@ -2,25 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Vehicle;
 use App\Models\Driver;
 use App\Models\FleetSetting;
+use App\Models\Vehicle;
 use App\Models\VehicleCapability;
 use App\Services\AuditLogService;
 use App\Services\VehicleOperationalHealthService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class VehicleController extends Controller
-{   
+{
     use AuthorizesRequests;
+
     /**
      * Display a listing of the resource.
      */
-
     private function getVehicleSettings(): array
     {
         $record = FleetSetting::query()
@@ -41,29 +41,25 @@ class VehicleController extends Controller
         $defaultStatus =
             $vehicleSettings['defaultStatus'] ?? 'Available';
 
-        if (!in_array($defaultStatus, $allowedStatuses, true)) {
+        if (! in_array($defaultStatus, $allowedStatuses, true)) {
             $defaultStatus = 'Available';
         }
 
         return [
-            'requirePlateNumber' =>
-                $vehicleSettings['requirePlateNumber'] ?? true,
-            
-            'requireDepartment' =>
-                $vehicleSettings['requireDepartment'] ?? false,
+            'requirePlateNumber' => $vehicleSettings['requirePlateNumber'] ?? true,
 
-            'defaultStatus' =>
-                $defaultStatus,
+            'requireDepartment' => $vehicleSettings['requireDepartment'] ?? false,
+
+            'defaultStatus' => $defaultStatus,
         ];
     }
 
     public function index(Request $request)
-    {   
+    {
         $this->authorize('viewAny', Vehicle::class);
 
         $user = $request->user();
         $showDriverDetails = $user->hasPermission('drivers.view');
-
 
         $query = Vehicle::with([
             'drivers',
@@ -89,13 +85,13 @@ class VehicleController extends Controller
 
             $query->where(function ($q) use ($search, $showDriverDetails) {
                 $q->where('brand', 'like', "%{$search}%")
-                ->orWhere('model', 'like', "%{$search}%")
-                ->orWhere('plate_number', 'like', "%{$search}%")
-                ->orWhere('department', 'like', "%{$search}%");
+                    ->orWhere('model', 'like', "%{$search}%")
+                    ->orWhere('plate_number', 'like', "%{$search}%")
+                    ->orWhere('department', 'like', "%{$search}%");
 
                 if ($showDriverDetails) {
                     $q->orWhereHas('drivers', function ($driver) use ($search) {
-                    $driver->where('first_name', 'like', "%{$search}%")
+                        $driver->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%");
                     });
                 }
@@ -121,37 +117,40 @@ class VehicleController extends Controller
                 : null;
 
             return [
-                'id'                => $vehicle->id,
-                'plate_number'      => $vehicle->plate_number,
-                'vehicle_type'      => $vehicle->vehicle_type,
-                'department'        => $vehicle->department,
-                'brand'             => $vehicle->brand,
-                'model'             => $vehicle->model,
-                'purchase_date'     => $vehicle->purchase_date,
-                'insurance_expiry'  => $vehicle->insurance_expiry,
-                'capacity'          => $vehicle->capacity,
-                'fuel_type'         => $vehicle->fuel_type,
-                'powertrain_type'   => $vehicle->powertrain_type,
-                'powertrain_label'  => $vehicle->powertrain_label,
-                'tank_capacity'     => $vehicle->tank_capacity,
-                'current_fuel'      => $vehicle->current_fuel,
-                'current_odometer'  => $vehicle->current_odometer,
+                'id' => $vehicle->id,
+                'plate_number' => $vehicle->plate_number,
+                'vehicle_type' => $vehicle->vehicle_type,
+                'lto_vehicle_category' => $vehicle->lto_vehicle_category,
+                'required_dl_code' => $vehicle->required_dl_code,
+                'department' => $vehicle->department,
+                'brand' => $vehicle->brand,
+                'model' => $vehicle->model,
+                'purchase_date' => $vehicle->purchase_date,
+                'insurance_expiry' => $vehicle->insurance_expiry,
+                'capacity' => $vehicle->capacity,
+                'fuel_type' => $vehicle->fuel_type,
+                'powertrain_type' => $vehicle->powertrain_type,
+                'powertrain_label' => $vehicle->powertrain_label,
+                'tank_capacity' => $vehicle->tank_capacity,
+                'current_fuel' => $vehicle->current_fuel,
+                'current_odometer' => $vehicle->current_odometer,
                 'battery_capacity_kwh' => $vehicle->battery_capacity_kwh,
                 'battery_level_percent' => $vehicle->battery_level_percent,
                 'estimated_range_km' => $vehicle->estimated_range_km,
                 'charging_port_type' => $vehicle->charging_port_type,
-                'status'            => $vehicle->status,
-                'readiness_status'  => $vehicle->readiness_status,
-                'readiness_label'   => $vehicle->readiness_label,
+                'transmission_type' => $vehicle->transmission_type,
+                'status' => $vehicle->status,
+                'readiness_status' => $vehicle->readiness_status,
+                'readiness_label' => $vehicle->readiness_label,
                 'fuel_level_percent' => $vehicle->fuel_level_percent,
-                'capabilities'      => $vehicle->capabilities->map(fn ($cap) => [
+                'capabilities' => $vehicle->capabilities->map(fn ($cap) => [
                     'id' => $cap->id,
                     'name' => $cap->name,
                     'slug' => $cap->slug,
                 ]),
 
                 'driver_name' => $driver
-                    ? $driver->first_name . ' ' . $driver->last_name
+                    ? $driver->first_name.' '.$driver->last_name
                     : null,
 
                 'driver_license' => $driver?->license_number,
@@ -165,73 +164,62 @@ class VehicleController extends Controller
                 */
                 'drivers' => $showDriverDetails
                     ? $vehicle->drivers->map(function ($driver) {
-                    return [
-                        'id' => $driver->id,
-                        'first_name' => $driver->first_name,
-                        'last_name' => $driver->last_name,
-                        'license_number' => $driver->license_number,
-                        'status' => $driver->status,
-                    ];
+                        return [
+                            'id' => $driver->id,
+                            'first_name' => $driver->first_name,
+                            'last_name' => $driver->last_name,
+                            'license_number' => $driver->license_number,
+                            'status' => $driver->status,
+                        ];
                     })->values()
                     : [],
                 // Last Service from Last Maintenance Complete
-                'last_service' =>
-                    $vehicle->lastCompletedMaintenance?->completion_date
-                        ?->format('Y-m-d'),
-                'last_service_record' =>
-                    $vehicle->lastCompletedMaintenance
+                'last_service' => $vehicle->lastCompletedMaintenance?->completion_date
+                    ?->format('Y-m-d'),
+                'last_service_record' => $vehicle->lastCompletedMaintenance
                         ? [
-                            'id' =>
-                                $vehicle->lastCompletedMaintenance->id,
-                            'maintenance_number' =>
-                                $vehicle->lastCompletedMaintenance->maintenance_number,
-                            'maintenance_type' =>
-                                $vehicle->lastCompletedMaintenance->maintenance_type,
-                            'completion_date' =>
-                                optional(
-                                    $vehicle->lastCompletedMaintenance->completion_date
-                                )->format('Y-m-d'),
-                            'cost' =>
-                                $vehicle->lastCompletedMaintenance->cost,
+                            'id' => $vehicle->lastCompletedMaintenance->id,
+                            'maintenance_number' => $vehicle->lastCompletedMaintenance->maintenance_number,
+                            'maintenance_type' => $vehicle->lastCompletedMaintenance->maintenance_type,
+                            'completion_date' => optional(
+                                $vehicle->lastCompletedMaintenance->completion_date
+                            )->format('Y-m-d'),
+                            'cost' => $vehicle->lastCompletedMaintenance->cost,
                         ]
                         : null,
-            
+
             ];
         });
-        
+
         // if AJAX request
         if ($request->expectsJson()) {
 
             return response()->json([
-                'vehicles' => $vehicles
+                'vehicles' => $vehicles,
             ]);
 
         }
 
         $vehiclePermissions = [
             'role' => $request->user()->role,
-            'canCreate' =>
-                $request->user()->can(
-                    'create',
-                    Vehicle::class
-                ),
-            'canUpdate' =>
-                $request->user()->hasPermission('vehicles.update'),
-            'canArchive' =>
-                $request->user()->hasPermission('vehicles.archive'),
-            'canBulkArchive' =>
-                $request->user()->hasPermission('vehicles.archive'),
-            'canRestore' =>
-                $request->user()->hasPermission('vehicles.archive'),
+            'canCreate' => $request->user()->can(
+                'create',
+                Vehicle::class
+            ),
+            'canUpdate' => $request->user()->hasPermission('vehicles.update'),
+            'canArchive' => $request->user()->hasPermission('vehicles.archive'),
+            'canBulkArchive' => $request->user()->hasPermission('vehicles.archive'),
+            'canRestore' => $request->user()->hasPermission('vehicles.archive'),
 
-            'canOpenMaintenance' =>
-                $request->user()->canViewModule('maintenance'),
+            'canOpenMaintenance' => $request->user()->canViewModule('maintenance'),
         ];
+
         return view(
             'fleet.index',
             compact('vehiclePermissions')
         );
     }
+
     /**
      * Show the form for creating a new resource.
      */
@@ -244,7 +232,7 @@ class VehicleController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-    {   
+    {
         $this->authorize('create', Vehicle::class);
 
         $vehicleSettings = $this->getVehicleSettings();
@@ -252,7 +240,7 @@ class VehicleController extends Controller
             (bool) $vehicleSettings['requirePlateNumber'];
         $requireDepartment =
             (bool) $vehicleSettings['requireDepartment'];
-        if (!$request->filled('status')) {
+        if (! $request->filled('status')) {
             $request->merge([
                 'status' => $vehicleSettings['defaultStatus'],
             ]);
@@ -299,6 +287,10 @@ class VehicleController extends Controller
                     'required',
                     Rule::in(Vehicle::TYPE_OPTIONS),
                 ],
+                'lto_vehicle_category' => [
+                    'nullable',
+                    Rule::in(Vehicle::LTO_VEHICLE_CATEGORIES),
+                ],
                 'department' => [
                     $requireDepartment
                         ? 'required'
@@ -313,11 +305,11 @@ class VehicleController extends Controller
                         'Logistics',
                     ]),
                 ],
-                'brand'             => 'required',
-                'model'             => 'required',
-                'purchase_date'     => 'nullable|date',
-                'insurance_expiry'  => 'nullable|date',
-                'capacity'          => 'required|integer',
+                'brand' => 'required',
+                'model' => 'required',
+                'purchase_date' => 'nullable|date',
+                'insurance_expiry' => 'nullable|date',
+                'capacity' => 'required|integer',
                 'powertrain_type' => [
                     'required',
                     Rule::in(
@@ -370,45 +362,44 @@ class VehicleController extends Controller
                     'max:100',
                 ],
                 'battery_health_percent' => [
-                    Rule::prohibitedIf(!$supportsBatteryHealth),
+                    Rule::prohibitedIf(! $supportsBatteryHealth),
                     'nullable',
                     'numeric',
                     'between:0,100',
                 ],
                 'battery_last_inspection_date' => [
-                    Rule::prohibitedIf(!$supportsBatteryHealth),
+                    Rule::prohibitedIf(! $supportsBatteryHealth),
                     'nullable',
                     'date',
                 ],
                 'engine_displacement_cc' => [
-                    Rule::prohibitedIf(!$isMotorcycle || $powertrainType === 'electric'),
+                    Rule::prohibitedIf(! $isMotorcycle || $powertrainType === 'electric'),
                     'nullable',
                     'integer',
                     'min:0',
                 ],
                 'transmission_type' => [
-                    Rule::prohibitedIf(!$isMotorcycle),
                     'nullable',
                     Rule::in(Vehicle::TRANSMISSION_TYPES),
                 ],
                 'helmet_available' => [
-                    Rule::prohibitedIf(!$isMotorcycle),
+                    Rule::prohibitedIf(! $isMotorcycle),
                     'nullable',
                     'boolean',
                 ],
                 'cargo_box_available' => [
-                    Rule::prohibitedIf(!$isMotorcycle),
+                    Rule::prohibitedIf(! $isMotorcycle),
                     'nullable',
                     'boolean',
                 ],
                 'cargo_capacity_kg' => [
-                    Rule::prohibitedIf(!$isMotorcycle),
+                    Rule::prohibitedIf(! $isMotorcycle),
                     'nullable',
                     'numeric',
                     'min:0',
                 ],
                 'registration_expiry' => [
-                    Rule::prohibitedIf(!$isMotorcycle),
+                    Rule::prohibitedIf(! $isMotorcycle),
                     'nullable',
                     'date',
                 ],
@@ -425,13 +416,13 @@ class VehicleController extends Controller
                     'nullable',
                     Rule::in(array_keys(Vehicle::READINESS_LABELS)),
                 ],
-                'assigned_driver_id'=> 'nullable|exists:drivers,id',
+                'assigned_driver_id' => 'nullable|exists:drivers,id',
                 'capabilities' => ['nullable', 'array'],
                 'capabilities.*' => [
                     'integer',
                     Rule::exists((new VehicleCapability)->getTable(), 'id'),
                 ],
-                'notes'             => 'nullable|string',
+                'notes' => 'nullable|string',
             ]
         );
 
@@ -472,13 +463,11 @@ class VehicleController extends Controller
         AuditLogService::log(
             module: 'Vehicle Management',
             action: 'Created',
-            description:
-                "Created vehicle {$vehicle->plate_number}.",
+            description: "Created vehicle {$vehicle->plate_number}.",
             record: $vehicle,
-            newValues:
-                $this->getVehicleAuditValues(
-                    $vehicle
-                )
+            newValues: $this->getVehicleAuditValues(
+                $vehicle
+            )
         );
 
         return response()->json([
@@ -530,7 +519,7 @@ class VehicleController extends Controller
             'activeSanitationLog',
         ];
 
-        if ($user->hasPermission('drivers.view') && !$user->hasRole('driver')) {
+        if ($user->hasPermission('drivers.view') && ! $user->hasRole('driver')) {
             $relations[] = 'drivers';
         }
 
@@ -543,14 +532,11 @@ class VehicleController extends Controller
             : collect();
 
         return response()->json([
-            'vehicle' =>
-                $vehicle,
+            'vehicle' => $vehicle,
 
-            'drivers' =>
-                $availableDrivers,
+            'drivers' => $availableDrivers,
 
-            'operational_health' =>
-                $healthService->summarize($vehicle),
+            'operational_health' => $healthService->summarize($vehicle),
         ]);
     }
 
@@ -624,6 +610,10 @@ class VehicleController extends Controller
                     'vehicle_type' => [
                         'required',
                         Rule::in(Vehicle::TYPE_OPTIONS),
+                    ],
+                    'lto_vehicle_category' => [
+                        'nullable',
+                        Rule::in(Vehicle::LTO_VEHICLE_CATEGORIES),
                     ],
                     'department' => [
                         $requireDepartment
@@ -715,45 +705,44 @@ class VehicleController extends Controller
                         'max:100',
                     ],
                     'battery_health_percent' => [
-                        Rule::prohibitedIf(!$supportsBatteryHealth),
+                        Rule::prohibitedIf(! $supportsBatteryHealth),
                         'nullable',
                         'numeric',
                         'between:0,100',
                     ],
                     'battery_last_inspection_date' => [
-                        Rule::prohibitedIf(!$supportsBatteryHealth),
+                        Rule::prohibitedIf(! $supportsBatteryHealth),
                         'nullable',
                         'date',
                     ],
                     'engine_displacement_cc' => [
-                        Rule::prohibitedIf(!$isMotorcycle || $powertrainType === 'electric'),
+                        Rule::prohibitedIf(! $isMotorcycle || $powertrainType === 'electric'),
                         'nullable',
                         'integer',
                         'min:0',
                     ],
                     'transmission_type' => [
-                        Rule::prohibitedIf(!$isMotorcycle),
                         'nullable',
                         Rule::in(Vehicle::TRANSMISSION_TYPES),
                     ],
                     'helmet_available' => [
-                        Rule::prohibitedIf(!$isMotorcycle),
+                        Rule::prohibitedIf(! $isMotorcycle),
                         'nullable',
                         'boolean',
                     ],
                     'cargo_box_available' => [
-                        Rule::prohibitedIf(!$isMotorcycle),
+                        Rule::prohibitedIf(! $isMotorcycle),
                         'nullable',
                         'boolean',
                     ],
                     'cargo_capacity_kg' => [
-                        Rule::prohibitedIf(!$isMotorcycle),
+                        Rule::prohibitedIf(! $isMotorcycle),
                         'nullable',
                         'numeric',
                         'min:0',
                     ],
                     'registration_expiry' => [
-                        Rule::prohibitedIf(!$isMotorcycle),
+                        Rule::prohibitedIf(! $isMotorcycle),
                         'nullable',
                         'date',
                     ],
@@ -808,10 +797,8 @@ class VehicleController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Please check the vehicle information.',
-                    'errors' =>
-                        $validator->errors(),
+                    'message' => 'Please check the vehicle information.',
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -823,10 +810,9 @@ class VehicleController extends Controller
                     : now();
             }
 
-            if (!$isMotorcycle) {
+            if (! $isMotorcycle) {
                 $validated = array_merge($validated, [
                     'engine_displacement_cc' => null,
-                    'transmission_type' => null,
                     'helmet_available' => null,
                     'cargo_box_available' => null,
                     'cargo_capacity_kg' => null,
@@ -851,8 +837,7 @@ class VehicleController extends Controller
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Tank capacity cannot be lower than the vehicle\'s current fuel level.',
+                    'message' => 'Tank capacity cannot be lower than the vehicle\'s current fuel level.',
                 ], 422);
             }
 
@@ -898,8 +883,7 @@ class VehicleController extends Controller
                         'id',
                         $driverId
                     )->update([
-                        'assigned_vehicle_id' =>
-                            $vehicle->id,
+                        'assigned_vehicle_id' => $vehicle->id,
                     ]);
                 }
             }
@@ -950,8 +934,7 @@ class VehicleController extends Controller
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Current fuel cannot exceed tank capacity.',
+                    'message' => 'Current fuel cannot exceed tank capacity.',
                 ], 422);
             }
 
@@ -1001,13 +984,13 @@ class VehicleController extends Controller
                         'nullable',
                         'numeric',
                         'between:0,100',
-                        Rule::prohibitedIf(!$vehicle->supportsExternalCharging()),
+                        Rule::prohibitedIf(! $vehicle->supportsExternalCharging()),
                     ],
                     'battery_last_inspection_date' => [
                         'sometimes',
                         'nullable',
                         'date',
-                        Rule::prohibitedIf(!$vehicle->supportsExternalCharging()),
+                        Rule::prohibitedIf(! $vehicle->supportsExternalCharging()),
                     ],
                     'notes' => [
                         'sometimes',
@@ -1030,9 +1013,7 @@ class VehicleController extends Controller
             }
 
             $vehicle->update($validated);
-        }
-
-        else {
+        } else {
             abort(403);
         }
 
@@ -1050,8 +1031,7 @@ class VehicleController extends Controller
         $changedNewValues = [];
 
         foreach (
-            $newAuditValues
-            as $field => $newValue
+            $newAuditValues as $field => $newValue
         ) {
             $oldValue =
                 $oldAuditValues[$field]
@@ -1069,7 +1049,7 @@ class VehicleController extends Controller
             }
         }
 
-        if (!empty($changedNewValues)) {
+        if (! empty($changedNewValues)) {
             $action = 'Updated';
 
             if (
@@ -1118,18 +1098,12 @@ class VehicleController extends Controller
             }
 
             $description = match ($action) {
-                'Driver Assigned' =>
-                    "Assigned a driver to vehicle {$vehicle->plate_number}.",
-                'Driver Unassigned' =>
-                    "Unassigned the driver from vehicle {$vehicle->plate_number}.",
-                'Driver Reassigned' =>
-                    "Reassigned the driver for vehicle {$vehicle->plate_number}.",
-                'Status Changed' =>
-                    "Changed the status of vehicle {$vehicle->plate_number}.",
-                'Battery Health Updated' =>
-                    "Recorded manual battery health information for vehicle {$vehicle->plate_number}.",
-                default =>
-                    "Updated vehicle {$vehicle->plate_number}.",
+                'Driver Assigned' => "Assigned a driver to vehicle {$vehicle->plate_number}.",
+                'Driver Unassigned' => "Unassigned the driver from vehicle {$vehicle->plate_number}.",
+                'Driver Reassigned' => "Reassigned the driver for vehicle {$vehicle->plate_number}.",
+                'Status Changed' => "Changed the status of vehicle {$vehicle->plate_number}.",
+                'Battery Health Updated' => "Recorded manual battery health information for vehicle {$vehicle->plate_number}.",
+                default => "Updated vehicle {$vehicle->plate_number}.",
             };
 
             AuditLogService::log(
@@ -1137,26 +1111,22 @@ class VehicleController extends Controller
                 action: $action,
                 description: $description,
                 record: $vehicle,
-                oldValues:
-                    $changedOldValues,
-                newValues:
-                    $changedNewValues
+                oldValues: $changedOldValues,
+                newValues: $changedNewValues
             );
         }
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Vehicle updated successfully.',
-            'vehicle' =>
-                $vehicle->fresh()->load('drivers'),
+            'message' => 'Vehicle updated successfully.',
+            'vehicle' => $vehicle->fresh()->load('drivers'),
         ]);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-        public function archive(
+    public function archive(
         Request $request,
         Vehicle $vehicle
     ) {
@@ -1202,8 +1172,7 @@ class VehicleController extends Controller
             AuditLogService::log(
                 module: 'Vehicle Management',
                 action: 'Archived',
-                description:
-                    "Archived vehicle {$vehicle->plate_number}.",
+                description: "Archived vehicle {$vehicle->plate_number}.",
                 record: $vehicle,
                 oldValues: $oldValues,
                 newValues: [
@@ -1226,7 +1195,7 @@ class VehicleController extends Controller
     ) {
         $this->authorize('restore', $vehicle);
 
-        if (!$vehicle->archived_at) {
+        if (! $vehicle->archived_at) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vehicle is not archived.',
@@ -1234,10 +1203,8 @@ class VehicleController extends Controller
         }
 
         $oldValues = [
-            'archived_at' =>
-                $vehicle->archived_at?->toDateTimeString(),
-            'archived_by' =>
-                $vehicle->archived_by,
+            'archived_at' => $vehicle->archived_at?->toDateTimeString(),
+            'archived_by' => $vehicle->archived_by,
         ];
 
         $vehicle->update([
@@ -1248,8 +1215,7 @@ class VehicleController extends Controller
         AuditLogService::log(
             module: 'Vehicle Management',
             action: 'Restored',
-            description:
-                "Restored vehicle {$vehicle->plate_number}.",
+            description: "Restored vehicle {$vehicle->plate_number}.",
             record: $vehicle,
             oldValues: $oldValues,
             newValues: [
@@ -1307,15 +1273,12 @@ class VehicleController extends Controller
                 AuditLogService::log(
                     module: 'Vehicle Management',
                     action: 'Archived',
-                    description:
-                        "Archived vehicle {$vehicle->plate_number}.",
+                    description: "Archived vehicle {$vehicle->plate_number}.",
                     record: $vehicle,
                     oldValues: $oldValues,
                     newValues: [
-                        'archived_at' =>
-                            $vehicle->archived_at?->toDateTimeString(),
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_at' => $vehicle->archived_at?->toDateTimeString(),
+                        'archived_by' => $request->user()->id,
                         'assigned_driver_id' => null,
                     ]
                 );
@@ -1346,37 +1309,32 @@ class VehicleController extends Controller
             )->whereNull('archived_at');
 
         return response()->json([
-            'total' =>
-                (clone $baseQuery)
-                    ->count(),
-            'available' =>
-                (clone $baseQuery)
-                    ->where(
-                        'status',
-                        'Available'
-                    )
-                    ->count(),
-            'on_trip' =>
-                (clone $baseQuery)
-                    ->where(
-                        'status',
-                        'On Trip'
-                    )
-                    ->count(),
-            'maintenance' =>
-                (clone $baseQuery)
-                    ->where(
-                        'status',
-                        'Maintenance'
-                    )
-                    ->count(),
-            'out_of_service' =>
-                (clone $baseQuery)
-                    ->where(
-                        'status',
-                        'Out of Service'
-                    )
-                    ->count(),
+            'total' => (clone $baseQuery)
+                ->count(),
+            'available' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    'Available'
+                )
+                ->count(),
+            'on_trip' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    'On Trip'
+                )
+                ->count(),
+            'maintenance' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    'Maintenance'
+                )
+                ->count(),
+            'out_of_service' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    'Out of Service'
+                )
+                ->count(),
         ]);
     }
 
@@ -1410,6 +1368,7 @@ class VehicleController extends Controller
                     'brand',
                     'model',
                     'vehicle_type',
+                    'lto_vehicle_category',
                     'department',
                     'fuel_type',
                     'powertrain_type',
@@ -1490,90 +1449,63 @@ class VehicleController extends Controller
             $vehicle->drivers->first();
 
         return [
-            'plate_number' =>
-                $vehicle->plate_number,
+            'plate_number' => $vehicle->plate_number,
 
-            'vehicle_type' =>
-                $vehicle->vehicle_type,
+            'vehicle_type' => $vehicle->vehicle_type,
 
-            'department' =>
-                $vehicle->department,
+            'lto_vehicle_category' => $vehicle->lto_vehicle_category,
 
-            'brand' =>
-                $vehicle->brand,
+            'department' => $vehicle->department,
 
-            'model' =>
-                $vehicle->model,
+            'brand' => $vehicle->brand,
 
-            'capacity' =>
-                $vehicle->capacity,
+            'model' => $vehicle->model,
 
-            'fuel_type' =>
-                $vehicle->fuel_type,
+            'capacity' => $vehicle->capacity,
 
-            'powertrain_type' =>
-                $vehicle->powertrain_type,
+            'fuel_type' => $vehicle->fuel_type,
 
-            'tank_capacity' =>
-                $vehicle->tank_capacity,
+            'powertrain_type' => $vehicle->powertrain_type,
 
-            'current_fuel' =>
-                $vehicle->current_fuel,
+            'tank_capacity' => $vehicle->tank_capacity,
 
-            'current_odometer' =>
-                $vehicle->current_odometer,
+            'current_fuel' => $vehicle->current_fuel,
 
-            'battery_capacity_kwh' =>
-                $vehicle->battery_capacity_kwh,
+            'current_odometer' => $vehicle->current_odometer,
 
-            'battery_level_percent' =>
-                $vehicle->battery_level_percent,
+            'battery_capacity_kwh' => $vehicle->battery_capacity_kwh,
 
-            'estimated_range_km' =>
-                $vehicle->estimated_range_km,
+            'battery_level_percent' => $vehicle->battery_level_percent,
 
-            'charging_port_type' =>
-                $vehicle->charging_port_type,
+            'estimated_range_km' => $vehicle->estimated_range_km,
 
-            'battery_health_percent' =>
-                $vehicle->battery_health_percent,
+            'charging_port_type' => $vehicle->charging_port_type,
 
-            'battery_health_updated_at' =>
-                $vehicle->battery_health_updated_at?->toIso8601String(),
+            'battery_health_percent' => $vehicle->battery_health_percent,
 
-            'battery_last_inspection_date' =>
-                $vehicle->battery_last_inspection_date?->format('Y-m-d'),
+            'battery_health_updated_at' => $vehicle->battery_health_updated_at?->toIso8601String(),
 
-            'engine_displacement_cc' =>
-                $vehicle->engine_displacement_cc,
+            'battery_last_inspection_date' => $vehicle->battery_last_inspection_date?->format('Y-m-d'),
 
-            'transmission_type' =>
-                $vehicle->transmission_type,
+            'engine_displacement_cc' => $vehicle->engine_displacement_cc,
 
-            'helmet_available' =>
-                $vehicle->helmet_available,
+            'transmission_type' => $vehicle->transmission_type,
 
-            'cargo_box_available' =>
-                $vehicle->cargo_box_available,
+            'helmet_available' => $vehicle->helmet_available,
 
-            'cargo_capacity_kg' =>
-                $vehicle->cargo_capacity_kg,
+            'cargo_box_available' => $vehicle->cargo_box_available,
 
-            'registration_expiry' =>
-                $vehicle->registration_expiry?->format('Y-m-d'),
+            'cargo_capacity_kg' => $vehicle->cargo_capacity_kg,
 
-            'status' =>
-                $vehicle->status,
+            'registration_expiry' => $vehicle->registration_expiry?->format('Y-m-d'),
 
-            'readiness_status' =>
-                $vehicle->readiness_status,
+            'status' => $vehicle->status,
 
-            'capabilities' =>
-                $vehicle->capabilities->pluck('slug')->sort()->values()->implode(', '),
+            'readiness_status' => $vehicle->readiness_status,
 
-            'assigned_driver_id' =>
-                $driver?->id,
+            'capabilities' => $vehicle->capabilities->pluck('slug')->sort()->values()->implode(', '),
+
+            'assigned_driver_id' => $driver?->id,
         ];
     }
-
 }

@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\DriverLicenseCompatibilityService;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Reservation;
-use App\Models\Maintenance;
-use App\Models\VehicleLocation;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Vehicle extends Model
 {
@@ -29,6 +27,46 @@ class Vehicle extends Model
         'automatic',
         'manual',
         'semi_automatic',
+    ];
+
+    public const LTO_VEHICLE_CATEGORIES = [
+        'L1',
+        'L2',
+        'L3',
+        'L4',
+        'L5',
+        'L6',
+        'L7',
+        'M1',
+        'M2',
+        'M3',
+        'N1',
+        'N2',
+        'N3',
+        'O1',
+        'O2',
+        'O3',
+        'O4',
+    ];
+
+    public const LTO_VEHICLE_CATEGORY_LABELS = [
+        'L1' => 'Two-wheel moped',
+        'L2' => 'Three-wheel moped',
+        'L3' => 'Two-wheel motorcycle',
+        'L4' => 'Motorcycle with sidecar',
+        'L5' => 'Powered tricycle',
+        'L6' => 'Light quadricycle',
+        'L7' => 'Heavy quadricycle',
+        'M1' => 'Passenger vehicle',
+        'M2' => 'Passenger vehicle over 8 seats',
+        'M3' => 'Heavy passenger vehicle / bus',
+        'N1' => 'Light goods vehicle',
+        'N2' => 'Medium goods vehicle',
+        'N3' => 'Heavy goods vehicle',
+        'O1' => 'Light trailer',
+        'O2' => 'Trailer',
+        'O3' => 'Heavy trailer',
+        'O4' => 'Heavy articulated trailer',
     ];
 
     public const POWERTRAIN_LABELS = [
@@ -63,11 +101,13 @@ class Vehicle extends Model
         'powertrain_label',
         'readiness_label',
         'fuel_level_percent',
+        'required_dl_code',
     ];
 
     protected $fillable = [
         'plate_number',
         'vehicle_type',
+        'lto_vehicle_category',
         'department',
         'brand',
         'model',
@@ -97,7 +137,7 @@ class Vehicle extends Model
         'notes',
         'archived_at',
         'archived_by',
-        //'last_service',
+        // 'last_service',
     ];
 
     protected $casts = [
@@ -125,11 +165,16 @@ class Vehicle extends Model
         return $this->vehicle_type === 'Motorcycle';
     }
 
+    public function getRequiredDlCodeAttribute(): ?string
+    {
+        return DriverLicenseCompatibilityService::requiredDlCode($this->lto_vehicle_category);
+    }
+
     public function getDisplayLabelAttribute(): string
     {
         $brandModel = trim(
-            ($this->brand ?? '') .
-            ' ' .
+            ($this->brand ?? '').
+            ' '.
             ($this->model ?? '')
         );
         $vehicleType = trim(
@@ -139,8 +184,8 @@ class Vehicle extends Model
             $brandModel !== '' &&
             $vehicleType !== ''
         ) {
-            return $brandModel .
-                ' - ' .
+            return $brandModel.
+                ' - '.
                 $vehicleType;
         }
         if ($brandModel !== '') {
@@ -149,11 +194,12 @@ class Vehicle extends Model
         if ($vehicleType !== '') {
             return $vehicleType;
         }
+
         return $this->plate_number
             ?: 'Vehicle';
     }
-    
-     public function drivers()
+
+    public function drivers()
     {
         return $this->hasMany(Driver::class, 'assigned_vehicle_id');
     }
@@ -287,7 +333,7 @@ class Vehicle extends Model
             'refueling',
         ];
 
-        if (!$allowInUse) {
+        if (! $allowInUse) {
             $blockingReadinessStatuses[] = 'in_use';
         }
 
@@ -295,7 +341,7 @@ class Vehicle extends Model
             return false;
         }
 
-        return !$this->sanitationLogs()
+        return ! $this->sanitationLogs()
             ->whereIn('status', ['pending', 'in_progress'])
             ->exists();
     }
@@ -305,7 +351,7 @@ class Vehicle extends Model
      */
     public function energyAdvisory(?float $plannedDistanceKm): array
     {
-        if (!$this->isOperationallyReady()) {
+        if (! $this->isOperationallyReady()) {
             return [
                 'state' => 'not_ready',
                 'label' => 'Not Ready',
@@ -361,7 +407,7 @@ class Vehicle extends Model
     }
 
     /**
-     * @param iterable<mixed>|null $requiredCapabilities
+     * @param  iterable<mixed>|null  $requiredCapabilities
      * @return array{state: string, label: string, message: string, missing: array<string>}
      */
     public function capabilityAdvisory($requiredCapabilities): array
@@ -388,17 +434,17 @@ class Vehicle extends Model
             $slug = is_string($cap) ? $cap : ($cap->slug ?? null);
             $name = is_string($cap) ? $cap : ($cap->name ?? $slug);
 
-            if ($slug && !in_array($slug, $vehicleCapabilitySlugs, true)) {
+            if ($slug && ! in_array($slug, $vehicleCapabilitySlugs, true)) {
                 $missingSlugs[] = $slug;
                 $missingNames[] = $name;
             }
         }
 
-        if (!empty($missingSlugs)) {
+        if (! empty($missingSlugs)) {
             return [
                 'state' => 'warning',
                 'label' => 'Capability Mismatch',
-                'message' => 'Vehicle lacks required capability: ' . implode(', ', $missingNames),
+                'message' => 'Vehicle lacks required capability: '.implode(', ', $missingNames),
                 'missing' => $missingNames,
             ];
         }

@@ -80,6 +80,17 @@ function populateViewDriverModal(modal, row) {
     );
     setViewDriverText(
         modal,
+        "viewDriverDlCodes",
+        (row.dataset.dlCodes || "").split("|").filter(Boolean).join(", ") ||
+            "Not Recorded",
+    );
+    setViewDriverText(
+        modal,
+        "viewDriverClutchAuthorization",
+        row.dataset.clutchAuthorization || "Not Recorded",
+    );
+    setViewDriverText(
+        modal,
         "viewDriverPhone",
         row.dataset.contactNumber
     );

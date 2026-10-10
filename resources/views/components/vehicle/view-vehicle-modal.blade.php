@@ -82,6 +82,21 @@
           <p id="viewVehicleCapabilities">No capabilities recorded</p>
         </div>
 
+        <div class="view-vehicle-detail-item">
+          <label>LTO Vehicle Category</label>
+          <p id="viewLtoVehicleCategory"></p>
+        </div>
+
+        <div class="view-vehicle-detail-item">
+          <label>Required DL Code</label>
+          <p id="viewRequiredDlCode"></p>
+        </div>
+
+        <div class="view-vehicle-detail-item">
+          <label>Transmission</label>
+          <p id="viewTransmissionType"></p>
+        </div>
+
         <div class="view-vehicle-detail-item full-width">
           <label>Sanitation Records</label>
           <p id="viewVehicleSanitation">No sanitation records</p>
@@ -182,11 +197,6 @@
         <div class="view-vehicle-detail-item" data-view-motorcycle-field data-view-motorcycle-engine-field>
           <label>Engine Displacement</label>
           <p id="viewEngineDisplacement"></p>
-        </div>
-
-        <div class="view-vehicle-detail-item" data-view-motorcycle-field>
-          <label>Transmission</label>
-          <p id="viewTransmissionType"></p>
         </div>
 
         <div class="view-vehicle-detail-item" data-view-motorcycle-field>

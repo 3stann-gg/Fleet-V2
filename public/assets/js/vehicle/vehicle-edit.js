@@ -265,6 +265,10 @@ function populateEditVehicleModal(vehicle) {
     setEditVehicleFieldValue("editVehicleId", vehicle.id);
     setEditVehicleFieldValue("editVehiclePlate", vehicle.plate_number);
     setEditVehicleSelectValue("editVehicleType", vehicle.vehicle_type);
+    setEditVehicleSelectValue(
+        "editVehicleLtoCategory",
+        vehicle.lto_vehicle_category || "",
+    );
     setEditVehicleSelectValue("editVehicleDepartment", vehicle.department);
     setEditVehicleFieldValue("editVehicleCapacity", vehicle.capacity);
     setEditVehicleSelectValue(
@@ -571,6 +575,10 @@ async function initEditVehicleModal() {
                     "",
                 vehicle_type:
                     document.getElementById("editVehicleType")?.value || "",
+                lto_vehicle_category:
+                    document.getElementById("editVehicleLtoCategory")?.value || null,
+                transmission_type:
+                    document.getElementById("editVehicleTransmissionType")?.value || null,
                 department:
                     document.getElementById("editVehicleDepartment")?.value ||
                     null,
@@ -595,9 +603,6 @@ async function initEditVehicleModal() {
             if (formData.vehicle_type === "Motorcycle") {
                 formData.engine_displacement_cc =
                     document.getElementById("editVehicleEngineDisplacement")?.value ||
-                    null;
-                formData.transmission_type =
-                    document.getElementById("editVehicleTransmissionType")?.value ||
                     null;
                 formData.helmet_available =
                     document.getElementById("editVehicleHelmetAvailable")?.value || null;

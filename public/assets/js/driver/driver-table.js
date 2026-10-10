@@ -190,6 +190,11 @@ function renderDriverTable(drivers) {
         const qualifications = Array.isArray(driver.qualifications)
             ? driver.qualifications.map((qualification) => qualification.vehicle_type)
             : [];
+        const dlCodes = Array.isArray(driver.dl_codes)
+            ? driver.dl_codes
+            : Array.isArray(driver.license_codes)
+              ? driver.license_codes.map((licenseCode) => licenseCode.code)
+              : [];
 
         const vehicleText = driver.vehicle
             ? `${driver.vehicle.brand ?? ""} ${driver.vehicle.model ?? ""} — ${
@@ -206,6 +211,8 @@ function renderDriverTable(drivers) {
                 data-license-number="${driver.license_number ?? ""}"
                 data-license-class="${driver.license_class ?? ""}"
                 data-license-expiry="${driver.license_expiry ?? ""}"
+                data-dl-codes="${escapeDriverHtml(dlCodes.join("|"))}"
+                data-clutch-authorization="${escapeDriverHtml(driver.clutch_authorization ?? "")}"
                 data-contact-number="${driver.contact_number ?? ""}"
                 data-email="${driver.email ?? ""}"
                 data-experience="${driver.experience ?? ""}"
