@@ -197,6 +197,22 @@ function populateViewVehicleModal(modal, vehicle) {
                   .join(" · ")
             : "No sanitation records",
     );
+    const trafficViolationContainer = modal.querySelector("#viewVehicleTrafficViolations");
+    if (trafficViolationContainer) {
+        const violations = vehicle.traffic_violations || [];
+        if (!violations.length) {
+            trafficViolationContainer.textContent = "No traffic violation records";
+        } else {
+            trafficViolationContainer.replaceChildren(...violations.map((violation) => {
+                const item = document.createElement("p");
+                const driverName = violation.driver
+                    ? [violation.driver.first_name, violation.driver.last_name].filter(Boolean).join(" ")
+                    : "No driver identified";
+                item.textContent = `${violation.violation_date || "Date not recorded"} · ${violation.violation_type_label || violation.violation_type} · ${driverName} · ${violation.responsibility_label || violation.responsibility} · ${violation.status_label || violation.status}`;
+                return item;
+            }));
+        }
+    }
     setViewVehicleText(modal, "viewFuelType", fuelType);
     setViewVehicleText(
         modal,

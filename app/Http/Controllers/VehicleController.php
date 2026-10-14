@@ -523,6 +523,20 @@ class VehicleController extends Controller
             $relations[] = 'drivers';
         }
 
+        if ($user->hasPermission('traffic_violations.view')) {
+            $relations['trafficViolations'] = function ($query) use ($user): void {
+                $query->select(['id', 'driver_id', 'vehicle_id', 'violation_date', 'violation_type', 'responsibility', 'status'])
+                    ->whereNull('archived_at')
+                    ->when($user->hasRole('driver'), fn ($builder) => $builder->where('driver_id', $user->driverProfile?->id))
+                    ->when($user->hasRole('maintenance'), fn ($builder) => $builder->whereIn('violation_type', [
+                        'registration_document_issue', 'vehicle_equipment_issue',
+                    ]))
+                    ->with('driver:id,first_name,last_name')
+                    ->latest('violation_date')
+                    ->limit(20);
+            };
+        }
+
         $vehicle->load($relations);
 
         $availableDrivers = $user->hasRole('fleet_manager')

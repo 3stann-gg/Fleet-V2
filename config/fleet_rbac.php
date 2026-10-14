@@ -119,6 +119,16 @@ return [
             'it_admin' => 'view',
         ],
 
+        'traffic_violations' => [
+            'fleet_manager' => 'full',
+            'dispatcher' => 'full',
+            'driver' => 'limited',
+            'department_head' => 'none',
+            'finance' => 'limited',
+            'maintenance' => 'view',
+            'it_admin' => 'view',
+        ],
+
         'maintenance' => [
             'fleet_manager' => 'full',
             'dispatcher' => 'view',
@@ -218,6 +228,8 @@ return [
             'operational_health.view', 'battery_health.update',
             'drivers.view', 'drivers.create', 'drivers.update', 'drivers.archive',
             'driver_performance.view', 'driver_qualifications.update',
+            'traffic_violations.view', 'traffic_violations.create', 'traffic_violations.update',
+            'traffic_violations.review', 'traffic_violations.archive', 'traffic_violations.settlement',
             'reservations.view', 'reservations.create', 'reservations.update',
             'reservations.cancel', 'reservations.archive', 'reservations.manage_all',
             'dispatch.view', 'dispatch.create', 'dispatch.update', 'dispatch.complete', 'dispatch.archive',
@@ -238,6 +250,7 @@ return [
             'dashboard.view',
             'vehicles.view', 'operational_health.view',
             'drivers.view', 'driver_performance.view',
+            'traffic_violations.view',
             'reservations.view', 'dispatch.view',
             'pretrip.view', 'posttrip.view', 'sanitation.view',
             'maintenance.view', 'fuel.view', 'charging.view',
@@ -253,6 +266,7 @@ return [
             'dashboard.view',
             'vehicles.view', 'operational_health.view',
             'drivers.view',
+            'traffic_violations.view', 'traffic_violations.create', 'traffic_violations.update',
             'reservations.view', 'reservations.create', 'reservations.update',
             'reservations.cancel', 'reservations.manage_all',
             'dispatch.view', 'dispatch.create', 'dispatch.update', 'dispatch.complete', 'dispatch.archive',
@@ -268,6 +282,7 @@ return [
         'driver' => [
             'dashboard.view',
             'vehicles.view', 'drivers.view',
+            'traffic_violations.view',
             'reservations.view', 'dispatch.view', 'dispatch.update', 'dispatch.complete',
             'pretrip.view', 'pretrip.complete', 'posttrip.view', 'posttrip.complete',
             'sanitation.view', 'sanitation.create',
@@ -278,6 +293,7 @@ return [
         'maintenance' => [
             'dashboard.view',
             'vehicles.view', 'vehicles.update',
+            'traffic_violations.view',
             'operational_health.view', 'battery_health.update',
             'pretrip.view', 'posttrip.view',
             'sanitation.view', 'sanitation.create', 'sanitation.update',
@@ -299,6 +315,7 @@ return [
         'finance' => [
             'dashboard.view',
             'vehicles.view', 'maintenance.view',
+            'traffic_violations.view', 'traffic_violations.settlement',
             'fuel.view', 'charging.view',
             'cost_analysis.view',
             'reports.view', 'reports.export',

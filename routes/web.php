@@ -29,6 +29,7 @@ use App\Http\Controllers\PreTripChecklistController;
 use App\Http\Controllers\PostTripChecklistController;
 use App\Http\Controllers\SanitationLogController;
 use App\Http\Controllers\SecureReportExportController;
+use App\Http\Controllers\TrafficViolationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -521,6 +522,56 @@ Route::middleware([
             '/driver-performance/data',
             [DriverPerformanceController::class, 'data']
         )->name('driver-performance.data');
+
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRAFFIC VIOLATION MANAGEMENT
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('fleet.module:traffic_violations')->group(function () {
+
+        Route::get(
+            '/traffic-violations',
+            [TrafficViolationController::class, 'index']
+        )->name('traffic-violations.index');
+
+        Route::post(
+            '/traffic-violations',
+            [TrafficViolationController::class, 'store']
+        )->name('traffic-violations.store');
+
+        Route::get(
+            '/traffic-violations/{trafficViolation}',
+            [TrafficViolationController::class, 'show']
+        )->name('traffic-violations.show');
+
+        Route::put(
+            '/traffic-violations/{trafficViolation}',
+            [TrafficViolationController::class, 'update']
+        )->name('traffic-violations.update');
+
+        Route::put(
+            '/traffic-violations/{trafficViolation}/review',
+            [TrafficViolationController::class, 'review']
+        )->name('traffic-violations.review');
+
+        Route::put(
+            '/traffic-violations/{trafficViolation}/settlement',
+            [TrafficViolationController::class, 'settlement']
+        )->name('traffic-violations.settlement');
+
+        Route::post(
+            '/traffic-violations/{trafficViolation}/archive',
+            [TrafficViolationController::class, 'archive']
+        )->name('traffic-violations.archive');
+
+        Route::post(
+            '/traffic-violations/{trafficViolation}/restore',
+            [TrafficViolationController::class, 'restore']
+        )->name('traffic-violations.restore');
 
     });
 

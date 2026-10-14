@@ -2,10 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Reservation;
-use App\Models\User;
-use App\Models\DispatchReassignment;
-use App\Models\TripLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -78,5 +74,10 @@ class Dispatch extends Model
     public function sanitationLogs(): HasMany
     {
         return $this->hasMany(SanitationLog::class);
+    }
+
+    public function trafficViolations(): HasMany
+    {
+        return $this->hasMany(TrafficViolation::class);
     }
 }

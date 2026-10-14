@@ -24,6 +24,9 @@
     $canDriverPerformance =
         $sidebarUser?->canViewModule('driver_performance') ?? false;
 
+    $canTrafficViolations =
+        $sidebarUser?->canViewModule('traffic_violations') ?? false;
+
     $canMaintenance =
         $sidebarUser?->canViewModule('maintenance') ?? false;
 
@@ -63,6 +66,7 @@
         $canDriverPerformance;
 
     $showOperations =
+        $canTrafficViolations ||
         $canMaintenance ||
         $canFuel ||
         $canRoutePlanning;
@@ -351,6 +355,23 @@
                 </span>
 
                 <ul>
+
+                    @if($canTrafficViolations)
+                        <li>
+                            <a
+                                href="{{ route('traffic-violations.index') }}"
+                                class="nav-link {{ request()->routeIs('traffic-violations.*') ? 'active' : '' }}"
+                                data-page="traffic-violations"
+                                data-tooltip="Traffic Violations"
+                            >
+                                <i class="ph-fill ph-warning-octagon"></i>
+
+                                <span class="nav-label">
+                                    Traffic Violations
+                                </span>
+                            </a>
+                        </li>
+                    @endif
 
                     @if($canMaintenance)
                         <li>

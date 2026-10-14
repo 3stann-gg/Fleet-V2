@@ -602,10 +602,16 @@ class DriverController extends Controller
         }
     }
 
-    public function show(Driver $driver)
+    public function show(Request $request, Driver $driver)
     {
         $this->authorize('view', $driver);
         $driver->load(['vehicle', 'qualifications', 'licenseCodes']);
+
+        if ($request->user()->hasPermission('traffic_violations.view')) {
+            $driver->load(['trafficViolations' => fn ($query) => $query
+                ->select(['id', 'driver_id', 'vehicle_id', 'violation_date', 'violation_type', 'responsibility', 'status'])
+                ->whereNull('archived_at')->with('vehicle:id,plate_number')->latest('violation_date')->limit(20)]);
+        }
 
         return response()->json(
             $driver

@@ -3,9 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\TripLog;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TripLog extends Model
 {
@@ -45,5 +44,10 @@ class TripLog extends Model
             User::class,
             'submitted_by'
         );
+    }
+
+    public function trafficViolations(): HasMany
+    {
+        return $this->hasMany(TrafficViolation::class);
     }
 }

@@ -119,6 +119,13 @@
         <label>Notes</label>
         <p id="viewDriverNotes"></p>
       </div>
+
+      @if(auth()->user()->hasPermission('traffic_violations.view'))
+        <div class="view-driver-notes">
+          <label>Traffic Violation History</label>
+          <div id="viewDriverTrafficViolations">No traffic violation records</div>
+        </div>
+      @endif
     </div>
 
     <div class="modal-footer">
