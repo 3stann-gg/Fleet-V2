@@ -200,6 +200,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const scrollableBody = modal.querySelector(".modal-body");
+        if (scrollableBody) {
+            scrollableBody.scrollTop = 0;
+        }
         modal.removeAttribute("hidden");
         modal.classList.add("show");
         document.body.classList.add("modal-open");

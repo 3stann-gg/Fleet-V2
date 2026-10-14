@@ -2,6 +2,90 @@
    Audit Log Details Modal
 ========================================== */
 
+.audit-filter-panel {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.audit-filter-heading {
+  margin-bottom: var(--space-3);
+}
+
+.audit-filter-heading h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-semibold);
+}
+
+.audit-filter-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.audit-filter-panel .toolbar {
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.audit-filter-panel .toolbar-left {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.audit-filter-panel .search-box form {
+  flex: 1;
+  min-width: 0;
+}
+
+.audit-logs-table {
+  min-width: 1080px;
+}
+
+.audit-timestamp-cell,
+.audit-ip-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-timestamp-cell time,
+.audit-user-name {
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.audit-module-cell {
+  min-width: 150px;
+}
+
+.audit-description-cell {
+  min-width: 240px;
+  max-width: 380px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.audit-event-badge {
+  white-space: normal;
+  text-align: center;
+}
+
+.audit-view-btn {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+}
+
+.audit-pagination {
+  flex-wrap: wrap;
+}
+
 #auditDetailsModal[hidden] {
   display: none !important;
 }
@@ -14,6 +98,15 @@
 
 #auditDetailsModal .custom-modal {
   width: min(100% - 32px, 760px);
+  max-height: min(90vh, 900px);
+  overflow: hidden;
+}
+
+#auditDetailsModal .modal-body {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 
@@ -29,6 +122,10 @@
   gap: 16px;
 
   margin-bottom: 20px;
+}
+
+#auditDetailsModal .detail-section-heading {
+  grid-column: 1 / -1;
 }
 
 #auditDetailsModal .audit-detail-item {
@@ -79,6 +176,15 @@
 
   border-top:
     1px solid var(--color-border);
+}
+
+#auditDetailsModal
+  .detail-section-heading + .audit-json-section,
+#auditDetailsModal
+  .detail-section-heading + .audit-long-section {
+  margin-top: 0;
+  padding-top: var(--space-3);
+  border-top: 0;
 }
 
 #auditDetailsModal
@@ -188,7 +294,7 @@
 ========================================== */
 
 #auditDetailsModal .modal-footer {
-  margin-top: 24px;
+  margin-top: 0;
 
   padding: 20px 24px;
 
@@ -203,6 +309,18 @@
 ========================================== */
 
 @media (max-width: 639px) {
+  .audit-filter-panel {
+    padding: var(--space-3);
+  }
+
+  .audit-filter-panel .toolbar-left,
+  .audit-filter-panel .toolbar-right,
+  .audit-filter-panel .search-box,
+  .audit-filter-panel .filter-select,
+  .audit-filter-panel .btn-outline {
+    width: 100%;
+  }
+
   #auditDetailsModal
     .audit-details-grid {
     grid-template-columns: 1fr;
@@ -217,5 +335,13 @@
     .modal-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 768px) {
+    #auditDetailsModal .custom-modal {
+      max-height: calc(100dvh - 16px);
+    }
   }
 }

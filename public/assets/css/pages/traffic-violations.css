@@ -1,8 +1,53 @@
 .traffic-overview-label {
     margin: 0 0 0.75rem;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     font-size: 0.875rem;
     font-weight: 600;
+}
+
+.traffic-filter-panel {
+    margin-bottom: var(--space-5);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-xs);
+}
+
+.traffic-filter-heading {
+    margin-bottom: var(--space-3);
+}
+
+.traffic-filter-heading h2 {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-semibold);
+}
+
+.traffic-filter-heading p {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-meta);
+}
+
+.traffic-filter-panel .toolbar {
+    margin-bottom: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.traffic-violations-page .stat-helper {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-meta);
+}
+
+.traffic-violations-page .stat-content h3,
+.traffic-violations-page .numeric-cell {
+    font-variant-numeric: tabular-nums;
 }
 
 .traffic-stats-grid {
@@ -11,6 +56,7 @@
 
 .traffic-filter-form .toolbar-left {
     flex-wrap: wrap;
+    min-width: 0;
 }
 
 .traffic-archived-toggle {
@@ -18,13 +64,51 @@
     align-items: center;
     gap: 0.5rem;
     min-height: 42px;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     white-space: nowrap;
 }
 
 .traffic-actions {
     display: flex;
     gap: 0.35rem;
+}
+
+.traffic-violations-table {
+    min-width: 1060px;
+}
+
+.traffic-citation-cell {
+    min-width: 150px;
+}
+
+.traffic-citation-cell strong {
+    display: block;
+    color: var(--color-text);
+    font-weight: var(--font-semibold);
+}
+
+.traffic-date-cell,
+.traffic-violations-table .numeric-cell,
+.traffic-payment-status {
+    white-space: nowrap;
+}
+
+.traffic-vehicle-cell,
+.traffic-driver-cell,
+.traffic-violation-cell {
+    min-width: 130px;
+}
+
+.status-badge.responsibility-badge {
+    border-color: var(--color-border-strong);
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+}
+
+.responsibility-badge.maintenance {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning-text);
 }
 
 .traffic-modal-wide {
@@ -102,7 +186,7 @@
     border: 1px solid var(--color-warning);
     border-radius: var(--radius-md, 8px);
     background: rgba(217, 119, 6, 0.08);
-    color: var(--color-text-primary);
+    color: var(--color-text);
 }
 
 .traffic-detail-grid > div {
@@ -111,9 +195,27 @@
     border-radius: var(--radius-md, 8px);
 }
 
+.traffic-detail-sections {
+    display: grid;
+    gap: var(--space-6);
+}
+
+.traffic-detail-section h3 {
+    margin: 0 0 var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-size: var(--font-size-label);
+    font-weight: var(--font-semibold);
+}
+
+.traffic-detail-section .traffic-detail-grid {
+    margin: 0;
+}
+
 .traffic-detail-grid dt {
     margin-bottom: 0.25rem;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -121,7 +223,7 @@
 
 .traffic-detail-grid dd {
     margin: 0;
-    color: var(--color-text-primary);
+    color: var(--color-text);
 }
 
 @media (max-width: 1200px) {
@@ -129,6 +231,19 @@
 }
 
 @media (max-width: 768px) {
+    .traffic-filter-panel {
+        padding: var(--space-3);
+    }
+
+    .traffic-filter-form .toolbar-left,
+    .traffic-filter-form .toolbar-right,
+    .traffic-filter-form .search-box,
+    .traffic-filter-form .filter-select,
+    .traffic-filter-form .btn-primary,
+    .traffic-filter-form .btn-outline {
+        width: 100%;
+    }
+
     #trafficViolationFormModal,
     #viewTrafficViolationModal,
     #reviewTrafficViolationModal,

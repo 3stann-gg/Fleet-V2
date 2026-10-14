@@ -167,28 +167,80 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (action === "view") {
                     const details = document.getElementById("trafficViolationDetails");
                     const driverName = record.driver ? `${record.driver.first_name} ${record.driver.last_name}` : "Not identified";
-                    const rows = {
-                        "Citation Number": value(record.citation_number), Date: value(record.violation_date), Time: value(record.violation_time),
-                        "Issuing Agency": value(record.issuing_agency), Location: value(record.location), Vehicle: value(record.vehicle?.plate_number),
-                        Driver: driverName, Violation: value(record.violation_type_label), Responsibility: value(record.responsibility_label),
-                        Status: value(record.status_label), Dispatch: value(record.dispatch?.dispatch_number), Description: value(record.description),
-                        Notes: value(record.notes), "Responsibility Notes": value(record.responsibility_notes),
-                    };
+                    const sections = [
+                        {
+                            title: "Citation",
+                            rows: {
+                                "Citation Number": value(record.citation_number),
+                                Date: value(record.violation_date),
+                                Time: value(record.violation_time),
+                                "Issuing Agency": value(record.issuing_agency),
+                                Location: value(record.location),
+                                Violation: value(record.violation_type_label),
+                                Description: value(record.description),
+                            },
+                        },
+                        {
+                            title: "Driver / Vehicle",
+                            rows: {
+                                Vehicle: value(record.vehicle?.plate_number),
+                                Driver: driverName,
+                            },
+                        },
+                        {
+                            title: "Dispatch / Trip Context",
+                            rows: {
+                                Dispatch: value(record.dispatch?.dispatch_number),
+                            },
+                        },
+                        {
+                            title: "Responsibility & Status",
+                            rows: {
+                                Responsibility: value(record.responsibility_label),
+                                Status: value(record.status_label),
+                                "Responsibility Notes": value(record.responsibility_notes),
+                            },
+                        },
+                    ];
                     if (Object.hasOwn(record, "fine_amount")) {
-                        rows["Fine Amount"] = record.fine_amount === null ? "Not recorded" : `₱${Number(record.fine_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-                        rows["Payment Status"] = value(record.payment_status_label);
-                        rows["Payment Date"] = value(record.payment_date);
-                        rows["Payment Reference"] = value(record.payment_reference);
-                        rows["Settlement Notes"] = value(record.settlement_notes);
+                        sections.push({
+                            title: "Fine & Payment",
+                            rows: {
+                                "Fine Amount": record.fine_amount === null ? "Not recorded" : `₱${Number(record.fine_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                                "Due Date": value(record.due_date),
+                                "Payment Status": value(record.payment_status_label),
+                                "Payment Date": value(record.payment_date),
+                                "Payment Reference": value(record.payment_reference),
+                                "Settlement Notes": value(record.settlement_notes),
+                            },
+                        });
                     }
-                    details.replaceChildren(...Object.entries(rows).map(([label, detail]) => {
-                        const wrapper = document.createElement("div");
-                        const term = document.createElement("dt");
-                        const description = document.createElement("dd");
-                        term.textContent = label;
-                        description.textContent = detail;
-                        wrapper.append(term, description);
-                        return wrapper;
+                    sections.push({
+                        title: "Additional Notes",
+                        rows: { Notes: value(record.notes) },
+                    });
+                    details.replaceChildren(...sections.map((section) => {
+                        const group = document.createElement("section");
+                        group.className = "traffic-detail-section";
+                        const heading = document.createElement("h3");
+                        heading.textContent = section.title;
+                        const list = document.createElement("dl");
+                        list.className = "traffic-detail-grid";
+                        Object.entries(section.rows).forEach(([label, detail]) => {
+                            const wrapper = document.createElement("div");
+                            wrapper.className = "traffic-detail-item";
+                            if (["Description", "Responsibility Notes", "Settlement Notes", "Notes"].includes(label)) {
+                                wrapper.classList.add("traffic-span-2");
+                            }
+                            const term = document.createElement("dt");
+                            const description = document.createElement("dd");
+                            term.textContent = label;
+                            description.textContent = detail;
+                            wrapper.append(term, description);
+                            list.appendChild(wrapper);
+                        });
+                        group.append(heading, list);
+                        return group;
                     }));
                     openModal(document.getElementById("viewTrafficViolationModal"));
                 } else if (action === "edit") {
