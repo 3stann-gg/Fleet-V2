@@ -80,6 +80,9 @@ html[data-theme="light"] {
   --input-bg: var(--color-surface);
   --input-border: var(--color-border-input);
   --btn-muted-bg: var(--color-surface-secondary);
+  --btn-primary-bg: #006d43;
+  --btn-primary-hover: #005c38;
+  --btn-primary-active: #004c2f;
   --btn-outline-bg: var(--color-surface);
   --btn-outline-text: #374151;
   --btn-outline-border: var(--color-border-strong);
@@ -293,6 +296,9 @@ html[data-theme="dark"] {
   --input-bg: var(--color-surface-secondary);
   --input-border: var(--color-border-input);
   --btn-muted-bg: var(--color-surface-secondary);
+  --btn-primary-bg: #006d43;
+  --btn-primary-hover: #005c38;
+  --btn-primary-active: #004c2f;
   --btn-outline-bg: var(--color-surface-secondary);
   --btn-outline-text: #e5e7eb;
   --btn-outline-border: var(--color-border-strong);

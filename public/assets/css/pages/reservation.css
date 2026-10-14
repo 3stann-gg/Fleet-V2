@@ -182,7 +182,7 @@
 .reservation-form input::placeholder,
 .reservation-form textarea::placeholder,
 .reservation-form .form-control::placeholder {
-    color: var(--color-text-light) !important;
+    color: var(--color-text-muted) !important;
     opacity: 1;
 }
 

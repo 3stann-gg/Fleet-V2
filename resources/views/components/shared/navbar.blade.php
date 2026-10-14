@@ -53,6 +53,9 @@
       driverPerformance:
           @json(auth()->user()?->canViewModule('driver_performance') ?? false),
 
+      trafficViolations:
+          @json(auth()->user()?->canViewModule('traffic_violations') ?? false),
+
       maintenance:
           @json(auth()->user()?->canViewModule('maintenance') ?? false),
 
@@ -67,6 +70,9 @@
 
       reports:
           @json(auth()->user()?->canViewModule('reports') ?? false),
+
+      auditLogs:
+          @json(auth()->user()?->hasPermission('audit_logs.view') ?? false),
 
       settings:
           @json(auth()->user()?->canViewModule('settings') ?? false),

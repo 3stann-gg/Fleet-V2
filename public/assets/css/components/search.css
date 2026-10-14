@@ -50,6 +50,6 @@
 }
 
 .search-box input::placeholder {
-  color: var(--color-text-light);
+  color: var(--color-text-muted);
   opacity: 1;
 }

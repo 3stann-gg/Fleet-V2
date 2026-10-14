@@ -104,12 +104,12 @@
                             @endif
                             <td>
                                 <div class="traffic-actions">
-                                    <button type="button" class="action-btn traffic-action" data-action="view" data-id="{{ $violation->id }}" title="View"><i class="ph ph-eye"></i></button>
-                                    @if($canUpdate && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="edit" data-id="{{ $violation->id }}" title="Edit"><i class="ph ph-pencil-simple"></i></button>@endif
-                                    @if($canReview && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="review" data-id="{{ $violation->id }}" title="Review"><i class="ph ph-clipboard-text"></i></button>@endif
-                                    @if($canSettle && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="settlement" data-id="{{ $violation->id }}" title="Settlement"><i class="ph ph-receipt"></i></button>@endif
+                                    <button type="button" class="action-btn traffic-action" data-action="view" data-id="{{ $violation->id }}" title="View" aria-label="View traffic violation"><i class="ph ph-eye" aria-hidden="true"></i></button>
+                                    @if($canUpdate && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="edit" data-id="{{ $violation->id }}" title="Edit" aria-label="Edit traffic violation"><i class="ph ph-pencil-simple" aria-hidden="true"></i></button>@endif
+                                    @if($canReview && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="review" data-id="{{ $violation->id }}" title="Review" aria-label="Review traffic violation"><i class="ph ph-clipboard-text" aria-hidden="true"></i></button>@endif
+                                    @if($canSettle && !$violation->archived_at)<button type="button" class="action-btn traffic-action" data-action="settlement" data-id="{{ $violation->id }}" title="Settlement" aria-label="Record traffic violation settlement"><i class="ph ph-receipt" aria-hidden="true"></i></button>@endif
                                     @if($canArchive)
-                                        <button type="button" class="action-btn traffic-action" data-action="{{ $violation->archived_at ? 'restore' : 'archive' }}" data-id="{{ $violation->id }}" title="{{ $violation->archived_at ? 'Restore' : 'Archive' }}"><i class="ph ph-{{ $violation->archived_at ? 'arrow-counter-clockwise' : 'archive' }}"></i></button>
+                                        <button type="button" class="action-btn traffic-action" data-action="{{ $violation->archived_at ? 'restore' : 'archive' }}" data-id="{{ $violation->id }}" title="{{ $violation->archived_at ? 'Restore' : 'Archive' }}" aria-label="{{ $violation->archived_at ? 'Restore traffic violation' : 'Archive traffic violation' }}"><i class="ph ph-{{ $violation->archived_at ? 'arrow-counter-clockwise' : 'archive' }}" aria-hidden="true"></i></button>
                                     @endif
                                 </div>
                             </td>
@@ -128,7 +128,7 @@
 @if($canCreate || $canUpdate)
 <div class="modal-overlay" id="trafficViolationFormModal" role="dialog" aria-modal="true" aria-labelledby="trafficViolationFormTitle">
     <div class="custom-modal traffic-modal-wide">
-        <div class="modal-header"><div><h2 id="trafficViolationFormTitle">Add Traffic Violation</h2><p>Record citation facts without assigning responsibility automatically.</p></div><button type="button" class="modal-close" data-close-modal><i class="ph ph-x"></i></button></div>
+        <div class="modal-header"><div><h2 id="trafficViolationFormTitle">Add Traffic Violation</h2><p>Record citation facts without assigning responsibility automatically.</p></div><button type="button" class="modal-close" data-close-modal aria-label="Close traffic violation form"><i class="ph ph-x" aria-hidden="true"></i></button></div>
         <form id="trafficViolationForm"><div class="modal-body"><input type="hidden" id="trafficViolationId">
             <div class="traffic-form-grid">
                 <div class="form-group"><label for="citation_number">Citation Number</label><input id="citation_number" name="citation_number" maxlength="100"></div>
@@ -153,12 +153,12 @@
 @endif
 
 <div class="modal-overlay" id="viewTrafficViolationModal" role="dialog" aria-modal="true" aria-labelledby="viewTrafficViolationTitle">
-    <div class="custom-modal traffic-modal-wide"><div class="modal-header"><div><h2 id="viewTrafficViolationTitle">Traffic Violation Details</h2><p>Administrative citation record and review history.</p></div><button type="button" class="modal-close" data-close-modal><i class="ph ph-x"></i></button></div><div class="modal-body"><dl class="traffic-detail-grid" id="trafficViolationDetails"></dl></div><div class="modal-footer"><button type="button" class="btn-outline" data-close-modal>Close</button></div></div>
+    <div class="custom-modal traffic-modal-wide"><div class="modal-header"><div><h2 id="viewTrafficViolationTitle">Traffic Violation Details</h2><p>Administrative citation record and review history.</p></div><button type="button" class="modal-close" data-close-modal aria-label="Close traffic violation details"><i class="ph ph-x" aria-hidden="true"></i></button></div><div class="modal-body"><dl class="traffic-detail-grid" id="trafficViolationDetails"></dl></div><div class="modal-footer"><button type="button" class="btn-outline" data-close-modal>Close</button></div></div>
 </div>
 
 @if($canReview)
 <div class="modal-overlay" id="reviewTrafficViolationModal" role="dialog" aria-modal="true" aria-labelledby="reviewTrafficViolationTitle">
-    <div class="custom-modal"><div class="modal-header"><div><h2 id="reviewTrafficViolationTitle">Review Traffic Violation</h2><p>Responsibility remains a manual human determination.</p></div><button type="button" class="modal-close" data-close-modal><i class="ph ph-x"></i></button></div>
+    <div class="custom-modal"><div class="modal-header"><div><h2 id="reviewTrafficViolationTitle">Review Traffic Violation</h2><p>Responsibility remains a manual human determination.</p></div><button type="button" class="modal-close" data-close-modal aria-label="Close traffic violation review"><i class="ph ph-x" aria-hidden="true"></i></button></div>
         <form id="reviewTrafficViolationForm"><div class="modal-body"><input type="hidden" id="reviewViolationId">
             <div class="traffic-form-grid">
                 <div class="form-group"><label for="reviewResponsibility">Responsibility</label><select id="reviewResponsibility" name="responsibility" required>@foreach($responsibilityLabels as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></div>
@@ -178,7 +178,7 @@
 
 @if($canSettle)
 <div class="modal-overlay" id="settlementTrafficViolationModal" role="dialog" aria-modal="true" aria-labelledby="settlementTrafficViolationTitle">
-    <div class="custom-modal"><div class="modal-header"><div><h2 id="settlementTrafficViolationTitle">Settlement Information</h2><p>Payment tracking is informational and is not a payroll deduction.</p></div><button type="button" class="modal-close" data-close-modal><i class="ph ph-x"></i></button></div>
+    <div class="custom-modal"><div class="modal-header"><div><h2 id="settlementTrafficViolationTitle">Settlement Information</h2><p>Payment tracking is informational and is not a payroll deduction.</p></div><button type="button" class="modal-close" data-close-modal aria-label="Close settlement information"><i class="ph ph-x" aria-hidden="true"></i></button></div>
         <form id="settlementTrafficViolationForm"><div class="modal-body"><input type="hidden" id="settlementViolationId"><div class="traffic-form-grid">
             <div class="form-group"><label for="settlementFineAmount">Fine Amount</label><input type="number" id="settlementFineAmount" name="fine_amount" min="0" step="0.01"></div>
             <div class="form-group"><label for="settlementDueDate">Due Date</label><input type="date" id="settlementDueDate" name="due_date"></div>

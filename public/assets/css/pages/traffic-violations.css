@@ -1,6 +1,6 @@
 .traffic-overview-label {
     margin: 0 0 0.75rem;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     font-size: 0.875rem;
     font-weight: 600;
 }
@@ -22,7 +22,7 @@
     align-items: center;
     gap: 0.5rem;
     min-height: 42px;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     white-space: nowrap;
 }
 
@@ -107,21 +107,21 @@
 .traffic-dispatch-warning,
 .form-error {
     padding: 0.75rem 1rem;
-    border: 1px solid var(--warning-color, #d97706);
+    border: 1px solid var(--color-warning);
     border-radius: var(--radius-md, 8px);
     background: rgba(217, 119, 6, 0.08);
-    color: var(--text-primary);
+    color: var(--color-text-primary);
 }
 
 .traffic-detail-grid > div {
     padding: 0.8rem;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 8px);
 }
 
 .traffic-detail-grid dt {
     margin-bottom: 0.25rem;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -129,7 +129,7 @@
 
 .traffic-detail-grid dd {
     margin: 0;
-    color: var(--text-primary);
+    color: var(--color-text-primary);
 }
 
 @media (max-width: 1200px) {

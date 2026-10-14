@@ -396,7 +396,7 @@ body.login-body #navbar {
     }
 
     .two-factor-code-input::placeholder {
-        color: var(--color-text-light);
+        color: var(--color-text-muted);
         opacity: 1;
     }
 
@@ -447,7 +447,7 @@ body.login-body #navbar {
 }
 
 .auth-card input::placeholder {
-    color: var(--color-text-light);
+    color: var(--color-text-muted);
     opacity: 1;
 }
 
@@ -526,7 +526,7 @@ body.login-body #navbar {
 }
 
 .auth-code-input::placeholder {
-    color: var(--color-text-light) !important;
+    color: var(--color-text-muted) !important;
     opacity: 1;
 }
 
