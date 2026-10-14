@@ -294,7 +294,7 @@
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
 
-                      <th class="sortable" data-column="7">
+                      <th class="sortable numeric-cell" data-column="7">
                         Cost
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>

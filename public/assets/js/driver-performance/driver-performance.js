@@ -366,11 +366,11 @@
             </td>
             <td>${escapeHtml(record.driver_number || "—")}</td>
             <td>${escapeHtml(record.assigned_vehicle || "Unassigned")}</td>
-            <td>${formatNumber(record.completed_trips)}</td>
-            <td>${formatNumber(record.cancelled_trips)}</td>
-            <td>${formatNumber(record.total_distance, 2)} km</td>
-            <td>${formatNumber(record.fuel_used, 2)} L</td>
-            <td>${formatNumber(record.electricity_used, 2)} kWh</td>
+            <td class="numeric-cell">${formatNumber(record.completed_trips)}</td>
+            <td class="numeric-cell">${formatNumber(record.cancelled_trips)}</td>
+            <td class="numeric-cell">${formatNumber(record.total_distance, 2)} km</td>
+            <td class="numeric-cell">${formatNumber(record.fuel_used, 2)} L</td>
+            <td class="numeric-cell">${formatNumber(record.electricity_used, 2)} kWh</td>
             <td>
               <span class="status-badge ${performanceClass(record.performance_level)}">
                 ${escapeHtml(record.performance_level)}
@@ -384,7 +384,7 @@
                 title="View Details"
                 aria-label="View performance details for ${escapeHtml(record.name)}"
               >
-                <i class="ph ph-eye"></i>
+                <i class="ph ph-eye" aria-hidden="true"></i>
                 View Details
               </button>
             </td>

@@ -306,7 +306,7 @@ function renderMaintenanceTable(maintenances) {
                     </td>
 
                     <!-- Cost -->
-                    <td>
+                    <td class="numeric-cell">
                         <span class="maintenance-cost">
                             ${cost}
                         </span>

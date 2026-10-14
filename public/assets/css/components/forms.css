@@ -34,9 +34,18 @@
 }
 
 .form-group label .required,
-.form-group label .req {
+.form-group label .req,
+.form-required-note .required {
   color: var(--color-danger);
   margin-left: 2px;
+  font-weight: var(--font-semibold);
+}
+
+.form-required-note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-snug);
 }
 
 .form-group input,
@@ -88,9 +97,19 @@
 .form-group input:disabled,
 .form-group select:disabled,
 .form-group textarea:disabled {
-  opacity: 0.65;
+  opacity: 1;
   cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border);
+}
+
+.form-group input[readonly],
+.form-group textarea[readonly] {
+  color: var(--color-text-muted);
   background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  cursor: default;
 }
 
 .form-group textarea::placeholder,
@@ -218,8 +237,11 @@ input.filter-select[type="date"] {
 }
 
 .filter-select:disabled {
-  opacity: 0.65;
+  opacity: 1;
   cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border);
 }
 
 /* Form footer actions */

@@ -14,7 +14,7 @@ function initViewReservationModal() {
     const NOT_PROVIDED = "Not provided";
     const statusClassMap = {
         Pending: "pending",
-        Approved: "trip",
+        Approved: "approved",
         Scheduled: "scheduled",
         Completed: "completed",
         Rejected: "rejected",

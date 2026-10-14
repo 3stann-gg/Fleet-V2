@@ -92,7 +92,7 @@
               <div class="toolbar">
                 <div class="toolbar-left">
                   <div class="search-box">
-                    <i class="ph ph-magnifying-glass"></i>
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 
                     <input
                       type="text"
@@ -102,7 +102,7 @@
                     />
                   </div>
 
-                  <select class="filter-select" id="vehicleTypeFilter">
+                  <select class="filter-select" id="vehicleTypeFilter" aria-label="Filter vehicles by type">
                     <option value="all">All Vehicle Types</option>
                     <option value="Ambulance">Ambulance</option>
                     <option value="Van">Van</option>
@@ -113,7 +113,7 @@
                     <option value="Service Vehicle">Service Vehicle</option>
                   </select>
 
-                  <select class="filter-select" id="vehicleStatusFilter">
+                  <select class="filter-select" id="vehicleStatusFilter" aria-label="Filter vehicles by status">
                     <option value="all">All Status</option>
                     <option value="Available">Available</option>
                     <option value="On Trip">On Trip</option>

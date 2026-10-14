@@ -189,7 +189,7 @@ function getDispatchStatusClass(status) {
     }
 
     if (value === "arrived") {
-        return "approved";
+        return "trip";
     }
 
     if (value === "completed") {

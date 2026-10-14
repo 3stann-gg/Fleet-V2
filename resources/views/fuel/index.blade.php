@@ -246,16 +246,16 @@
                         Fuel Type
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th class="sortable" data-column="7">
+                      <th class="sortable numeric-cell" data-column="7">
                         Quantity
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th>Cost / L</th>
-                      <th class="sortable" data-column="9">
+                      <th class="numeric-cell">Cost / L</th>
+                      <th class="sortable numeric-cell" data-column="9">
                         Total Cost
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th class="sortable" data-column="10">
+                      <th class="sortable numeric-cell" data-column="10">
                         Odometer
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
@@ -321,7 +321,7 @@
                 <div class="card-header"><div><h3>Charging Transactions</h3><p class="card-subtitle">View recorded charging activity for plug-in hybrid and electric vehicles.</p></div></div>
                 <div class="table-responsive">
                   <table class="fleet-table">
-                    <thead><tr><th>Vehicle</th><th>Powertrain</th><th>Driver</th><th>Date / Time</th><th>Battery Before</th><th>Battery After</th><th>Energy Added</th><th>Charging Location</th><th>Cost</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Vehicle</th><th>Powertrain</th><th>Driver</th><th>Date / Time</th><th class="numeric-cell">Battery Before</th><th class="numeric-cell">Battery After</th><th class="numeric-cell">Energy Added</th><th>Charging Location</th><th class="numeric-cell">Cost</th><th>Actions</th></tr></thead>
                     <tbody id="chargingTableBody"><tr class="helper-row"><td colspan="10">Loading charging transactions...</td></tr></tbody>
                   </table>
                 </div>

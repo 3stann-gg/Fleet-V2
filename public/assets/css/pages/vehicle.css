@@ -124,24 +124,6 @@
   border-radius: 50px;
   transition: width 0.35s ease;
 }
-.empty-state {
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.empty-state i {
-  font-size: 64px;
-  color: #cbd5e1;
-}
-
-.empty-state h4 {
-  margin-top: 20px;
-  font-size: 22px;
-}
-
-.empty-state p {
-  color: #6b7280;
-}
 /* ==========================================
    Print Styles
 ========================================== */

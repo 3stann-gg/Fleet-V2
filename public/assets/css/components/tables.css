@@ -7,6 +7,7 @@
   border-collapse: collapse;
   color: var(--color-text);
   font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .fleet-table thead th {
@@ -45,6 +46,19 @@
   border-bottom-color: transparent;
 }
 
+/* Archived records remain readable while visually secondary. */
+.fleet-table tbody tr[data-archived-at]:not([data-archived-at=""]),
+.fleet-table tbody tr.is-archived,
+.fleet-table tbody tr.traffic-row-archived {
+  background: var(--color-surface-muted);
+}
+
+.fleet-table tbody tr[data-archived-at]:not([data-archived-at=""]) td,
+.fleet-table tbody tr.is-archived td,
+.fleet-table tbody tr.traffic-row-archived td {
+  color: var(--color-text-muted);
+}
+
 /* Selected / bulk */
 .fleet-table tbody tr.is-selected,
 .fleet-table tbody tr.selected {
@@ -63,11 +77,21 @@
 }
 
 .fleet-table .action-buttons,
-.fleet-table .table-actions {
+.fleet-table .table-actions,
+.fleet-table .traffic-actions {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: max-content;
+}
+
+/* Reusable alignment for money, quantities, distances and counts. */
+.fleet-table .numeric-cell,
+.fleet-table [data-column-type="numeric"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================
@@ -113,6 +137,8 @@
 
 .fleet-table .helper-row td,
 .fleet-table .empty-state td,
+.fleet-table .loading-row td,
+.fleet-table tr[class*="-no-results"] td,
 .fleet-table tr[data-helper-row="true"] td {
   height: auto;
   padding: var(--space-8) var(--space-4);
@@ -126,21 +152,24 @@
 }
 
 .fleet-table .helper-row:hover td,
-.fleet-table .empty-state:hover td {
+.fleet-table .empty-state:hover td,
+.fleet-table .loading-row:hover td,
+.fleet-table tr[class*="-no-results"]:hover td {
   background: transparent;
 }
 
 /* Module empty state panels */
 .fleet-empty-state,
 .route-empty-state,
-.empty-state-panel {
+.empty-state-panel,
+.empty-state:not(tr) {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: var(--space-3);
-  padding: var(--space-9) var(--space-6);
+  padding: var(--space-7) var(--space-6);
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-card);
   background: var(--color-surface-muted);
@@ -149,7 +178,8 @@
 
 .fleet-empty-state i,
 .route-empty-state i,
-.empty-state-panel i {
+.empty-state-panel i,
+.empty-state:not(tr) i {
   font-size: 40px;
   color: var(--color-primary);
   opacity: 0.9;
@@ -157,7 +187,9 @@
 
 .fleet-empty-state h3,
 .route-empty-state h3,
-.empty-state-panel h3 {
+.empty-state-panel h3,
+.empty-state:not(tr) h3,
+.empty-state:not(tr) h4 {
   margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-semibold);
@@ -166,7 +198,8 @@
 
 .fleet-empty-state p,
 .route-empty-state p,
-.empty-state-panel p {
+.empty-state-panel p,
+.empty-state:not(tr) p {
   margin: 0;
   max-width: 28rem;
   font-size: var(--font-size-sm);

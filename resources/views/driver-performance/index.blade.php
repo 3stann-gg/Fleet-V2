@@ -156,11 +156,11 @@
                                 <th>Driver</th>
                                 <th>Driver ID</th>
                                 <th>Assigned Vehicle</th>
-                                <th>Completed Trips</th>
-                                <th>Cancelled Trips</th>
-                                <th>Total Distance</th>
-                                <th>Fuel Used</th>
-                                <th>Electricity Used</th>
+                                <th class="numeric-cell">Completed Trips</th>
+                                <th class="numeric-cell">Cancelled Trips</th>
+                                <th class="numeric-cell">Total Distance</th>
+                                <th class="numeric-cell">Fuel Used</th>
+                                <th class="numeric-cell">Electricity Used</th>
                                 <th>Performance Level</th>
                                 <th>Actions</th>
                             </tr>

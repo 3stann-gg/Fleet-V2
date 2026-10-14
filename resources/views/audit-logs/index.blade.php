@@ -21,7 +21,7 @@
             <div class="toolbar-left">
 
                 <div class="search-box">
-                    <i class="ph ph-magnifying-glass"></i>
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 
                     <form
                         method="GET"
@@ -161,7 +161,7 @@
                     href="{{ route('audit-logs.index') }}"
                     class="btn-outline"
                 >
-                    <i class="ph ph-x"></i>
+                    <i class="ph ph-x" aria-hidden="true"></i>
                     Clear Filters
                 </a>
             </div>
@@ -421,7 +421,7 @@
                 id="closeAuditDetailsModal"
                 aria-label="Close audit details"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 

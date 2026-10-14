@@ -106,7 +106,7 @@ function getReservationStatusClass(status) {
         .replace(/[\s-]+/g, "");
 
     if (value === "pending") return "pending";
-    if (value === "approved") return "trip";
+    if (value === "approved") return "approved";
     if (value === "scheduled") return "scheduled";
     if (value === "completed") return "completed";
     if (value === "rejected") return "rejected";

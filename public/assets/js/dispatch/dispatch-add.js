@@ -1135,7 +1135,7 @@ function createDispatchRow(dispatch) {
         Pending: "pending",
         Assigned: "scheduled",
         "En Route": "trip",
-        Arrived: "approved",
+        Arrived: "trip",
         Completed: "completed",
         Cancelled: "cancelled",
     };

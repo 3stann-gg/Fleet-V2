@@ -505,7 +505,7 @@
                       <th class="sortable" data-sort="vehicle">Vehicle</th>
                       <th class="sortable" data-sort="driver">Driver</th>
                       <th class="sortable" data-sort="priority">Priority</th>
-                      <th class="sortable" data-sort="estimatedDistance">Distance</th>
+                      <th class="sortable numeric-cell" data-sort="estimatedDistance">Distance</th>
                       <th>Estimated Time</th>
                       <th class="sortable" data-sort="status">Status</th>
                       <th class="sortable" data-sort="departureDate">Departure</th>
