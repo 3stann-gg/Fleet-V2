@@ -19,7 +19,7 @@
                       id="addVehicleBtn"
                       class="btn-primary"
                   >
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Request Vehicle
                   </button>
               @endif
@@ -29,7 +29,7 @@
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-icon">
-                  <i class="ph-fill ph-car"></i>
+                  <i class="ph-fill ph-car" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -41,7 +41,7 @@
 
               <div class="stat-card">
                 <div class="stat-icon success">
-                  <i class="ph-fill ph-check-circle"></i>
+                  <i class="ph-fill ph-check-circle" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -52,8 +52,8 @@
               </div>
 
               <div class="stat-card">
-                <div class="stat-icon warning">
-                  <i class="ph-fill ph-truck"></i>
+                <div class="stat-icon info">
+                  <i class="ph-fill ph-truck" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -72,8 +72,8 @@
                   <div class="stat-card">
               @endif
 
-                  <div class="stat-icon danger">
-                      <i class="ph-fill ph-wrench"></i>
+                  <div class="stat-icon warning">
+                      <i class="ph-fill ph-wrench" aria-hidden="true"></i>
                   </div>
 
                   <div class="stat-content">
@@ -132,7 +132,7 @@
 
                 <div class="toolbar-right">
                   <button type="button" class="btn-outline" id="refreshVehicles">
-                    <i class="ph ph-arrows-clockwise"></i>
+                    <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                     Refresh
                   </button>
                 </div>
@@ -155,7 +155,7 @@
                               id="archiveSelected"
                               class="btn-danger"
                           >
-                              <i class="ph ph-archive"></i>
+                              <i class="ph ph-archive" aria-hidden="true"></i>
                               Archive Selected
                           </button>
                       </div>
@@ -244,46 +244,46 @@
                         @endif
                       </th>
 
-                      <th class="sortable" data-column="1">
+                      <th class="sortable vehicle-primary-column" data-column="1">
                         Vehicle
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="2">
                         Plate No.
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="3">
                         Type
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="4">
                         Powertrain
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="5">
                         Driver
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="6">
                         Status
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th class="sortable" data-column="7">
                         Readiness
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th>Energy</th>
 
                       <th class="sortable" data-column="9">
                         Last Service
-                        <i class="ph ph-caret-up-down sort-icon"></i>
+                        <i class="ph ph-caret-up-down sort-icon" aria-hidden="true"></i>
                       </th>
 
                       <th>Actions</th>
@@ -303,12 +303,12 @@
               </div>
 
               <div class="pagination" id="vehiclePagination">
-                <button>
-                  <i class="ph ph-caret-left"></i>
+                <button type="button" aria-label="Previous vehicle page">
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
-                <button>
-                  <i class="ph ph-caret-right"></i>
+                <button type="button" aria-label="Next vehicle page">
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

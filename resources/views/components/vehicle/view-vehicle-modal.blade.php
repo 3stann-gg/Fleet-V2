@@ -3,12 +3,12 @@
   id="viewVehicleModal"
   role="dialog"
   aria-modal="true"
-  aria-labelledby="viewVehicleName"
+  aria-labelledby="viewVehicleModalTitle"
 >
   <div class="custom-modal">
     <div class="modal-header">
       <div>
-        <h2>Vehicle Details</h2>
+        <h2 id="viewVehicleModalTitle">Vehicle Details</h2>
         <p>View complete vehicle information.</p>
       </div>
 
@@ -18,9 +18,10 @@
         id="closeViewVehicleModal"
         aria-label="Close vehicle details dialog"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
+    <div class="modal-body">
     <div class="vehicle-profile">
       <img
         id="viewVehicleImage"
@@ -28,16 +29,16 @@
         alt="Vehicle"
       />
 
-      <h3 id="viewVehicleName"></h3>
-
-      <p id="viewVehicleSubtitle">Emergency Response Unit</p>
-      <span
-        id="viewVehicleStatus"
-        class="status-badge available">
-    </span>
+      <div class="vehicle-profile-content">
+        <h3 id="viewVehicleName"></h3>
+        <p id="viewVehicleSubtitle">Emergency Response Unit</p>
+        <span
+          id="viewVehicleStatus"
+          class="status-badge available">
+        </span>
+      </div>
     </div>
 
-    <div class="modal-body">
       <div class="view-vehicle-summary">
         <div class="view-vehicle-summary-item">
           <span class="view-vehicle-summary-label">Plate Number</span>
@@ -66,6 +67,9 @@
       </div>
 
       <div class="view-vehicle-details">
+        <div class="vehicle-detail-section-title full-width">
+          <span>Vehicle Information</span>
+        </div>
         <!--
         <div class="view-vehicle-detail-item">
           <label>Model / Subtitle</label>
@@ -77,9 +81,17 @@
           <p id="viewVehicleDepartment"></p>
         </div>
 
+        <div class="vehicle-detail-section-title full-width">
+          <span>Capabilities</span>
+        </div>
+
         <div class="view-vehicle-detail-item full-width">
           <label>Vehicle Capabilities</label>
           <p id="viewVehicleCapabilities">No capabilities recorded</p>
+        </div>
+
+        <div class="vehicle-detail-section-title full-width">
+          <span>Registration &amp; LTO</span>
         </div>
 
         <div class="view-vehicle-detail-item">
@@ -97,11 +109,25 @@
           <p id="viewTransmissionType"></p>
         </div>
 
+        <div class="view-vehicle-detail-item">
+          <label>Purchase Date</label>
+          <p id="viewPurchaseDate"></p>
+        </div>
+
+        <div class="view-vehicle-detail-item">
+          <label>Insurance Expiry</label>
+          <p id="viewInsuranceExpiry"></p>
+        </div>
+
+        <div class="vehicle-detail-section-title full-width">
+          <span>Compliance &amp; Service</span>
+        </div>
+
         <div class="view-vehicle-detail-item full-width">
           <label>Sanitation Records</label>
           <p id="viewVehicleSanitation">No sanitation records</p>
           <button type="button" class="btn-outline" id="createVehicleSanitationRecord">
-            <i class="ph ph-sparkle"></i>
+            <i class="ph ph-sparkle" aria-hidden="true"></i>
             Create Sanitation Record
           </button>
         </div>
@@ -113,8 +139,8 @@
           </div>
         @endif
 
-        <div class="vehicle-energy-section-title full-width">
-          <span>Power / Energy Information</span>
+        <div class="vehicle-detail-section-title full-width">
+          <span>Powertrain &amp; Energy</span>
         </div>
 
         <div class="view-vehicle-detail-item">
@@ -187,18 +213,8 @@
           <p id="viewBatteryInspectionDate"></p>
         </div>
 
-        <div class="view-vehicle-detail-item">
-          <label>Purchase Date</label>
-          <p id="viewPurchaseDate"></p>
-        </div>
-
-        <div class="view-vehicle-detail-item">
-          <label>Insurance Expiry</label>
-          <p id="viewInsuranceExpiry"></p>
-        </div>
-
-        <div class="vehicle-energy-section-title full-width" data-view-motorcycle-field>
-          <span>Motorcycle Information</span>
+        <div class="vehicle-detail-section-title full-width" data-view-motorcycle-field>
+          <span>Motorcycle Details</span>
         </div>
 
         <div class="view-vehicle-detail-item" data-view-motorcycle-field data-view-motorcycle-engine-field>
@@ -226,8 +242,8 @@
           <p id="viewRegistrationExpiry"></p>
         </div>
 
-        <div class="vehicle-energy-section-title full-width">
-          <span>Vehicle Operational Health</span>
+        <div class="vehicle-detail-section-title full-width">
+          <span>Operational Health</span>
         </div>
 
         <div class="view-vehicle-detail-item">
@@ -266,7 +282,7 @@
         <button type="button" class="btn-outline" id="closeViewBtn">Close</button>
 
         <button type="button" class="btn-primary" id="editVehicleBtn">
-          <i class="ph ph-pencil-simple"></i>
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
           Edit Vehicle
         </button>
       </div>

@@ -25,7 +25,7 @@
             </header>
 
             <!-- Overview banner -->
-            <section class="dashboard-banner" aria-label="Hospital fleet overview">
+            <section class="dashboard-banner dashboard-overview-banner" aria-label="Hospital fleet overview">
               <div class="dashboard-banner-item">
                 <span class="dashboard-banner-label">Facility</span>
                 <strong>Tala Hospital</strong>
@@ -45,39 +45,39 @@
             </section>
 
             <!-- Primary KPIs -->
-            <section class="dashboard-banner" aria-label="Operational checklist alerts">
-              <div class="dashboard-banner-item">
+            <section class="dashboard-banner dashboard-alert-grid" aria-label="Operational checklist alerts">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $failedPreTripChecks > 0 ? 'dashboard-alert-item--danger' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Failed pre-trip checks</span>
                 <strong id="dashboardFailedPreTripChecks">{{ $failedPreTripChecks }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $activeSanitationRecords > 0 ? 'dashboard-alert-item--info' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Active sanitation</span>
                 <strong id="dashboardActiveSanitationRecords">{{ $activeSanitationRecords }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $maintenanceRequiredPostTripChecks > 0 ? 'dashboard-alert-item--warning' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Maintenance follow-up</span>
                 <strong id="dashboardMaintenancePostTripChecks">{{ $maintenanceRequiredPostTripChecks }}</strong>
               </div>
             </section>
 
-            <section class="dashboard-banner" aria-label="Compliance and operational health alerts">
-              <div class="dashboard-banner-item">
+            <section class="dashboard-banner dashboard-alert-grid dashboard-alert-grid--five" aria-label="Compliance and operational health alerts">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $expiredComplianceItems > 0 ? 'dashboard-alert-item--danger' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Expired compliance</span>
                 <strong id="dashboardExpiredCompliance">{{ $expiredComplianceItems }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $expiringWithinThirtyDays > 0 ? 'dashboard-alert-item--warning' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Expiring within 30 days</span>
                 <strong id="dashboardExpiringCompliance">{{ $expiringWithinThirtyDays }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $maintenanceDueOrOverdue > 0 ? 'dashboard-alert-item--danger' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Maintenance due / overdue</span>
                 <strong id="dashboardMaintenanceDue">{{ $maintenanceDueOrOverdue }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $batteryHealthReviewNeeded > 0 ? 'dashboard-alert-item--warning' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Battery health review</span>
                 <strong id="dashboardBatteryHealthReview">{{ $batteryHealthReviewNeeded }}</strong>
               </div>
-              <div class="dashboard-banner-item">
+              <div class="dashboard-banner-item dashboard-alert-item {{ $vehiclesWithOperationalWarnings > 0 ? 'dashboard-alert-item--warning' : 'dashboard-alert-item--neutral' }}">
                 <span class="dashboard-banner-label">Operational warnings</span>
                 <strong id="dashboardOperationalWarnings">{{ $vehiclesWithOperationalWarnings }}</strong>
               </div>
@@ -104,7 +104,7 @@
                 @else
                     <article class="stat-card dashboard-kpi">
                 @endif
-                    <div class="stat-icon" aria-hidden="true">
+                    <div class="stat-icon success" aria-hidden="true">
                         <i class="ph-fill ph-ambulance"></i>
                     </div>
                     <div class="stat-content">
@@ -131,7 +131,7 @@
                 @else
                     <article class="stat-card dashboard-kpi">
                 @endif
-                    <div class="stat-icon" aria-hidden="true">
+                    <div class="stat-icon info" aria-hidden="true">
                         <i class="ph-fill ph-truck"></i>
                     </div>
                     <div class="stat-content">
@@ -158,7 +158,7 @@
                 @else
                     <article class="stat-card dashboard-kpi">
                 @endif
-                    <div class="stat-icon" aria-hidden="true">
+                    <div class="stat-icon info" aria-hidden="true">
                         <i class="ph-fill ph-user"></i>
                     </div>
                     <div class="stat-content">
@@ -185,7 +185,7 @@
                 @else
                     <article class="stat-card dashboard-kpi">
                 @endif
-                    <div class="stat-icon" aria-hidden="true">
+                    <div class="stat-icon warning" aria-hidden="true">
                         <i class="ph-fill ph-warning-circle"></i>
                     </div>
                     <div class="stat-content">
@@ -196,7 +196,7 @@
                             {{ number_format($vehiclesNeedingAttention) }}
                         </h2>
                         <div class="kpi-meta">
-                            <span class="kpi-trend {{ $vehiclesNeedingAttention > 0 ? 'kpi-trend--up' : 'kpi-trend--steady' }}">
+                            <span class="kpi-trend {{ $vehiclesNeedingAttention > 0 ? 'kpi-trend--warning' : 'kpi-trend--steady' }}">
                                 {{ $vehiclesNeedingAttention > 0 ? 'Review' : 'Clear' }}
                             </span>
                             <span class="kpi-support">
@@ -218,7 +218,7 @@
                 @else
                     <article class="stat-card dashboard-kpi">
                 @endif
-                    <div class="stat-icon" aria-hidden="true">
+                    <div class="stat-icon danger" aria-hidden="true">
                         <i class="ph-fill ph-siren"></i>
                     </div>
                     <div class="stat-content">
@@ -227,7 +227,7 @@
                             {{ number_format($emergencyRequests) }}
                         </h2>
                         <div class="kpi-meta">
-                            <span class="kpi-trend {{ $emergencyRequests > 0 ? 'kpi-trend--up' : 'kpi-trend--steady' }}">
+                            <span class="kpi-trend {{ $emergencyRequests > 0 ? 'kpi-trend--danger' : 'kpi-trend--steady' }}">
                                 {{ $emergencyRequests > 0 ? 'Priority' : 'None pending' }}
                             </span>
                             <span class="kpi-support">Active emergency-priority requests</span>
@@ -518,7 +518,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr>
+                            <tr class="helper-row" data-helper-row="true">
                                 <td colspan="5">
                                     No vehicle records found.
                                 </td>

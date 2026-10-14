@@ -251,15 +251,16 @@ function renderVehicleTable(vehicles) {
                                     type="checkbox"
                                     class="vehicle-checkbox"
                                     data-id="${vehicle.id ?? ""}"
+                                    aria-label="Select vehicle"
                                 >
                             `
                             : ""
                     }
                 </td>
-                <td>
+                <td class="vehicle-primary-cell">
                     <div class="vehicle-info">
                         <div class="vehicle-avatar">
-                            <i class="${vehicleIcon}"></i>
+                            <i class="${vehicleIcon}" aria-hidden="true"></i>
                         </div>
                         <div>
                             <div class="vehicle-name">
@@ -272,7 +273,7 @@ function renderVehicleTable(vehicles) {
                         </div>
                     </div>
                 </td>
-                <td>
+                <td class="vehicle-plate-cell">
                     ${vehicle.plate_number ?? ""}
                 </td>
                 <td>
@@ -323,8 +324,9 @@ function renderVehicleTable(vehicles) {
                             type="button"
                             class="action-btn view"
                             data-id="${vehicle.id}"
-                            title="View">
-                            <i class="ph ph-eye"></i>
+                            title="View"
+                            aria-label="View vehicle details">
+                            <i class="ph ph-eye" aria-hidden="true"></i>
                         </button>
                         ${
                             canUpdate && !vehicle.archived_at
@@ -333,8 +335,9 @@ function renderVehicleTable(vehicles) {
                                         type="button"
                                         class="action-btn edit"
                                         data-id="${vehicle.id}"
-                                        title="Edit">
-                                        <i class="ph ph-pencil-simple"></i>
+                                        title="Edit"
+                                        aria-label="Edit vehicle">
+                                        <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -346,8 +349,9 @@ function renderVehicleTable(vehicles) {
                                         type="button"
                                         class="action-btn archive"
                                         data-id="${vehicle.id}"
-                                        title="Archive">
-                                        <i class="ph ph-archive"></i>
+                                        title="Archive"
+                                        aria-label="Archive vehicle">
+                                        <i class="ph ph-archive" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -363,8 +367,9 @@ function renderVehicleTable(vehicles) {
                                         type="button"
                                         class="action-btn restore"
                                         data-id="${vehicle.id}"
-                                        title="Restore">
-                                        <i class="ph ph-arrow-counter-clockwise"></i>
+                                        title="Restore"
+                                        aria-label="Restore vehicle">
+                                        <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""

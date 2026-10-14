@@ -5,8 +5,8 @@
         <h2 id="vehicleSanitationTitle">Create Sanitation Record</h2>
         <p>Record an intentional vehicle cleaning transaction.</p>
       </div>
-      <button type="button" class="modal-close" id="closeVehicleSanitationModal" aria-label="Close">
-        <i class="ph ph-x"></i>
+      <button type="button" class="modal-close" id="closeVehicleSanitationModal" aria-label="Close sanitation record dialog">
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
     <form id="vehicleSanitationForm">
