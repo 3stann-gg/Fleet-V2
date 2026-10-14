@@ -440,6 +440,10 @@
       button.textContent = label;
       button.disabled = options.disabled === true;
 
+      if (options.ariaLabel) {
+        button.setAttribute("aria-label", options.ariaLabel);
+      }
+
       if (options.active) {
         button.classList.add("active");
         button.setAttribute("aria-current", "page");
@@ -455,6 +459,7 @@
 
     addButton("‹", Math.max(1, state.currentPage - 1), {
       disabled: state.currentPage === 1,
+      ariaLabel: "Previous page",
     });
 
     for (let page = 1; page <= totalPages; page += 1) {
@@ -463,6 +468,7 @@
 
     addButton("›", Math.min(totalPages, state.currentPage + 1), {
       disabled: state.currentPage === totalPages,
+      ariaLabel: "Next page",
     });
   }
 
@@ -617,7 +623,7 @@
     if (tableBody) {
       tableBody.innerHTML = `
         <tr class="helper-row">
-          <td colspan="9">Loading driver performance records...</td>
+          <td colspan="10">Loading driver performance records...</td>
         </tr>
       `;
     }

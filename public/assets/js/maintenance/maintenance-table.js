@@ -341,7 +341,7 @@ function renderMaintenanceTable(maintenances) {
                                     maintenance.maintenance_number ?? ""
                                 }"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
 
                             ${
@@ -357,7 +357,7 @@ function renderMaintenanceTable(maintenances) {
                                                 ""
                                             }"
                                         >
-                                            <i class="ph ph-pencil-simple"></i>
+                                            <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -377,7 +377,7 @@ function renderMaintenanceTable(maintenances) {
                                             }"
                                             title="Archive"
                                         >
-                                            <i class="ph ph-archive"></i>
+                                            <i class="ph ph-archive" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -397,7 +397,7 @@ function renderMaintenanceTable(maintenances) {
                                             }"
                                             title="Restore"
                                         >
-                                            <i class="ph ph-arrow-counter-clockwise"></i>
+                                            <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""

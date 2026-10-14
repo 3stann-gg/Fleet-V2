@@ -19,59 +19,69 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon success">
-                        <i class="ph-fill ph-check-circle"></i>
+                        <i class="ph-fill ph-check-circle" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="performanceCompletedTrips">0</h3>
                         <p>Completed Trips</p>
+                        <span class="stat-helper">Selected period</span>
                     </div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-icon danger">
-                        <i class="ph-fill ph-x-circle"></i>
+                        <i class="ph-fill ph-x-circle" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="performanceCancelledTrips">0</h3>
                         <p>Cancelled Trips</p>
+                        <span class="stat-helper">Selected period</span>
                     </div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-icon info">
-                        <i class="ph-fill ph-path"></i>
+                        <i class="ph-fill ph-path" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="performanceTotalDistance">0 km</h3>
                         <p>Total Distance</p>
+                        <span class="stat-helper">Kilometers logged</span>
                     </div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-icon warning">
-                        <i class="ph-fill ph-gas-pump"></i>
+                        <i class="ph-fill ph-gas-pump" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="performanceFuelUsed">0 L</h3>
                         <p>Fuel Used</p>
+                        <span class="stat-helper">Liters consumed</span>
                     </div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-icon info">
-                        <i class="ph-fill ph-lightning"></i>
+                        <i class="ph-fill ph-lightning" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="performanceElectricityUsed">0 kWh</h3>
                         <p>Electricity Used</p>
+                        <span class="stat-helper">Energy consumed</span>
                     </div>
                 </div>
             </div>
 
             <div class="report-charts-grid driver-performance-charts">
                 <div class="report-chart-card" id="topPerformingDriversChart">
-                    <h4>Top Performing Drivers</h4>
-                    <p class="card-subtitle">Completed trips in the selected period.</p>
+                    <div class="analytics-card-header">
+                        <div>
+                            <h4>Top Performing Drivers</h4>
+                            <p class="card-subtitle">Completed trips in the selected period.</p>
+                        </div>
+                        <span class="analytics-unit">Trips</span>
+                    </div>
                     <p class="report-chart-empty" hidden>No completed trip data available.</p>
                     <div class="report-chart-body">
                         <div class="report-bars is-horizontal"></div>
@@ -79,8 +89,13 @@
                 </div>
 
                 <div class="report-chart-card" id="driverStatusDistributionChart">
-                    <h4>Driver Status Distribution</h4>
-                    <p class="card-subtitle">Current status of the displayed drivers.</p>
+                    <div class="analytics-card-header">
+                        <div>
+                            <h4>Driver Status Distribution</h4>
+                            <p class="card-subtitle">Current status of the displayed drivers.</p>
+                        </div>
+                        <span class="analytics-unit">Drivers</span>
+                    </div>
                     <p class="report-chart-empty" hidden>No driver status data available.</p>
                     <div class="report-chart-body report-donut-wrap">
                         <div class="report-donut" aria-hidden="true"></div>
@@ -150,7 +165,7 @@
                 </div>
 
                 <div class="table-responsive">
-                    <table class="fleet-table">
+                    <table class="fleet-table" aria-label="Driver performance records">
                         <thead>
                             <tr>
                                 <th>Driver</th>

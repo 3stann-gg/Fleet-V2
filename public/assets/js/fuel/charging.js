@@ -157,11 +157,12 @@
         document.getElementById("chargingPaginationInfo").innerHTML = `Showing <strong>${first}–${last}</strong> of <strong>${total}</strong> charging transactions`;
         const pagination = document.getElementById("chargingPagination");
         pagination.innerHTML = "";
-        [["ph-caret-left", state.page - 1, state.page === 1], ["ph-caret-right", state.page + 1, state.page === pages]].forEach(([icon, page, disabled]) => {
+        [["ph-caret-left", state.page - 1, state.page === 1, "Previous page"], ["ph-caret-right", state.page + 1, state.page === pages, "Next page"]].forEach(([icon, page, disabled, ariaLabel]) => {
             const button = document.createElement("button");
             button.type = "button";
             button.disabled = disabled;
-            button.innerHTML = `<i class="ph ${icon}"></i>`;
+            button.setAttribute("aria-label", ariaLabel);
+            button.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`;
             button.addEventListener("click", () => { state.page = page; render(); });
             pagination.appendChild(button);
         });
