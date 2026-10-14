@@ -82,6 +82,11 @@ class Driver extends Model
         return $this->hasMany(ChargingLog::class);
     }
 
+    public function trafficViolations(): HasMany
+    {
+        return $this->hasMany(TrafficViolation::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

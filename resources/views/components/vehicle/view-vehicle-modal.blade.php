@@ -106,6 +106,13 @@
           </button>
         </div>
 
+        @if(auth()->user()->hasPermission('traffic_violations.view'))
+          <div class="view-vehicle-detail-item full-width">
+            <label>Traffic Violation History</label>
+            <div id="viewVehicleTrafficViolations">No traffic violation records</div>
+          </div>
+        @endif
+
         <div class="vehicle-energy-section-title full-width">
           <span>Power / Energy Information</span>
         </div>

@@ -2,17 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Models\Vehicle;
-use App\Models\Driver;
-use App\Models\Dispatch;
-use App\Models\RoutePlan;
-use App\Models\User;
-use App\Models\Shipment;
-use App\Models\HospitalFacility;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Reservation extends Model
@@ -97,7 +91,7 @@ class Reservation extends Model
 
     public function getRequestTypeLabelAttribute(): string
     {
-        if (!$this->request_type) {
+        if (! $this->request_type) {
             return 'Not Specified';
         }
 
@@ -108,7 +102,7 @@ class Reservation extends Model
 
     public function getPriorityLabelAttribute(): string
     {
-        if (!$this->priority) {
+        if (! $this->priority) {
             return 'Not Specified';
         }
 
@@ -216,6 +210,11 @@ class Reservation extends Model
             'reservation_id',
             'vehicle_capability_id'
         );
+    }
+
+    public function trafficViolations(): HasMany
+    {
+        return $this->hasMany(TrafficViolation::class);
     }
 
     public function derivedCapabilities(): array

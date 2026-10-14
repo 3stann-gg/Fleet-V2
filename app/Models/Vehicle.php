@@ -259,6 +259,11 @@ class Vehicle extends Model
         return $this->hasMany(SanitationLog::class);
     }
 
+    public function trafficViolations(): HasMany
+    {
+        return $this->hasMany(TrafficViolation::class);
+    }
+
     public function activeSanitationLog(): HasOne
     {
         return $this->hasOne(SanitationLog::class)

@@ -156,6 +156,23 @@ function populateViewDriverModal(modal, row) {
 
 }
 
+function populateDriverTrafficViolations(modal, violations) {
+  const container = modal.querySelector("#viewDriverTrafficViolations");
+  if (!container) return;
+
+  if (!Array.isArray(violations) || violations.length === 0) {
+    container.textContent = "No traffic violation records";
+    return;
+  }
+
+  container.replaceChildren(...violations.map((violation) => {
+    const item = document.createElement("p");
+    const vehicle = violation.vehicle?.plate_number || "No vehicle linked";
+    item.textContent = `${violation.violation_date || "Date not recorded"} · ${violation.violation_type_label || violation.violation_type} · ${vehicle} · ${violation.responsibility_label || violation.responsibility} · ${violation.status_label || violation.status}`;
+    return item;
+  }));
+}
+
 function openDriverDetailsModal(modal) {
   if (!modal.classList.contains("show")) {
     modal.dataset.previousBodyOverflow = document.body.style.overflow;
@@ -185,7 +202,7 @@ function initViewDriverModal() {
 
   modal.dataset.viewDriverModalInitialized = "true";
 
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     if (!event.target || typeof event.target.closest !== "function") return;
 
     const viewButton = event.target.closest(".action-btn.view");
@@ -199,6 +216,22 @@ function initViewDriverModal() {
     modal.currentRow = row;
     populateViewDriverModal(modal, row);
     openDriverDetailsModal(modal);
+
+    const violationContainer = modal.querySelector("#viewDriverTrafficViolations");
+    if (violationContainer) {
+      violationContainer.textContent = "Loading traffic violation history...";
+      try {
+        const response = await fetch(`/drivers/${row.dataset.id}`, {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error("Unable to load driver history.");
+        const driver = await response.json();
+        populateDriverTrafficViolations(modal, driver.traffic_violations || []);
+      } catch (error) {
+        violationContainer.textContent = "Traffic violation history is unavailable.";
+      }
+    }
   });
 
   if (closeButton) {
