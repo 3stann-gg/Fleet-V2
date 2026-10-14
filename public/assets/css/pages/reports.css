@@ -9,6 +9,52 @@
   color: var(--color-text-muted);
 }
 
+.reports-control-panel {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.reports-control-heading {
+  margin-bottom: var(--space-3);
+}
+
+.reports-control-heading h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-semibold);
+}
+
+.reports-control-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.reports-control-panel .toolbar {
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.reports-page .stat-helper {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.reports-page .stat-content h3,
+.reports-page .fleet-table td,
+.reports-page .report-bar-value {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Page rhythm uses shared layout / toolbar tokens */
 .reports-preset-name {
   min-width: 160px;
@@ -97,6 +143,16 @@
   color: var(--color-text);
 }
 
+.report-chart-card h4::after {
+  display: block;
+  width: 36px;
+  height: 2px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  content: "";
+}
+
 .reports-page .page-header h1 {
   font-size: clamp(1.75rem, 2.2vw, 2rem);
   font-weight: var(--font-semibold);
@@ -114,11 +170,21 @@
   font-size: 14px;
 }
 
+.report-chart-empty:not([hidden]) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+
 .report-chart-body {
   flex: 1;
   min-height: 180px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .report-donut-wrap {
@@ -276,6 +342,16 @@
   margin-bottom: 16px;
 }
 
+.reports-results-card .table-responsive {
+  overflow-x: auto;
+}
+
+#reportsSummaryTable th.numeric-cell,
+#reportsSummaryTable td.numeric-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .reports-page-size-label {
   font-size: 13px;
   font-weight: 600;
@@ -294,6 +370,17 @@
 }
 
 @media (max-width: 767px) {
+  .reports-control-panel {
+    padding: var(--space-3);
+  }
+
+  .reports-control-panel .toolbar-left,
+  .reports-control-panel .toolbar-right,
+  .reports-control-panel .filter-select,
+  .reports-control-panel .btn-outline {
+    width: 100%;
+  }
+
   .reports-filter-grid {
     flex-direction: column;
     align-items: stretch;

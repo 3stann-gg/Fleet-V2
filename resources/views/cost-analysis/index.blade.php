@@ -17,6 +17,13 @@
               </div>
             </div>
 
+            <section class="cost-control-panel" aria-labelledby="costFiltersHeading">
+              <div class="cost-control-heading">
+                <div>
+                  <h2 id="costFiltersHeading">Analysis Filters</h2>
+                  <p>Select a period, operational scope, cost category, and analysis view.</p>
+                </div>
+              </div>
             <div class="toolbar cost-filter-bar">
               <div class="toolbar-left cost-filter-grid">
                 <select class="filter-select" id="costDateRange" aria-label="Cost date range">
@@ -65,11 +72,12 @@
               </div>
               <div class="toolbar-right">
                 <button type="button" class="btn-outline" id="refreshCostAnalysis">
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
             </div>
+            </section>
 
             <div class="cost-presets-bar" aria-label="Cost analysis presets">
               <input
@@ -104,45 +112,51 @@
 
             <div class="stats-grid" id="costOverviewKpis">
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-currency-circle-dollar"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-currency-circle-dollar" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiTotal">₱0.00</h3>
                   <p>Total Operating Cost</p>
+                  <span class="stat-helper">Selected analysis period</span>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-gas-pump"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-gas-pump" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiFuel">₱0.00</h3>
                   <p>Fuel Cost</p>
+                  <span class="stat-helper">Fuel and energy records</span>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon warning"><i class="ph-fill ph-wrench"></i></div>
+                <div class="stat-icon warning"><i class="ph-fill ph-wrench" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiMaintenance">₱0.00</h3>
                   <p>Maintenance Cost</p>
+                  <span class="stat-helper">Recorded service expenses</span>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon success"><i class="ph-fill ph-car"></i></div>
+                <div class="stat-icon success"><i class="ph-fill ph-car" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiAvgVehicle">₱0.00</h3>
                   <p>Average Cost per Vehicle</p>
+                  <span class="stat-helper">Across filtered vehicles</span>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-truck"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-truck" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiAvgTrip">N/A</h3>
                   <p>Average Cost per Trip</p>
+                  <span class="stat-helper">Completed trip activity</span>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-chart-pie-slice"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-chart-pie-slice" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="costKpiBudgetUtil">Not Configured</h3>
                   <p>Budget Utilization</p>
+                  <span class="stat-helper">Configured budget period</span>
                 </div>
               </div>
             </div>
@@ -260,8 +274,8 @@
                   <div class="cost-chart-body">
                     <div class="cost-bars"></div>
                     <div class="cost-chart-key">
-                      <span><i style="background:#00a86b"></i> Fuel</span>
-                      <span><i style="background:#3b82f6"></i> Maintenance</span>
+                      <span><i style="background:#00a86b" aria-hidden="true"></i> Fuel</span>
+                      <span><i style="background:#3b82f6" aria-hidden="true"></i> Maintenance</span>
                     </div>
                   </div>
                 </div>
@@ -500,7 +514,7 @@
               <div class="toolbar cost-table-toolbar">
                 <div class="toolbar-left">
                   <div class="search-box">
-                    <i class="ph ph-magnifying-glass"></i>
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
                     <input type="text" id="costTableSearch" placeholder="Search cost records" aria-label="Search cost records" />
                   </div>
                   <select class="filter-select" id="costTableSourceFilter" aria-label="Filter by source module">
@@ -532,7 +546,7 @@
                 </div>
               </div>
               <div class="table-responsive">
-                <table class="fleet-table" id="costRecordsTable">
+                <table class="fleet-table" id="costRecordsTable" aria-label="Cost analysis records">
                   <thead id="costTableHead"></thead>
                   <tbody id="costTableBody"></tbody>
                 </table>
@@ -545,11 +559,11 @@
               </div>
               <div class="pagination" id="costTablePagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -564,12 +578,13 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="costBudgetModalTitle"
+        aria-describedby="costBudgetModalDescription"
       >
         <div class="custom-modal cost-budget-modal">
           <div class="modal-header">
             <div>
               <h2 id="costBudgetModalTitle">Configure Budget</h2>
-              <p>Set overall and category budgets for Cost Analysis.</p>
+              <p id="costBudgetModalDescription">Set overall and category budgets for Cost Analysis.</p>
             </div>
             <button
               type="button"
@@ -577,12 +592,16 @@
               id="closeCostBudgetModal"
               aria-label="Close budget configuration"
             >
-              <i class="ph ph-x"></i>
+              <i class="ph ph-x" aria-hidden="true"></i>
             </button>
           </div>
-          <div class="modal-body">
-            <form id="saveCostBudgetForm">
+          <form id="saveCostBudgetForm" class="operational-modal-form">
+            <div class="modal-body">
               <div class="form-grid">
+                <div class="form-section-heading">
+                  <h3>Period &amp; Overall Budget</h3>
+                  <p>Define the budget period and overall spending limit.</p>
+                </div>
                 <div class="form-group">
                   <label for="budgetPeriodType">Budget Period Type</label>
                   <select id="budgetPeriodType">
@@ -616,6 +635,10 @@
                     </div>
                   </div>
                 </div>
+                <div class="form-section-heading">
+                  <h3>Category Budgets</h3>
+                  <p>Optionally allocate the overall budget across existing cost categories.</p>
+                </div>
                 <div class="form-group">
                   <label for="budgetCatFuel">Fuel Budget (₱)</label>
                   <input type="number" id="budgetCatFuel" min="0" step="0.01" placeholder="Optional" />
@@ -636,21 +659,24 @@
                   <label for="budgetCatOther">Other Budget (₱)</label>
                   <input type="number" id="budgetCatOther" min="0" step="0.01" placeholder="Optional" />
                 </div>
+                <div class="form-section-heading">
+                  <h3>Additional Information</h3>
+                </div>
                 <div class="form-group full-width">
                   <label for="budgetNotes">Notes</label>
                   <textarea id="budgetNotes" maxlength="500" placeholder="Optional notes"></textarea>
                 </div>
               </div>
-              <div class="modal-footer">
+            </div>
+            <div class="modal-footer">
                 <button type="button" class="btn-outline" id="cancelCostBudgetModal">
                   Cancel
                 </button>
                 <button type="submit" class="btn-primary">
                   Save Budget
                 </button>
-              </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       </div>
     @endif

@@ -136,6 +136,7 @@ function renderCostTable() {
     "<tr>" +
     columns
       .map((col) => {
+        const numeric = ["currency", "percent", "number"].includes(col.type);
         const sorted =
           costTableState.sortField === col.key ? costTableState.sortDir : null;
         const icon =
@@ -144,7 +145,7 @@ function renderCostTable() {
             : sorted === "desc"
               ? "ph-caret-down"
               : "ph-caret-up-down";
-        return `<th class="sortable" data-field="${col.key}" ${
+        return `<th class="sortable${numeric ? " numeric-cell" : ""}" data-field="${col.key}" ${
           sorted
             ? `aria-sort="${sorted === "asc" ? "ascending" : "descending"}"`
             : ""
@@ -186,7 +187,7 @@ function renderCostTable() {
                 columns
                     .map(
                         (col) =>
-                            `<td>${escapeCostTableHtml(
+                            `<td class="${["currency", "percent", "number"].includes(col.type) ? "numeric-cell" : ""}">${escapeCostTableHtml(
                                 formatCostTableCell(row[col.key], col.type),
                             )}</td>`,
                     )

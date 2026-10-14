@@ -20,7 +20,7 @@
                       class="btn-primary"
                       id="newRouteBtn"
                   >
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Request Route
                   </button>
               @endif
@@ -28,42 +28,42 @@
 
             <div class="stats-grid">
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-map-trifold"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-map-trifold" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatTotal">0</h3>
                   <p>Total Planned Routes</p>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon success"><i class="ph-fill ph-check-circle"></i></div>
+                <div class="stat-icon success"><i class="ph-fill ph-check-circle" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatReady">0</h3>
                   <p>Ready For Dispatch</p>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon warning"><i class="ph-fill ph-warning"></i></div>
+                <div class="stat-icon warning"><i class="ph-fill ph-warning" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatHighPriority">0</h3>
                   <p>High Priority Routes</p>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-path"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-path" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatAvgDistance">0.0 km</h3>
                   <p>Average Estimated Distance</p>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-clock"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-clock" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatAvgTime">0 min</h3>
                   <p>Average Estimated Time</p>
                 </div>
               </div>
               <div class="stat-card">
-                <div class="stat-icon"><i class="ph-fill ph-car"></i></div>
+                <div class="stat-icon"><i class="ph-fill ph-car" aria-hidden="true"></i></div>
                 <div class="stat-content">
                   <h3 id="routeStatVehicles">0</h3>
                   <p>Assigned Vehicles</p>
@@ -71,10 +71,17 @@
               </div>
             </div>
 
+            <section class="route-control-panel" aria-labelledby="routeFiltersHeading">
+              <div class="route-control-heading">
+                <div>
+                  <h2 id="routeFiltersHeading">Route History Filters</h2>
+                  <p>Narrow planned routes by assignment, priority, status, or departure date.</p>
+                </div>
+              </div>
             <div class="toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
-                  <i class="ph ph-magnifying-glass"></i>
+                  <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
                   <input
                     type="text"
                     id="routeSearch"
@@ -132,11 +139,12 @@
               </div>
               <div class="toolbar-right">
                 <button type="button" class="btn-outline" id="refreshRoutes">
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
             </div>
+            </section>
 
             @if($routePermissions['canCreate'] ?? false)
                 <div
@@ -206,7 +214,7 @@
                             id="openFullRouteMapBtn"
                             title="Open Full Map"
                         >
-                            <i class="ph ph-arrows-out"></i>
+                            <i class="ph ph-arrows-out" aria-hidden="true"></i>
                             Full Map
                         </button>
                     </div>
@@ -345,7 +353,7 @@
                             class="full-map-navigation-mode"
                             aria-live="polite"
                         >
-                            <i class="ph-fill ph-navigation"></i>
+                            <i class="ph-fill ph-navigation" aria-hidden="true"></i>
                             <span id="fullMapNavigationModeLabel">
                                 Driver Navigation
                             </span>
@@ -373,7 +381,7 @@
                             aria-label="Route navigation information"
                         >   
                             <div id="fullMapGpsIndicator" class="full-map-gps-indicator is-no-signal">
-                                <i id="fullMapGpsIndicatorIcon" class="ph ph-crosshair-slash"></i>
+                                <i id="fullMapGpsIndicatorIcon" class="ph ph-crosshair-slash" aria-hidden="true"></i>
 
                                 <div class="full-map-gps-indicator-content">
                                     <span id="fullMapGpsIndicatorLabel">GPS</span>
@@ -490,13 +498,13 @@
               </div>
 
               <div id="routeEmptyState" class="route-empty-state" hidden>
-                <i class="ph ph-map-trifold" style="font-size: 40px"></i>
+                <i class="ph ph-map-trifold route-empty-state-icon" aria-hidden="true"></i>
                 <h3>No routes planned yet.</h3>
                 <p>Create your first transportation route.</p>
               </div>
 
               <div class="table-responsive" id="routeTableWrap">
-                <table class="fleet-table" id="routeTable">
+                <table class="fleet-table" id="routeTable" aria-label="Planned route history">
                   <thead>
                     <tr>
                       <th class="sortable" data-sort="routeNumber">Route No.</th>
@@ -506,7 +514,7 @@
                       <th class="sortable" data-sort="driver">Driver</th>
                       <th class="sortable" data-sort="priority">Priority</th>
                       <th class="sortable numeric-cell" data-sort="estimatedDistance">Distance</th>
-                      <th>Estimated Time</th>
+                      <th class="numeric-cell">Estimated Time</th>
                       <th class="sortable" data-sort="status">Status</th>
                       <th class="sortable" data-sort="departureDate">Departure</th>
                       <th>Created</th>
@@ -524,11 +532,11 @@
               </div>
               <div class="pagination" id="routePagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -541,20 +549,24 @@
         ($routePermissions['canUpdate'] ?? false)
     )
         <!-- New / Edit Route Modal -->
-      <div id="routeFormModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="routeFormModalTitle">
+      <div id="routeFormModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="routeFormModalTitle" aria-describedby="routeFormModalDescription">
         <div class="custom-modal">
           <div class="modal-header">
             <div>
               <h2 id="routeFormModalTitle">Request Route</h2>
-              <p>Plan a transportation route before dispatch.</p>
+              <p id="routeFormModalDescription">Plan a transportation route before dispatch.</p>
             </div>
             <button type="button" class="modal-close" id="closeRouteFormModal" aria-label="Close route form">
-              <i class="ph ph-x"></i>
+              <i class="ph ph-x" aria-hidden="true"></i>
             </button>
           </div>
-          <div class="modal-body">
-            <form id="routeForm">
+          <form id="routeForm" class="operational-modal-form">
+            <div class="modal-body">
               <div class="form-grid">
+                <div class="form-section-heading">
+                  <h3>Route Information</h3>
+                  <p>Reservation reference and operational priority.</p>
+                </div>
                 <div class="form-group">
                   <label for="routeNumber">Route Number</label>
                   <input type="text" id="routeNumber" readonly />
@@ -574,6 +586,10 @@
                     <option value="Emergency">Emergency</option>
                   </select>
                 </div>
+                <div class="form-section-heading">
+                  <h3>Origin, Destination &amp; Stops</h3>
+                  <p>Define the planned journey and any intermediate stops.</p>
+                </div>
                 <div class="form-group">
                   <label for="routeOrigin">Origin *</label>
                   <input type="text" id="routeOrigin" placeholder="Pickup location" required />
@@ -586,9 +602,13 @@
                   <label>Stops</label>
                   <div id="routeStopsList"></div>
                   <button type="button" class="btn-outline" id="addRouteStopBtn">
-                    <i class="ph ph-plus"></i>
+                    <i class="ph ph-plus" aria-hidden="true"></i>
                     Add Stop
                   </button>
+                </div>
+                <div class="form-section-heading">
+                  <h3>Vehicle &amp; Driver</h3>
+                  <p>Review the resources assigned through the approved reservation.</p>
                 </div>
                 <div class="form-group">
                   <label for="routeVehicle">Vehicle *</label>
@@ -605,6 +625,10 @@
                 <div class="form-group">
                   <label for="routeDepartment">Department *</label>
                   <select id="routeDepartment" required></select>
+                </div>
+                <div class="form-section-heading">
+                  <h3>Schedule &amp; Status</h3>
+                  <p>Confirm route readiness and the planned departure.</p>
                 </div>
                 <div class="form-group">
                   <label for="routeStatus">Status *</label>
@@ -624,6 +648,10 @@
                   <label for="routeDepartureTime">Departure Time *</label>
                   <input type="time" id="routeDepartureTime" required readonly />
                 </div>
+                <div class="form-section-heading">
+                  <h3>Distance &amp; Estimated Time</h3>
+                  <p>Read-only values produced by the existing route optimization workflow.</p>
+                </div>
                 <div class="form-group">
                   <label for="routeEstimatedDistance">Estimated Distance</label>
                   <input type="text" id="routeEstimatedDistance" readonly placeholder="Run optimization" />
@@ -640,6 +668,9 @@
                   <label for="routeOptScore">Optimization Score</label>
                   <input type="text" id="routeOptScore" readonly />
                 </div>
+                <div class="form-section-heading">
+                  <h3>Additional Information</h3>
+                </div>
                 <div class="form-group full-width">
                   <label for="routePurpose">Purpose</label>
                   <input type="text" id="routePurpose" placeholder="Trip purpose" />
@@ -650,7 +681,8 @@
                 </div>
               </div>
               <div id="routeOptimizeSummary" class="route-optimize-summary" hidden></div>
-              <div class="modal-footer">
+            </div>
+            <div class="modal-footer">
                 <button type="button" class="btn-outline" id="cancelRouteForm">Cancel</button>
                 <button type="button" class="btn-outline" id="saveRouteTemplateFromForm">
                   Save as Template
@@ -660,7 +692,7 @@
                     class="btn-outline"
                     id="optimizeRouteBtn"
                 >
-                    <i class="ph ph-path"></i>
+                    <i class="ph ph-path" aria-hidden="true"></i>
                     Optimize Route
                 </button>
                 <button
@@ -669,51 +701,55 @@
                     id="applyRouteOptimizationBtn"
                     disabled
                 >
-                    <i class="ph ph-check"></i>
+                    <i class="ph ph-check" aria-hidden="true"></i>
                     Apply Optimization
                 </button>
                 <button type="submit" class="btn-primary" id="saveRouteBtn">Save Route</button>
-              </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       </div>
     @endif
 
       <!-- View Route Modal -->
-      <div id="viewRouteModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="viewRouteModalTitle">
+      <div id="viewRouteModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="viewRouteModalTitle" aria-describedby="viewRouteModalDescription">
         <div class="custom-modal">
           <div class="modal-header">
             <div>
               <h2 id="viewRouteModalTitle">Route Details</h2>
-              <p>Read-only planned route information.</p>
+              <p id="viewRouteModalDescription">Read-only planned route information.</p>
             </div>
             <button type="button" class="modal-close" id="closeViewRouteModal" aria-label="Close route details">
-              <i class="ph ph-x"></i>
+              <i class="ph ph-x" aria-hidden="true"></i>
             </button>
           </div>
           <div class="modal-body">
             <div class="view-route-grid">
+              <div class="detail-section-heading"><h3>Route Information</h3></div>
               <div><label>Route Number</label><p id="viewRouteNumber"></p></div>
               <div><label>Reservation Number</label><p id="viewRouteReservationNumber"></p></div>
               <div><label>Status</label><p id="viewRouteStatus"></p></div>
               <div><label>Priority</label><p id="viewRoutePriority"></p></div>
               <div><label>Departure</label><p id="viewRouteDeparture"></p></div>
+              <div class="detail-section-heading"><h3>Origin &amp; Destination</h3></div>
               <div><label>Origin</label><p id="viewRouteOrigin"></p></div>
               <div><label>Destination</label><p id="viewRouteDestination"></p></div>
               <div><label>Stops</label><p id="viewRouteStops"></p></div>
+              <div class="detail-section-heading"><h3>Vehicle &amp; Driver</h3></div>
               <div><label>Department</label><p id="viewRouteDepartment"></p></div>
               <div><label>Vehicle</label><p id="viewRouteVehicle"></p></div>
               <div><label>Driver</label><p id="viewRouteDriver"></p></div>
+              <div class="detail-section-heading"><h3>Distance &amp; Estimated Time</h3></div>
               <div><label>Distance</label><p id="viewRouteDistance"></p></div>
               <div><label>Travel Time</label><p id="viewRouteTime"></p></div>
               <div><label>Strategy</label><p id="viewRouteStrategy"></p></div>
               <div><label>Score</label><p id="viewRouteScore"></p></div>
+              <div class="detail-section-heading"><h3>Additional Information</h3></div>
               <div><label>Purpose</label><p id="viewRoutePurpose"></p></div>
               <div><label>Created</label><p id="viewRouteCreated"></p></div>
               <div><label>Updated</label><p id="viewRouteUpdated"></p></div>
-              <div style="grid-column: 1 / -1"><label>Notes</label><p id="viewRouteNotes"></p></div>
-              <div style="grid-column: 1 / -1">
+              <div class="route-detail-full"><label>Notes</label><p id="viewRouteNotes"></p></div>
+              <div class="route-detail-full">
                 <label>Status History / Timeline</label>
                 <ul class="route-timeline" id="viewRouteTimeline"></ul>
               </div>
@@ -733,7 +769,7 @@
                       class="btn-outline"
                       id="duplicateRouteFromViewBtn"
                   >
-                      <i class="ph ph-copy"></i>
+                      <i class="ph ph-copy" aria-hidden="true"></i>
                       Duplicate
                   </button>
               @endif
@@ -743,7 +779,7 @@
                       class="btn-outline"
                       id="archiveRouteFromViewBtn"
                   >
-                      <i class="ph ph-archive"></i>
+                      <i class="ph ph-archive" aria-hidden="true"></i>
                       Archive
                   </button>
               @endif
@@ -754,7 +790,7 @@
                       id="restoreRouteFromViewBtn"
                       hidden
                   >
-                      <i class="ph ph-arrow-counter-clockwise"></i>
+                      <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                       Restore
                   </button>
               @endif
@@ -764,7 +800,7 @@
                       class="btn-primary"
                       id="editRouteFromViewBtn"
                   >
-                      <i class="ph ph-pencil-simple"></i>
+                      <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                       Edit Route
                   </button>
               @endif
@@ -782,7 +818,7 @@
       >
         <div class="custom-modal delete-modal">
           <div class="delete-icon">
-            <i class="ph-fill ph-warning-circle"></i>
+            <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
           </div>
           <h2 id="routeDriverStatusConfirmTitle">
             Update Dispatch Status
@@ -812,7 +848,7 @@
               class="btn-primary"
               id="confirmRouteDriverStatus"
             >
-              <i class="ph ph-check"></i>
+              <i class="ph ph-check" aria-hidden="true"></i>
               <span id="confirmRouteDriverStatusText">
                 Set En Route
               </span>

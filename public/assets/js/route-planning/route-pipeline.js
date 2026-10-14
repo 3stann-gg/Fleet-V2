@@ -700,7 +700,7 @@ function buildRouteTableRow(record) {
       </span>
     </td>
 
-    <td>
+    <td class="numeric-cell">
       <span class="route-time">
         ${escapeRouteHtml(record.estimatedTravelTime || "—")}
       </span>

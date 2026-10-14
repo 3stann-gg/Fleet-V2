@@ -19,9 +19,13 @@
       </button>
     </div>
 
-    <form id="secureExportForm" novalidate>
+    <form id="secureExportForm" class="operational-modal-form" novalidate>
       <div class="modal-body">
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Export Verification</h3>
+            <p>Confirm the requested format and verify your current account password.</p>
+          </div>
           <div class="form-group full-width">
             <label for="secureExportFormat">Export Format</label>
             <input type="text" id="secureExportFormat" readonly />
@@ -39,6 +43,10 @@
             <small class="field-error" id="secureExportCurrentPasswordError"></small>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Optional File Protection</h3>
+            <p>Add a separate password to supported downloaded files.</p>
+          </div>
           <div class="form-group full-width secure-export-protection-toggle">
             <label class="secure-export-checkbox" for="secureExportProtectedFile">
               <input type="checkbox" id="secureExportProtectedFile" />
