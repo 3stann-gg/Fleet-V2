@@ -4,6 +4,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="viewTripLogModalTitle"
+    aria-describedby="viewTripLogModalDescription"
     hidden
 >
     <div class="custom-modal view-trip-log-modal">
@@ -14,7 +15,7 @@
                     Trip Log
                 </h2>
 
-                <p>
+                <p id="viewTripLogModalDescription">
                     Review the submitted trip details and proof photos.
                 </p>
             </div>
@@ -23,9 +24,9 @@
                 type="button"
                 class="modal-close"
                 id="closeViewTripLogModal"
-                aria-label="Close modal"
+                aria-label="Close trip log details"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 

@@ -22,25 +22,23 @@
         id="closeViewDriverModal"
         aria-label="Close driver details"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="vehicle-profile driver-profile">
-      <img
-        id="viewDriverImage"
-        src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20170%20170%27%3E%3Crect%20width%3D%27170%27%20height%3D%27170%27%20fill%3D%27%23f8fafc%27%2F%3E%3Ccircle%20cx%3D%2785%27%20cy%3D%2762%27%20r%3D%2730%27%20fill%3D%27%23cbd5e1%27%2F%3E%3Cpath%20d%3D%27M30%20155c10-35%2035-50%2055-50s45%2015%2055%2050%27%20fill%3D%27%23cbd5e1%27%2F%3E%3C%2Fsvg%3E"
-        alt="Driver photo"
-      />
-
-      <h3 id="viewDriverName"></h3>
-
-      <p id="viewDriverSubtitle"></p>
-
-      <span id="viewDriverStatus" class="status-badge available"></span>
-    </div>
-
     <div class="modal-body">
+      <div class="vehicle-profile driver-profile">
+        <img
+          id="viewDriverImage"
+          src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20170%20170%27%3E%3Crect%20width%3D%27170%27%20height%3D%27170%27%20fill%3D%27%23f8fafc%27%2F%3E%3Ccircle%20cx%3D%2785%27%20cy%3D%2762%27%20r%3D%2730%27%20fill%3D%27%23cbd5e1%27%2F%3E%3Cpath%20d%3D%27M30%20155c10-35%2035-50%2055-50s45%2015%2055%2050%27%20fill%3D%27%23cbd5e1%27%2F%3E%3C%2Fsvg%3E"
+          alt="Driver photo"
+        />
+
+        <h3 id="viewDriverName"></h3>
+        <p id="viewDriverSubtitle"></p>
+        <span id="viewDriverStatus" class="status-badge available"></span>
+      </div>
+
       <div class="view-driver-summary">
         <div class="view-driver-summary-item">
           <span class="view-driver-summary-label">Employee ID</span>
@@ -64,6 +62,11 @@
       </div>
 
       <div class="view-driver-details">
+        <div class="detail-section-heading">
+          <h3>License &amp; LTO Information</h3>
+          <p>Legal credentials recorded for licensing compatibility.</p>
+        </div>
+
         <div class="view-driver-detail-item">
           <label>License Number</label>
           <p id="viewDriverLicenseNumber"></p>
@@ -79,6 +82,10 @@
           <p id="viewDriverClutchAuthorization"></p>
         </div>
 
+        <div class="detail-section-heading">
+          <h3>Contact &amp; Employment</h3>
+        </div>
+
         <div class="view-driver-detail-item">
           <label>Contact Number</label>
           <p id="viewDriverPhone"></p>
@@ -87,11 +94,6 @@
         <div class="view-driver-detail-item">
           <label>Email</label>
           <p id="viewDriverEmail"></p>
-        </div>
-
-        <div class="view-driver-detail-item">
-          <label>Assigned Vehicle</label>
-          <p id="viewDriverAssignedVehicle"></p>
         </div>
 
         <div class="view-driver-detail-item">
@@ -109,10 +111,24 @@
           <p id="viewDriverEmergencyContact"></p>
         </div>
 
+        <div class="detail-section-heading">
+          <h3>Availability &amp; Hospital Qualifications</h3>
+          <p>Operational assignment and internal authorization.</p>
+        </div>
+
+        <div class="view-driver-detail-item">
+          <label>Assigned Vehicle</label>
+          <p id="viewDriverAssignedVehicle"></p>
+        </div>
+
         <div class="view-driver-detail-item">
           <label>Hospital Authorized Vehicle Types</label>
           <p id="viewDriverQualifications"></p>
         </div>
+      </div>
+
+      <div class="detail-section-heading detail-section-heading--standalone">
+        <h3>Additional Information</h3>
       </div>
 
       <div class="view-driver-notes">
@@ -121,8 +137,11 @@
       </div>
 
       @if(auth()->user()->hasPermission('traffic_violations.view'))
+        <div class="detail-section-heading detail-section-heading--standalone">
+          <h3>Traffic Violation History</h3>
+        </div>
+
         <div class="view-driver-notes">
-          <label>Traffic Violation History</label>
           <div id="viewDriverTrafficViolations">No traffic violation records</div>
         </div>
       @endif
@@ -134,7 +153,7 @@
       </button>
 
       <button type="button" class="btn-primary" id="editDriverFromViewBtn">
-        <i class="ph ph-pencil-simple"></i>
+        <i class="ph ph-pencil-simple" aria-hidden="true"></i>
         Edit Driver
       </button>
     </div>

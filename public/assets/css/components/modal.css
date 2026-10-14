@@ -106,6 +106,64 @@
   background: var(--color-surface);
 }
 
+/* Operational form modals keep actions visible while long content scrolls. */
+.operational-modal-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.operational-modal-form > .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.operational-modal-form > .modal-footer {
+  margin-top: 0;
+}
+
+.form-section-heading,
+.detail-section-heading {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: var(--space-3) 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-section-heading:not(:first-child),
+.detail-section-heading:not(:first-child) {
+  margin-top: var(--space-2);
+}
+
+.form-section-heading--outside-grid {
+  margin-bottom: var(--space-4);
+}
+
+.detail-section-heading--standalone {
+  margin-top: var(--space-5);
+}
+
+.form-section-heading h3,
+.detail-section-heading h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.form-section-heading p,
+.detail-section-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-body);
+}
+
 .secure-export-modal {
   width: min(100%, 620px);
 }
@@ -472,6 +530,12 @@
 #viewDriverModal .view-driver-notes {
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
+}
+
+#viewDriverModal .driver-profile {
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 /* Reservation summary */

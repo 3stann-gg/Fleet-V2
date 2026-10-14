@@ -4,6 +4,7 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="dispatchChecklistModalTitle"
+  aria-describedby="dispatchChecklistModalDescription"
 >
   <div class="custom-modal">
     <div class="modal-header">
@@ -12,12 +13,12 @@
         <p id="dispatchChecklistModalDescription">Record the operational checklist for this dispatch.</p>
       </div>
       <button type="button" class="modal-close" id="closeDispatchChecklistModal" aria-label="Close checklist">
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="dispatchChecklistForm" class="vehicle-form">
+    <form id="dispatchChecklistForm" class="vehicle-form operational-modal-form">
+      <div class="modal-body">
         <input type="hidden" id="checklistDispatchId">
 
         <div id="preTripChecklistFields">
@@ -122,13 +123,14 @@
           </a>
         </div>
 
-        <div class="modal-footer">
+      </div>
+
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelDispatchChecklist">Close</button>
           <button type="submit" class="btn-primary" id="saveDispatchChecklist">
             <i class="ph ph-check"></i> Save Checklist
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

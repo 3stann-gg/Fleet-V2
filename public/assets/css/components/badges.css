@@ -179,3 +179,9 @@
   border-color: transparent;
   color: var(--color-info-text);
 }
+
+.status-chip--neutral {
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
