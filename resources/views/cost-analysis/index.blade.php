@@ -426,7 +426,7 @@
                 <div class="cost-budget-table-section">
                   <h4>Category Budget Performance</h4>
                   <div class="table-responsive">
-                    <table class="fleet-table" id="costCategoryBudgetTable">
+                    <table class="fleet-table" id="costCategoryBudgetTable" aria-label="Category budget performance">
                       <thead>
                         <tr>
                           <th scope="col">Category</th>
@@ -459,7 +459,7 @@
                       @endif
                   </div>
                   <div class="table-responsive">
-                    <table class="fleet-table" id="costBudgetHistoryTable">
+                    <table class="fleet-table" id="costBudgetHistoryTable" aria-label="Budget change history">
                       <thead>
                         <tr>
                           <th scope="col">Action</th>

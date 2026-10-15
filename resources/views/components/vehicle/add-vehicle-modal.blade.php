@@ -4,13 +4,14 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="vehicleModalTitle"
+  aria-describedby="vehicleModalDescription"
 >
   <div class="custom-modal">
     <!-- Header -->
     <div class="modal-header">
       <div>
         <h2 id="vehicleModalTitle">Request New Vehicle</h2>
-        <p>Register a new hospital fleet vehicle.</p>
+        <p id="vehicleModalDescription">Register a new hospital fleet vehicle.</p>
       </div>
 
       <button

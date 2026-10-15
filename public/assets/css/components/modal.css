@@ -276,16 +276,12 @@
 
 .delete-note {
   margin-top: 12px !important;
+  color: var(--color-text-light);
+  font-size: 15px;
 }
 
 .delete-modal strong {
   color: var(--color-text);
-}
-
-.delete-note {
-  margin-top: 10px;
-  color: var(--color-text-light);
-  font-size: 15px;
 }
 
 .delete-modal .modal-footer {
@@ -881,6 +877,12 @@
   gap: 12px;
 
   box-sizing: border-box;
+
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+
+  background: var(--modal-bg);
 }
 
 /* Delete section */
@@ -982,5 +984,21 @@
 
   #accountManagementModal .modal-footer button {
     width: 100%;
+  }
+}
+
+@supports (height: 100dvh) {
+  #accountManagementModal {
+    height: 100dvh;
+  }
+
+  #accountManagementModal .custom-modal {
+    max-height: calc(100dvh - 48px);
+  }
+
+  @media (max-width: 768px) {
+    #accountManagementModal .custom-modal {
+      max-height: calc(100dvh - 20px);
+    }
   }
 }

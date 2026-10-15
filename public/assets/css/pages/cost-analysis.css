@@ -111,11 +111,6 @@
   content: "";
 }
 
-.cost-analysis-page .page-header h1 {
-  font-size: clamp(1.75rem, 2.2vw, 2rem);
-  font-weight: var(--font-semibold);
-}
-
 .cost-analysis-page .card-subtitle {
   font-size: var(--font-size-sm);
   line-height: var(--line-height-snug);
@@ -394,13 +389,13 @@
 }
 
 .cost-budget-status[data-status="Near Limit"] {
-  border-color: #d97706;
-  color: #d97706;
+  border-color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .cost-budget-status[data-status="Over Budget"] {
-  border-color: #dc2626;
-  color: #dc2626;
+  border-color: var(--color-danger);
+  color: var(--color-danger-text);
 }
 
 .cost-budget-status[data-status="Not Configured"],

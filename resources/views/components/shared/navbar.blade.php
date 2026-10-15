@@ -1,7 +1,7 @@
 <header class="navbar-custom">
   <div class="navbar-left">
     <button type="button" class="menu-toggle" aria-label="Toggle navigation menu">
-      <i class="ph ph-list"></i>
+      <i class="ph ph-list" aria-hidden="true"></i>
     </button>
 
     <div class="app-identity">

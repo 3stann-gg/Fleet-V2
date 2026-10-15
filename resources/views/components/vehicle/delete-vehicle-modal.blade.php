@@ -4,6 +4,7 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="deleteVehicleTitle"
+  aria-describedby="deleteVehicleMessage"
 >
   <div class="custom-modal delete-modal">
     <div class="delete-icon">

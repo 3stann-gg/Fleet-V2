@@ -482,7 +482,7 @@
                         </div>
 
                         <div class="table-responsive">
-                            <table class="fleet-table">
+                            <table class="fleet-table" aria-label="Maintenance service types">
                                 <thead>
                                     <tr>
                                         <th>Service Type</th>
@@ -534,7 +534,7 @@
                             </button>
                         </div>
                         <div class="table-responsive">
-                            <table class="fleet-table">
+                            <table class="fleet-table" aria-label="Maintenance technicians and workshops">
                                 <thead>
                                     <tr>
                                         <th>Name</th>
@@ -611,7 +611,7 @@
                           </button>
                       </div>
                       <div class="table-responsive">
-                          <table class="fleet-table">
+                          <table class="fleet-table" aria-label="Contractual fuel stations">
                               <thead>
                                   <tr>
                                       <th>Fuel Station</th>
@@ -799,7 +799,7 @@
                             </h3>
 
                             <p class="card-subtitle">
-                                Create, update, reset, and remove user accounts.
+                                Create, update, reset, and deactivate user accounts.
                             </p>
                         </div>
                     </div>

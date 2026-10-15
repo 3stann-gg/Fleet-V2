@@ -423,7 +423,7 @@
                     @endif
                   </div>
                   <div class="table-responsive">
-                    <table class="fleet-table">
+                    <table class="fleet-table" aria-label="Fleet vehicle status overview">
                       <thead>
                         <tr>
                           <th scope="col">Vehicle</th>

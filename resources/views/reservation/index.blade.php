@@ -324,11 +324,11 @@
 
               <div class="pagination" id="reservationPagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

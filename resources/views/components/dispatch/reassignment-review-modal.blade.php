@@ -34,7 +34,7 @@
                     data-bs-dismiss="modal"
                     aria-label="Close modal"
                 >
-                    <i class="ph ph-x"></i>
+            <i class="ph ph-x" aria-hidden="true"></i>
                 </button>
             </div>
 

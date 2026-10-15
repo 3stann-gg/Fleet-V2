@@ -4,12 +4,13 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="viewVehicleModalTitle"
+  aria-describedby="viewVehicleModalDescription"
 >
   <div class="custom-modal">
     <div class="modal-header">
       <div>
         <h2 id="viewVehicleModalTitle">Vehicle Details</h2>
-        <p>View complete vehicle information.</p>
+        <p id="viewVehicleModalDescription">View complete vehicle information.</p>
       </div>
 
       <button

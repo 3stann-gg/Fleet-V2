@@ -14,7 +14,7 @@
             id="closeReservationConfirmation"
             aria-label="Close"
         >
-            <i class="ph ph-x"></i>
+            <i class="ph ph-x" aria-hidden="true"></i>
         </button>
 
         <div class="delete-icon" id="reservationConfirmationIcon">

@@ -96,12 +96,6 @@
   box-shadow: var(--shadow-xs);
 }
 
-.route-planning-page .page-header h1,
-.vehicle-page.route-planning-page .page-header h1 {
-  font-size: clamp(1.75rem, 2.2vw, 2rem);
-  font-weight: var(--font-semibold);
-}
-
 .route-map-stage {
   position: relative;
   min-height: 220px;

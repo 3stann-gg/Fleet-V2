@@ -231,7 +231,7 @@
                 </div>
 
               <div class="table-responsive">
-                <table class="fleet-table">
+                <table class="fleet-table" aria-label="Hospital fleet vehicles">
                   <thead>
                     <tr>
                       <th>

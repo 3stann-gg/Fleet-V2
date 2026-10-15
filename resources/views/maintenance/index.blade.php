@@ -176,7 +176,7 @@
                             class="btn-danger"
                             aria-label="Archive selected maintenance records"
                         >
-                            <i class="ph ph-archive"></i>
+                        <i class="ph ph-archive" aria-hidden="true"></i>
                             Archive Selected
                         </button>
                     </div>
@@ -329,11 +329,11 @@
 
               <div class="pagination" id="maintenancePagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

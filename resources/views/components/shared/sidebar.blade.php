@@ -799,6 +799,6 @@
         aria-controls="sidebar"
         aria-expanded="true"
     >
-        <i class="ph ph-caret-double-left"></i>
+        <i class="ph ph-caret-double-left" aria-hidden="true"></i>
     </button>
 </aside>

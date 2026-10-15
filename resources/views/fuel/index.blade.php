@@ -155,7 +155,7 @@
                   class="btn-danger"
                   aria-label="Delete selected fuel records"
                 >
-                  <i class="ph ph-trash"></i>
+                <i class="ph ph-trash" aria-hidden="true"></i>
                   Delete Selected
                 </button>
               </div>
@@ -285,11 +285,11 @@
               </div>
               <div class="pagination" id="fuelPagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

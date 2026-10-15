@@ -4,6 +4,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="changePasswordModalTitle"
+    aria-describedby="changePasswordModalDescription"
     aria-hidden="true"
     data-has-errors="{{ $errors->updatePassword->any() ? 'true' : 'false' }}"
 >
@@ -15,7 +16,7 @@
                     Change Password
                 </h3>
 
-                <p class="card-subtitle">
+                <p class="card-subtitle" id="changePasswordModalDescription">
                     Use a strong and unique password to keep your account secure.
                 </p>
             </div>
@@ -26,7 +27,7 @@
                 id="closeChangePasswordModal"
                 aria-label="Close change password modal"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
@@ -34,7 +35,7 @@
             method="POST"
             action="{{ route('profile.password.update') }}"
             id="updatePasswordForm"
-            class="profile-password-form"
+            class="profile-password-form operational-modal-form"
             novalidate
         >
             @csrf
@@ -66,7 +67,7 @@
                                 data-password-toggle="update_password_current_password"
                                 aria-label="Show current password"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
                         </div>
 
@@ -104,7 +105,7 @@
                                 data-password-toggle="update_password_password"
                                 aria-label="Show new password"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
                         </div>
 
@@ -142,7 +143,7 @@
                                 data-password-toggle="update_password_password_confirmation"
                                 aria-label="Show password confirmation"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
                         </div>
 
