@@ -53,6 +53,52 @@ function clearAllReservationErrors(form) {
   });
 }
 
+function isEmergencyReservationRequestType(requestType) {
+    return (
+        window.RESERVATION_CONTEXT?.emergencyRequestTypes || []
+    ).includes(requestType);
+}
+
+function getReservationApplicationDateTime() {
+    const now = new Date();
+    const applicationTimezone =
+        window.RESERVATION_CONTEXT?.applicationTimezone;
+    const localDateTime = () => ({
+        date: reservationFormatDate(now),
+        time: `${String(now.getHours()).padStart(2, "0")}:${String(
+            now.getMinutes(),
+        ).padStart(2, "0")}`,
+    });
+
+    if (!applicationTimezone) {
+        return localDateTime();
+    }
+
+    try {
+        const dateTimeParts = Object.fromEntries(
+            new Intl.DateTimeFormat("en-CA", {
+                timeZone: applicationTimezone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23",
+            })
+                .formatToParts(now)
+                .filter(({ type }) => type !== "literal")
+                .map(({ type, value }) => [type, value]),
+        );
+
+        return {
+            date: `${dateTimeParts.year}-${dateTimeParts.month}-${dateTimeParts.day}`,
+            time: `${dateTimeParts.hour}:${dateTimeParts.minute}`,
+        };
+    } catch (error) {
+        return localDateTime();
+    }
+}
+
 function validateReservationForm(form) {
     if (!form) return false;
     clearAllReservationErrors(form);

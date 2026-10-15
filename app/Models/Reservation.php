@@ -132,6 +132,17 @@ class Reservation extends Model
         return in_array($requestType, ['medical_supply_delivery', 'Supply Delivery'], true);
     }
 
+    /** @return list<string> */
+    public static function emergencyRequestTypes(): array
+    {
+        return ['emergency_response', 'Emergency Transfer'];
+    }
+
+    public static function isEmergencyRequestType(?string $requestType): bool
+    {
+        return in_array($requestType, self::emergencyRequestTypes(), true);
+    }
+
     public static function requiresPatientName(?string $requestType): bool
     {
         return in_array($requestType, [

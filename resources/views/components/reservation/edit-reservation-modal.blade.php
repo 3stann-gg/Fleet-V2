@@ -293,6 +293,7 @@
               id="editReservationDate"
               required
             />
+            <small class="form-hint" id="editReservationDateHint">Select a date allowed by Reservation Settings.</small>
           </div>
 
           <div class="form-group">
@@ -302,6 +303,7 @@
               id="editReservationTime"
               required
             />
+            <small class="form-hint" id="editReservationTimeHint">Enter the scheduled pickup time.</small>
           </div>
 
           <div class="form-group">
@@ -322,7 +324,7 @@
 
             <small
                 class="form-hint"
-                id="reservationPriorityHint"
+                id="editReservationPriorityHint"
             >
                 Choose priority independently from the transport request type.
             </small>

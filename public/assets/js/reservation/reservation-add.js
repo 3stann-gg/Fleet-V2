@@ -51,18 +51,10 @@ function reservationFormatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
-function isEmergencyTransferReservation() {
-    return (
-        document.getElementById("reservationType")?.value ===
-        "Emergency Transfer"
+function isEmergencyReservation() {
+    return isEmergencyReservationRequestType(
+        document.getElementById("reservationType")?.value,
     );
-}
-function getCurrentReservationTime() {
-    const now = new Date();
-
-    return `${String(now.getHours()).padStart(2, "0")}:${String(
-        now.getMinutes(),
-    ).padStart(2, "0")}`;
 }
 
 function isSupplyDeliveryReservation() {
@@ -163,24 +155,28 @@ function applyReservationAddSettings(settings) {
     const statusSelect = document.getElementById("reservationStatus");
     const statusHint = document.getElementById("reservationStatusHint");
     const prioritySelect = document.getElementById("reservationPriority");
+    const dateHint = document.getElementById("reservationDateHint");
+    const timeHint = document.getElementById("reservationTimeHint");
+    const priorityHint = document.getElementById("reservationPriorityHint");
     const today = new Date();
+    const applicationDateTime = getReservationApplicationDateTime();
     const minimumDate = new Date(today);
     if (!settings.allowSameDay) {
         minimumDate.setDate(minimumDate.getDate() + 1);
     }
     const maximumDate = new Date(today);
     maximumDate.setDate(maximumDate.getDate() + settings.maxAdvanceDays);
-    const todayValue = reservationFormatDate(today);
+    const todayValue = applicationDateTime.date;
     const minimumDateValue = reservationFormatDate(minimumDate);
     const maximumDateValue = reservationFormatDate(maximumDate);
-    const emergency = isEmergencyTransferReservation();
+    const emergency = isEmergencyReservation();
     /*
     |--------------------------------------------------------------------------
     | Date
     |--------------------------------------------------------------------------
     */
     if (dateInput) {
-        dateInput.min = minimumDateValue;
+        dateInput.min = emergency ? todayValue : minimumDateValue;
         dateInput.max = maximumDateValue;
         if (emergency) {
             dateInput.value = todayValue;
@@ -200,7 +196,7 @@ function applyReservationAddSettings(settings) {
     */
     if (timeInput) {
         if (emergency) {
-            timeInput.value = getCurrentReservationTime();
+            timeInput.value = applicationDateTime.time;
             /*
             | Emergency time is controlled automatically.
             */
@@ -216,7 +212,7 @@ function applyReservationAddSettings(settings) {
     */
     if (prioritySelect) {
         if (emergency) {
-            prioritySelect.value = "Emergency";
+            prioritySelect.value = "emergency";
 
             prioritySelect.disabled = true;
         } else {
@@ -225,13 +221,28 @@ function applyReservationAddSettings(settings) {
             | Emergency priority must not remain selected
             | for a normal request.
             */
-            if (prioritySelect.value === "Emergency") {
+            if (["emergency", "Emergency"].includes(prioritySelect.value)) {
                 prioritySelect.value = "";
             }
             /*
             | Preserve normal default behavior.
             */
         }
+    }
+    if (dateHint) {
+        dateHint.textContent = emergency
+            ? "Emergency date is set automatically and confirmed by the server."
+            : "Date is controlled by Reservation Settings.";
+    }
+    if (timeHint) {
+        timeHint.textContent = emergency
+            ? "Emergency time is set automatically and confirmed by the server."
+            : "Enter the scheduled pickup time.";
+    }
+    if (priorityHint) {
+        priorityHint.textContent = emergency
+            ? "Emergency priority is system-managed."
+            : "Choose priority independently from the transport request type.";
     }
     /*
     |--------------------------------------------------------------------------
@@ -255,7 +266,7 @@ function applyReservationAddSettings(settings) {
     if (statusHint) {
         if (emergency) {
             statusHint.textContent =
-                "Emergency Transfer is automatically approved for immediate processing.";
+                "Emergency Response is automatically approved for immediate processing.";
         } else {
             statusHint.textContent = settings.requireApproval
                 ? "New reservations require approval and will start as Pending."
