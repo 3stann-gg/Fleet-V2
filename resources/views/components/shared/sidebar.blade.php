@@ -79,6 +79,29 @@
         $canAuditLogs ||
         $canSettings;
 
+    $fleetManagementActive =
+        request()->routeIs('fleet', 'vehicles.*', 'reservation.*', 'dispatch', 'dispatch.*');
+
+    $driverManagementActive =
+        request()->routeIs('driver', 'drivers.*', 'driver-performance', 'driver-performance.*');
+
+    $operationsActive =
+        request()->routeIs(
+            'traffic-violations.*',
+            'maintenance',
+            'maintenance.*',
+            'fuel',
+            'fuel.*',
+            'route-planning',
+            'route-planning.*'
+        );
+
+    $analyticsActive =
+        request()->routeIs('cost-analysis', 'cost-analysis.*', 'reports', 'reports.*');
+
+    $systemActive =
+        request()->routeIs('audit-logs.*', 'settings', 'settings.*');
+
     /*
     |--------------------------------------------------------------------------
     | User Display
@@ -213,11 +236,7 @@
 
             {{-- MAIN MENU --}}
             @if($canDashboard)
-                <span class="nav-title">
-                    MAIN MENU
-                </span>
-
-                <ul>
+                <ul class="sidebar-dashboard-list">
                     <li>
                         <a
                             href="{{ route('dashboard') }}"
@@ -238,11 +257,29 @@
 
             {{-- FLEET MANAGEMENT --}}
             @if($showFleetManagement)
-                <span class="nav-title">
-                    FLEET MANAGEMENT
-                </span>
+                <div
+                    class="sidebar-group {{ $fleetManagementActive ? 'is-active is-open' : '' }}"
+                    data-sidebar-group
+                    data-active-group="{{ $fleetManagementActive ? 'true' : 'false' }}"
+                >
+                    <button
+                        type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="{{ $fleetManagementActive ? 'true' : 'false' }}"
+                        aria-controls="fleetManagementLinks"
+                        aria-label="Fleet Management"
+                        data-tooltip="Fleet Management"
+                    >
+                        <span class="sidebar-group-label">Fleet Management</span>
+                        <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
+                    </button>
 
-                <ul>
+                    <div
+                        class="sidebar-group-panel"
+                        id="fleetManagementLinks"
+                        @if(!$fleetManagementActive) hidden @endif
+                    >
+                        <ul class="sidebar-group-list">
 
                     @if($canVehicles)
                         <li>
@@ -297,17 +334,37 @@
                         </li>
                     @endif
 
-                </ul>
+                        </ul>
+                    </div>
+                </div>
             @endif
 
 
             {{-- DRIVER MANAGEMENT --}}
             @if($showDriverManagement)
-                <span class="nav-title">
-                    DRIVER MANAGEMENT
-                </span>
+                <div
+                    class="sidebar-group {{ $driverManagementActive ? 'is-active is-open' : '' }}"
+                    data-sidebar-group
+                    data-active-group="{{ $driverManagementActive ? 'true' : 'false' }}"
+                >
+                    <button
+                        type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="{{ $driverManagementActive ? 'true' : 'false' }}"
+                        aria-controls="driverManagementLinks"
+                        aria-label="Driver Management"
+                        data-tooltip="Driver Management"
+                    >
+                        <span class="sidebar-group-label">Driver Management</span>
+                        <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
+                    </button>
 
-                <ul>
+                    <div
+                        class="sidebar-group-panel"
+                        id="driverManagementLinks"
+                        @if(!$driverManagementActive) hidden @endif
+                    >
+                        <ul class="sidebar-group-list">
 
                     @if($canDrivers)
                         <li>
@@ -344,17 +401,37 @@
                         </li>
                     @endif
 
-                </ul>
+                        </ul>
+                    </div>
+                </div>
             @endif
 
 
             {{-- OPERATIONS --}}
             @if($showOperations)
-                <span class="nav-title">
-                    OPERATIONS
-                </span>
+                <div
+                    class="sidebar-group {{ $operationsActive ? 'is-active is-open' : '' }}"
+                    data-sidebar-group
+                    data-active-group="{{ $operationsActive ? 'true' : 'false' }}"
+                >
+                    <button
+                        type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="{{ $operationsActive ? 'true' : 'false' }}"
+                        aria-controls="operationsLinks"
+                        aria-label="Operations"
+                        data-tooltip="Operations"
+                    >
+                        <span class="sidebar-group-label">Operations</span>
+                        <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
+                    </button>
 
-                <ul>
+                    <div
+                        class="sidebar-group-panel"
+                        id="operationsLinks"
+                        @if(!$operationsActive) hidden @endif
+                    >
+                        <ul class="sidebar-group-list">
 
                     @if($canTrafficViolations)
                         <li>
@@ -426,17 +503,37 @@
                         </li>
                     @endif
 
-                </ul>
+                        </ul>
+                    </div>
+                </div>
             @endif
 
 
             {{-- ANALYTICS --}}
             @if($showAnalytics)
-                <span class="nav-title">
-                    ANALYTICS
-                </span>
+                <div
+                    class="sidebar-group {{ $analyticsActive ? 'is-active is-open' : '' }}"
+                    data-sidebar-group
+                    data-active-group="{{ $analyticsActive ? 'true' : 'false' }}"
+                >
+                    <button
+                        type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="{{ $analyticsActive ? 'true' : 'false' }}"
+                        aria-controls="analyticsLinks"
+                        aria-label="Analytics"
+                        data-tooltip="Analytics"
+                    >
+                        <span class="sidebar-group-label">Analytics</span>
+                        <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
+                    </button>
 
-                <ul>
+                    <div
+                        class="sidebar-group-panel"
+                        id="analyticsLinks"
+                        @if(!$analyticsActive) hidden @endif
+                    >
+                        <ul class="sidebar-group-list">
 
                     @if($canCostAnalysis)
                         <li>
@@ -473,17 +570,37 @@
                         </li>
                     @endif
 
-                </ul>
+                        </ul>
+                    </div>
+                </div>
             @endif
 
 
             {{-- SYSTEM --}}
-                @if($showSystem)
-                    <span class="nav-title">
-                        SYSTEM
-                    </span>
+            @if($showSystem)
+                <div
+                    class="sidebar-group {{ $systemActive ? 'is-active is-open' : '' }}"
+                    data-sidebar-group
+                    data-active-group="{{ $systemActive ? 'true' : 'false' }}"
+                >
+                    <button
+                        type="button"
+                        class="sidebar-group-toggle"
+                        aria-expanded="{{ $systemActive ? 'true' : 'false' }}"
+                        aria-controls="systemLinks"
+                        aria-label="System"
+                        data-tooltip="System"
+                    >
+                        <span class="sidebar-group-label">System</span>
+                        <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
+                    </button>
 
-                    <ul>
+                    <div
+                        class="sidebar-group-panel"
+                        id="systemLinks"
+                        @if(!$systemActive) hidden @endif
+                    >
+                        <ul class="sidebar-group-list">
 
                         @if($canAuditLogs)
                             <li>
@@ -520,8 +637,10 @@
                             </li>
                         @endif
 
-                    </ul>
-                @endif
+                        </ul>
+                    </div>
+                </div>
+            @endif
 
         </nav>
 

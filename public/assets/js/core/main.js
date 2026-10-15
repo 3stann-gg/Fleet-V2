@@ -92,11 +92,13 @@ function syncDesktopSidebarCollapseState(toggle) {
     if (!isDesktopSidebarViewport()) {
         document.body.classList.remove("sidebar-collapsed");
         updateDesktopSidebarToggleAria(desktopToggle, false);
+        syncSidebarGroupCollapsedPresentation(false);
         return;
     }
 
     document.body.classList.toggle("sidebar-collapsed", preferCollapsed);
     updateDesktopSidebarToggleAria(desktopToggle, preferCollapsed);
+    syncSidebarGroupCollapsedPresentation(preferCollapsed);
 }
 
 function initDesktopSidebarCollapse() {
@@ -126,6 +128,7 @@ function initDesktopSidebarCollapse() {
         setDesktopSidebarCollapsedPreference(nextCollapsed);
         document.body.classList.toggle("sidebar-collapsed", nextCollapsed);
         updateDesktopSidebarToggleAria(toggle, nextCollapsed);
+        syncSidebarGroupCollapsedPresentation(nextCollapsed);
 
         if (typeof hideSidebarCollapsedTooltip === "function") {
             hideSidebarCollapsedTooltip();
@@ -250,7 +253,7 @@ function getSidebarTooltipTarget(node) {
     if (!(node instanceof Element)) return null;
 
     return node.closest(
-        ".nav-link[data-tooltip], .sidebar-profile[data-tooltip]",
+        ".nav-link[data-tooltip], .sidebar-group-toggle[data-tooltip], .sidebar-profile[data-tooltip]",
     );
 }
 
@@ -272,20 +275,35 @@ function initSidebarCollapsedTooltips() {
     ensureSidebarTooltipLayer();
 
     /* Accessible names for icon-only collapsed state (nav-label is visibility:hidden) */
-    sidebar.querySelectorAll(".nav-link[data-tooltip]").forEach((link) => {
-        if (!link.hasAttribute("aria-label")) {
-            link.setAttribute(
-                "aria-label",
-                link.getAttribute("data-tooltip") || "",
-            );
-        }
+    sidebar
+        .querySelectorAll(
+            ".nav-link[data-tooltip], .sidebar-group-toggle[data-tooltip]",
+        )
+        .forEach((link) => {
+            if (link.classList.contains("sidebar-group-toggle")) {
+                const activeChildLabel = link
+                    .closest("[data-sidebar-group]")
+                    ?.querySelector(".nav-link.active .nav-label")
+                    ?.textContent.trim();
 
-        const icon = link.querySelector("i");
+                if (activeChildLabel) {
+                    link.dataset.tooltip = `${link.getAttribute("aria-label")}: ${activeChildLabel}`;
+                }
+            }
 
-        if (icon) {
-            icon.setAttribute("aria-hidden", "true");
-        }
-    });
+            if (!link.hasAttribute("aria-label")) {
+                link.setAttribute(
+                    "aria-label",
+                    link.getAttribute("data-tooltip") || "",
+                );
+            }
+
+            const icon = link.querySelector("i");
+
+            if (icon) {
+                icon.setAttribute("aria-hidden", "true");
+            }
+        });
 
     sidebar.addEventListener("pointerover", (event) => {
         const target = getSidebarTooltipTarget(event.target);
@@ -773,6 +791,169 @@ function initSidebarProfileDropdown() {
 }
 
 /* =====================================
+   Sidebar Collapsible Groups
+===================================== */
+
+function syncSidebarGroupCollapsedPresentation(collapsed) {
+    document.querySelectorAll("[data-sidebar-group]").forEach((group) => {
+        const toggle = group.querySelector(".sidebar-group-toggle");
+        const panel = group.querySelector(".sidebar-group-panel");
+
+        if (!toggle || !panel) return;
+
+        if (collapsed) {
+            if (group.dataset.expandedBeforeSidebarCollapse === undefined) {
+                group.dataset.expandedBeforeSidebarCollapse =
+                    toggle.getAttribute("aria-expanded") === "true"
+                        ? "true"
+                        : "false";
+            }
+
+            toggle.setAttribute("aria-expanded", "false");
+            group.classList.remove("is-open");
+            panel.hidden = true;
+            panel.inert = true;
+
+            return;
+        }
+
+        if (group.dataset.expandedBeforeSidebarCollapse === undefined) return;
+
+        const wasExpanded =
+            group.dataset.expandedBeforeSidebarCollapse === "true" ||
+            group.dataset.activeGroup === "true";
+
+        delete group.dataset.expandedBeforeSidebarCollapse;
+        toggle.setAttribute("aria-expanded", String(wasExpanded));
+        group.classList.toggle("is-open", wasExpanded);
+        panel.hidden = !wasExpanded;
+        panel.inert = !wasExpanded;
+    });
+}
+
+function initSidebarGroups() {
+    const sidebar = document.getElementById("sidebar");
+
+    if (!sidebar || sidebar.dataset.groupsInitialized === "true") return;
+
+    const groups = Array.from(
+        sidebar.querySelectorAll("[data-sidebar-group]"),
+    );
+
+    if (groups.length === 0) return;
+
+    sidebar.dataset.groupsInitialized = "true";
+
+    const closeTimers = new WeakMap();
+
+    const setExpanded = (group, expanded) => {
+        const toggle = group.querySelector(".sidebar-group-toggle");
+        const panel = group.querySelector(".sidebar-group-panel");
+
+        if (!toggle || !panel) return;
+
+        const pendingClose = closeTimers.get(panel);
+
+        if (pendingClose) {
+            window.clearTimeout(pendingClose);
+            closeTimers.delete(panel);
+        }
+
+        toggle.setAttribute("aria-expanded", String(expanded));
+        panel.inert = !expanded;
+
+        if (expanded) {
+            panel.hidden = false;
+
+            window.requestAnimationFrame(() => {
+                if (toggle.getAttribute("aria-expanded") === "true") {
+                    group.classList.add("is-open");
+                }
+            });
+
+            return;
+        }
+
+        group.classList.remove("is-open");
+
+        const closeTimer = window.setTimeout(() => {
+            if (!group.classList.contains("is-open")) {
+                panel.hidden = true;
+            }
+
+            closeTimers.delete(panel);
+        }, 200);
+
+        closeTimers.set(panel, closeTimer);
+    };
+
+    groups.forEach((group) => {
+        const toggle = group.querySelector(".sidebar-group-toggle");
+        const panel = group.querySelector(".sidebar-group-panel");
+        const isActiveGroup = group.dataset.activeGroup === "true";
+
+        if (!toggle || !panel) return;
+
+        group.classList.toggle("is-active", isActiveGroup);
+        group.classList.toggle("is-open", isActiveGroup);
+        toggle.setAttribute("aria-expanded", String(isActiveGroup));
+        panel.hidden = !isActiveGroup;
+        panel.inert = !isActiveGroup;
+
+        toggle.addEventListener("click", () => {
+            const wasSidebarCollapsed =
+                isDesktopSidebarViewport() &&
+                document.body.classList.contains("sidebar-collapsed");
+
+            if (wasSidebarCollapsed) {
+                document.getElementById("desktopSidebarToggle")?.click();
+            }
+
+            const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+
+            if (wasSidebarCollapsed) {
+                if (!isExpanded) {
+                    groups.forEach((otherGroup) => {
+                        if (
+                            otherGroup !== group &&
+                            otherGroup.dataset.activeGroup !== "true"
+                        ) {
+                            setExpanded(otherGroup, false);
+                        }
+                    });
+
+                    setExpanded(group, true);
+                }
+
+                return;
+            }
+
+            if (isExpanded && isActiveGroup) return;
+
+            if (!isExpanded) {
+                groups.forEach((otherGroup) => {
+                    if (
+                        otherGroup !== group &&
+                        otherGroup.dataset.activeGroup !== "true"
+                    ) {
+                        setExpanded(otherGroup, false);
+                    }
+                });
+            }
+
+            setExpanded(group, !isExpanded);
+        });
+    });
+
+    if (
+        isDesktopSidebarViewport() &&
+        document.body.classList.contains("sidebar-collapsed")
+    ) {
+        syncSidebarGroupCollapsedPresentation(true);
+    }
+}
+
+/* =====================================
    Responsive Sidebar Navigation
 ===================================== */
 function initResponsiveNavigation() {
@@ -883,6 +1064,7 @@ function initializeFleetUI() {
   initializePage();
 
   initDesktopSidebarCollapse();
+  initSidebarGroups();
   initSidebarCollapsedTooltips();
 
   initThemeControls();
@@ -896,6 +1078,7 @@ function bootFleetUI() {
 
   setTimeout(() => {
     initDesktopSidebarCollapse();
+    initSidebarGroups();
     initSidebarCollapsedTooltips();
     initThemeControls();
     initSidebarProfileDropdown();
@@ -904,6 +1087,7 @@ function bootFleetUI() {
 
   setTimeout(() => {
     initDesktopSidebarCollapse();
+    initSidebarGroups();
     initSidebarCollapsedTooltips();
     initThemeControls();
     initSidebarProfileDropdown();
