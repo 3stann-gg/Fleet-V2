@@ -79,6 +79,81 @@ function applyEditReservationDateSettings(settings) {
     dateInput.max = reservationFormatDate(maximumDate);
 }
 
+function applyEditReservationEmergencyBehavior(settings) {
+    const form = document.getElementById("editReservationForm");
+    const dateInput = document.getElementById("editReservationDate");
+    const timeInput = document.getElementById("editReservationTime");
+    const prioritySelect = document.getElementById("editReservationPriority");
+    const statusSelect = document.getElementById("editReservationStatus");
+    const dateHint = document.getElementById("editReservationDateHint");
+    const timeHint = document.getElementById("editReservationTimeHint");
+    const priorityHint = document.getElementById("editReservationPriorityHint");
+    const emergency = isEmergencyReservationRequestType(
+        document.getElementById("editReservationType")?.value,
+    );
+    const wasEmergency = form?.dataset.emergencyActive === "true";
+
+    if (emergency) {
+        const applicationDateTime = getReservationApplicationDateTime();
+        if (dateInput) {
+            dateInput.min = applicationDateTime.date;
+            dateInput.value = applicationDateTime.date;
+            dateInput.disabled = true;
+        }
+        if (timeInput) {
+            timeInput.value = applicationDateTime.time;
+            timeInput.disabled = true;
+        }
+        if (prioritySelect) {
+            prioritySelect.value = "emergency";
+            prioritySelect.disabled = true;
+        }
+        if (statusSelect) {
+            statusSelect.value = "Approved";
+            statusSelect.disabled = true;
+        }
+        if (form) {
+            form.dataset.emergencyActive = "true";
+        }
+    } else {
+        applyEditReservationDateSettings(settings);
+        if (dateInput) {
+            dateInput.disabled = false;
+        }
+        if (timeInput) {
+            timeInput.disabled = false;
+        }
+        if (prioritySelect) {
+            prioritySelect.disabled = false;
+        }
+        if (wasEmergency) {
+            if (dateInput) dateInput.value = "";
+            if (timeInput) timeInput.value = "";
+            if (prioritySelect) prioritySelect.value = "";
+        }
+        if (form) {
+            delete form.dataset.emergencyActive;
+        }
+        applyReservationEditRbac();
+    }
+
+    if (dateHint) {
+        dateHint.textContent = emergency
+            ? "Emergency date is system-managed."
+            : "Select a date allowed by Reservation Settings.";
+    }
+    if (timeHint) {
+        timeHint.textContent = emergency
+            ? "Emergency time is system-managed."
+            : "Enter the scheduled pickup time.";
+    }
+    if (priorityHint) {
+        priorityHint.textContent = emergency
+            ? "Emergency priority is system-managed."
+            : "Choose a valid priority for this request type.";
+    }
+}
+
 //  RBAC
 function getReservationEditRole() {
     return window.FleetRBAC?.getRole?.() || "";
@@ -375,6 +450,7 @@ async function initEditReservationModal() {
   populateEditReservationForm = (row) => {
     const form = document.getElementById("editReservationForm");
     if (!form) return;
+    delete form.dataset.emergencyActive;
 
     const setValue = (id, value) => {
       const field = form.querySelector("#" + id);
@@ -450,6 +526,7 @@ async function initEditReservationModal() {
     }
     setValue("editReservationContact", getRowData(row, "contactNumber"));
     setValue("editReservationNotes", getRowData(row, "notes"));
+    applyEditReservationEmergencyBehavior(reservationSettings);
   };
 
   openEditReservationModal = (row) => {
@@ -525,6 +602,7 @@ async function initEditReservationModal() {
       editReservationType.addEventListener("change", () => {
           applyEditReservationPatientRequirement();
           applyEditReservationLogisticsVisibility();
+          applyEditReservationEmergencyBehavior(reservationSettings);
       });
   }
   if (form && !form.dataset.editReservationFormInitialized) {

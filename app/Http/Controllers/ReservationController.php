@@ -2,23 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Reservation;
-use App\Models\Vehicle;
 use App\Models\Driver;
-use App\Models\HospitalFacility;
-use Illuminate\Http\Request;
-use App\Models\FleetSetting;
-use App\Services\FleetNotificationService;
 use App\Models\FleetNotification;
+use App\Models\FleetSetting;
+use App\Models\HospitalFacility;
+use App\Models\Reservation;
+use App\Models\Shipment;
+use App\Models\Vehicle;
+use App\Models\VehicleCapability;
 use App\Services\AuditLogService;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Validator;
+use App\Services\FleetNotificationService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class ReservationController extends Controller
-{   
+{
     use AuthorizesRequests;
 
     private function getReservationSettings(): array
@@ -29,33 +30,43 @@ class ReservationController extends Controller
         $settings = $record?->settings ?? [];
         $reservationSettings =
             $settings['reservations'] ?? [];
+
         return [
-            'requireApproval' =>
-                $reservationSettings['requireApproval'] ?? true,
-            'allowSameDay' =>
-                $reservationSettings['allowSameDay'] ?? true,
-            'maxAdvanceDays' =>
-                max(
-                    1,
-                    min(
-                        365,
-                        (int) (
-                            $reservationSettings['maxAdvanceDays']
-                            ?? 30
-                        )
+            'requireApproval' => $reservationSettings['requireApproval'] ?? true,
+            'allowSameDay' => $reservationSettings['allowSameDay'] ?? true,
+            'maxAdvanceDays' => max(
+                1,
+                min(
+                    365,
+                    (int) (
+                        $reservationSettings['maxAdvanceDays']
+                        ?? 30
                     )
-                ),
-            'defaultDurationHours' =>
-                max(
-                    1,
-                    min(
-                        72,
-                        (int) (
-                            $reservationSettings['defaultDurationHours']
-                            ?? 2
-                        )
+                )
+            ),
+            'defaultDurationHours' => max(
+                1,
+                min(
+                    72,
+                    (int) (
+                        $reservationSettings['defaultDurationHours']
+                        ?? 2
                     )
-                ),
+                )
+            ),
+        ];
+    }
+
+    /** @return array{priority: string, schedule_date: string, schedule_time: string, status: string} */
+    private function emergencyReservationValues(): array
+    {
+        $currentTime = now();
+
+        return [
+            'priority' => 'emergency',
+            'schedule_date' => $currentTime->toDateString(),
+            'schedule_time' => $currentTime->format('H:i'),
+            'status' => 'Approved',
         ];
     }
 
@@ -68,12 +79,12 @@ class ReservationController extends Controller
         | Vehicle and Driver must be paired
         |--------------------------------------------------------------------------
         */
-        if ($vehicleId && !$driverId) {
+        if ($vehicleId && ! $driverId) {
             throw new \Exception(
                 'A driver must be assigned when a vehicle is selected.'
             );
         }
-        if (!$vehicleId && $driverId) {
+        if (! $vehicleId && $driverId) {
             throw new \Exception(
                 'A driver cannot be assigned without a vehicle.'
             );
@@ -86,7 +97,7 @@ class ReservationController extends Controller
         if ($vehicleId) {
             $vehicle = Vehicle::find($vehicleId);
 
-            if (!$vehicle) {
+            if (! $vehicle) {
                 throw new \Exception(
                     'Selected vehicle was not found.'
                 );
@@ -106,7 +117,7 @@ class ReservationController extends Controller
         if ($driverId) {
             $driver = Driver::find($driverId);
 
-            if (!$driver) {
+            if (! $driver) {
                 throw new \Exception(
                     'Selected driver was not found.'
                 );
@@ -114,7 +125,7 @@ class ReservationController extends Controller
 
             if ($driver->status !== 'Available') {
                 $driverName = trim(
-                    ($driver->first_name ?? '') . ' ' .
+                    ($driver->first_name ?? '').' '.
                     ($driver->last_name ?? '')
                 );
 
@@ -128,7 +139,7 @@ class ReservationController extends Controller
             |--------------------------------------------------------------------------
             */
             if (
-                !$vehicleId ||
+                ! $vehicleId ||
                 (int) $driver->assigned_vehicle_id !== (int) $vehicleId
             ) {
                 throw new \Exception(
@@ -141,13 +152,13 @@ class ReservationController extends Controller
     private function validateVehicleHasAssignedDriver(
         ?int $vehicleId
     ): void {
-        if (!$vehicleId) {
+        if (! $vehicleId) {
             return;
         }
 
         $vehicle = Vehicle::find($vehicleId);
 
-        if (!$vehicle) {
+        if (! $vehicle) {
             throw new \Exception(
                 'Selected vehicle was not found.'
             );
@@ -160,7 +171,7 @@ class ReservationController extends Controller
             )
             ->exists();
 
-        if (!$hasAssignedDriver) {
+        if (! $hasAssignedDriver) {
             throw new \Exception(
                 "Vehicle {$vehicle->brand} {$vehicle->model} has no assigned driver and cannot be used for this reservation."
             );
@@ -183,7 +194,7 @@ class ReservationController extends Controller
             'pickupHospital',
             'destinationHospital',
             'requiredCapabilities',
-            //'shipment',
+            // 'shipment',
         ]);
 
         if (
@@ -194,37 +205,37 @@ class ReservationController extends Controller
         } else {
             $query->whereNull('archived_at');
         }
-            /*
-            |--------------------------------------------------------------------------
-            | RBAC Data Scope
-            |--------------------------------------------------------------------------
-            */
-            if ($user->hasRole('driver')) {
-                $driverId =
-                    $user->driverProfile?->id;
-                if ($driverId) {
-                    $query->where(
-                        'driver_id',
-                        $driverId
-                    );
-                } else {
-                    /*
-                    | Driver account not linked to a Driver profile.
-                    | Return no reservation records.
-                    */
-                    $query->whereRaw('1 = 0');
-                }
+        /*
+        |--------------------------------------------------------------------------
+        | RBAC Data Scope
+        |--------------------------------------------------------------------------
+        */
+        if ($user->hasRole('driver')) {
+            $driverId =
+                $user->driverProfile?->id;
+            if ($driverId) {
+                $query->where(
+                    'driver_id',
+                    $driverId
+                );
+            } else {
+                /*
+                | Driver account not linked to a Driver profile.
+                | Return no reservation records.
+                */
+                $query->whereRaw('1 = 0');
             }
-            if ($user->hasRole('department_head')) {
-                if ($user->department) {
-                    $query->where(
-                        'department',
-                        $user->department
-                    );
-                } else {
-                    $query->whereRaw('1 = 0');
-                }
+        }
+        if ($user->hasRole('department_head')) {
+            if ($user->department) {
+                $query->where(
+                    'department',
+                    $user->department
+                );
+            } else {
+                $query->whereRaw('1 = 0');
             }
+        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -235,32 +246,32 @@ class ReservationController extends Controller
                     'like',
                     "%{$search}%"
                 )
-                ->orWhere(
-                    'patient_name',
-                    'like',
-                    "%{$search}%"
-                )
-                ->orWhere(
-                    'pickup_location',
-                    'like',
-                    "%{$search}%"
-                )
-                ->orWhere(
-                    'destination',
-                    'like',
-                    "%{$search}%"
-                )
-                ->orWhereHas('vehicle', function ($vehicle) use ($search) {
-                    $vehicle
-                        ->where('brand', 'like', "%{$search}%")
-                        ->orWhere('model', 'like', "%{$search}%")
-                        ->orWhere('plate_number', 'like', "%{$search}%");
-                })
-                ->orWhereHas('driver', function ($driver) use ($search) {
-                    $driver
-                        ->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%");
-                });
+                    ->orWhere(
+                        'patient_name',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'pickup_location',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'destination',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhereHas('vehicle', function ($vehicle) use ($search) {
+                        $vehicle
+                            ->where('brand', 'like', "%{$search}%")
+                            ->orWhere('model', 'like', "%{$search}%")
+                            ->orWhere('plate_number', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('driver', function ($driver) use ($search) {
+                        $driver
+                            ->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    });
             });
         }
         if (
@@ -303,13 +314,13 @@ class ReservationController extends Controller
 
         $sort = $request->get('sort', 'id');
 
-        if (!in_array($sort, $allowedSorts)) {
+        if (! in_array($sort, $allowedSorts)) {
             $sort = 'id';
         }
 
         $direction = $request->get('direction', 'asc');
 
-        if (!in_array($direction, ['asc', 'desc'])) {
+        if (! in_array($direction, ['asc', 'desc'])) {
             $direction = 'asc';
         }
 
@@ -319,29 +330,23 @@ class ReservationController extends Controller
 
         if ($request->expectsJson()) {
             return response()->json([
-                'reservations' => $reservations
+                'reservations' => $reservations,
             ]);
         }
 
         $reservationPermissions = [
-            'role' =>
-                $user->role,
-            'canCreate' =>
-                $user->can(
-                    'create',
-                    Reservation::class
-                ),
-            'canUpdate' =>
-                $user->hasPermission('reservations.update'),
-            'canArchive' =>
-                $user->hasPermission('reservations.archive'),
-            'canBulkArchive' =>
-                $user->hasPermission('reservations.archive'),
-            'canApprove' =>
-                $user->hasPermission('reservations.manage_all'),
-            'canReject' =>
-                $user->hasPermission('reservations.manage_all'),
+            'role' => $user->role,
+            'canCreate' => $user->can(
+                'create',
+                Reservation::class
+            ),
+            'canUpdate' => $user->hasPermission('reservations.update'),
+            'canArchive' => $user->hasPermission('reservations.archive'),
+            'canBulkArchive' => $user->hasPermission('reservations.archive'),
+            'canApprove' => $user->hasPermission('reservations.manage_all'),
+            'canReject' => $user->hasPermission('reservations.manage_all'),
         ];
+
         return view(
             'reservation.index',
             compact('reservationPermissions')
@@ -357,10 +362,17 @@ class ReservationController extends Controller
 
         $reservationSettings =
             $this->getReservationSettings();
-        $isEmergencyTransfer =
-    $request->input('request_type') === 'Emergency Transfer';
-    $minimumDate =
-        $isEmergencyTransfer
+        $isEmergencyRequest = Reservation::isEmergencyRequestType(
+            $request->input('request_type')
+        );
+        $emergencyValues = $isEmergencyRequest
+            ? $this->emergencyReservationValues()
+            : [];
+        if ($isEmergencyRequest) {
+            $request->merge($emergencyValues);
+        }
+        $minimumDate =
+            $isEmergencyRequest
             ? now()->toDateString()
             : (
                 $reservationSettings['allowSameDay']
@@ -414,7 +426,7 @@ class ReservationController extends Controller
                     'string',
                     'max:255',
                     Rule::requiredIf(function () use ($request) {
-                        return !Reservation::isSupplyDeliveryType(
+                        return ! Reservation::isSupplyDeliveryType(
                             $request->input('request_type')
                         );
                     }),
@@ -432,7 +444,7 @@ class ReservationController extends Controller
                     'string',
                     'max:255',
                     Rule::requiredIf(function () use ($request) {
-                        return !Reservation::isSupplyDeliveryType(
+                        return ! Reservation::isSupplyDeliveryType(
                             $request->input('request_type')
                         );
                     }),
@@ -448,8 +460,8 @@ class ReservationController extends Controller
                 'schedule_date' => [
                     'required',
                     'date',
-                    'after_or_equal:' . $minimumDate,
-                    'before_or_equal:' . $maximumDate,
+                    'after_or_equal:'.$minimumDate,
+                    'before_or_equal:'.$maximumDate,
                 ],
                 'schedule_time' => [
                     'required',
@@ -478,14 +490,12 @@ class ReservationController extends Controller
                 ],
             ],
             [
-                'schedule_date.after_or_equal' =>
-                    $reservationSettings['allowSameDay']
+                'schedule_date.after_or_equal' => $reservationSettings['allowSameDay']
                         ? 'Reservation date cannot be earlier than today.'
                         : 'Same-day reservations are disabled. Please select a future date.',
 
-                'schedule_date.before_or_equal' =>
-                    'Reservation date cannot be more than ' .
-                    $reservationSettings['maxAdvanceDays'] .
+                'schedule_date.before_or_equal' => 'Reservation date cannot be more than '.
+                    $reservationSettings['maxAdvanceDays'].
                     ' days in advance.',
             ]
         );
@@ -499,7 +509,10 @@ class ReservationController extends Controller
         }
 
         try {
-            $validated = $validator->validated();
+            $validated = [
+                ...$validator->validated(),
+                ...$emergencyValues,
+            ];
 
             /*
             |--------------------------------------------------------------------------
@@ -518,11 +531,11 @@ class ReservationController extends Controller
                 $validated['pickup_hospital_id'] = null;
                 $validated['destination_hospital_id'] = null;
 
-                $shipment = \App\Models\Shipment::find(
+                $shipment = Shipment::find(
                     $validated['shipment_id']
                 );
 
-                if (!$shipment) {
+                if (! $shipment) {
                     throw new \Exception(
                         'Selected Logistics shipment was not found.'
                     );
@@ -549,8 +562,8 @@ class ReservationController extends Controller
                     $shipment->destination_facility;
 
                 if (
-                    !$validated['pickup_location'] ||
-                    !$validated['destination']
+                    ! $validated['pickup_location'] ||
+                    ! $validated['destination']
                 ) {
                     throw new \Exception(
                         'The selected Logistics shipment does not have a valid pickup location or destination.'
@@ -566,13 +579,13 @@ class ReservationController extends Controller
                 | Resolve Selected Pickup Facility
                 |--------------------------------------------------------------------------
                 */
-                if (!empty($validated['pickup_hospital_id'])) {
+                if (! empty($validated['pickup_hospital_id'])) {
 
                     $pickupHospital = HospitalFacility::query()
                         ->where('status', true)
                         ->find($validated['pickup_hospital_id']);
 
-                    if (!$pickupHospital) {
+                    if (! $pickupHospital) {
                         throw new \Exception(
                             'The selected pickup hospital or facility is no longer available.'
                         );
@@ -587,13 +600,13 @@ class ReservationController extends Controller
                 | Resolve Selected Destination Facility
                 |--------------------------------------------------------------------------
                 */
-                if (!empty($validated['destination_hospital_id'])) {
+                if (! empty($validated['destination_hospital_id'])) {
 
                     $destinationHospital = HospitalFacility::query()
                         ->where('status', true)
                         ->find($validated['destination_hospital_id']);
 
-                    if (!$destinationHospital) {
+                    if (! $destinationHospital) {
                         throw new \Exception(
                             'The selected destination hospital or facility is no longer available.'
                         );
@@ -616,11 +629,10 @@ class ReservationController extends Controller
                     'department_head'
                 )
             ) {
-                if (!$request->user()->department) {
+                if (! $request->user()->department) {
                     return response()->json([
                         'success' => false,
-                        'message' =>
-                            'Your account does not have an assigned department.',
+                        'message' => 'Your account does not have an assigned department.',
                     ], 422);
                 }
                 $validated['department'] =
@@ -641,29 +653,10 @@ class ReservationController extends Controller
                 $request->user()->department;
             /*
             |--------------------------------------------------------------------------
-            | Emergency Transfer / Normal Reservation
+            | Emergency / Normal Reservation
             |--------------------------------------------------------------------------
             */
-            $isEmergencyTransfer =
-                $validated['request_type'] === 'Emergency Transfer';
-            if ($isEmergencyTransfer) {
-                /*
-                |--------------------------------------------------------------------------
-                | Emergency transfers bypass normal approval.
-                |--------------------------------------------------------------------------
-                */
-                $validated['priority'] = 'Emergency';
-                $validated['status'] = 'Approved';
-                /*
-                |--------------------------------------------------------------------------
-                | Emergency transfer is immediate.
-                |--------------------------------------------------------------------------
-                */
-                $validated['schedule_date'] =
-                    now()->toDateString();
-                $validated['schedule_time'] =
-                    now()->format('H:i');
-            } else {
+            if (! $isEmergencyRequest) {
                 /*
                 |--------------------------------------------------------------------------
                 | Normal reservation approval flow.
@@ -701,21 +694,19 @@ class ReservationController extends Controller
                 'pickupHospital',
                 'destinationHospital',
                 'requiredCapabilities',
-                //'shipment',
+                // 'shipment',
             ]);
 
             AuditLogService::log(
                 module: 'Reservation Management',
                 action: 'Created',
-                description:
-                    $isEmergencyTransfer
-                        ? "Created emergency transfer reservation {$reservation->reservation_number}; approval workflow bypassed for immediate processing."
+                description: $isEmergencyRequest
+                        ? "Created emergency reservation {$reservation->reservation_number}; approval workflow bypassed for immediate processing."
                         : "Created reservation {$reservation->reservation_number}.",
                 record: $reservation,
-                newValues:
-                    $this->getReservationAuditValues(
-                        $reservation
-                    )
+                newValues: $this->getReservationAuditValues(
+                    $reservation
+                )
             );
 
             if ($reservation->status === 'Pending') {
@@ -723,7 +714,7 @@ class ReservationController extends Controller
                     $reservation->vehicle_id !== null &&
                     $reservation->driver_id !== null;
 
-                if (!$hasAssignedVehicleAndDriver) {
+                if (! $hasAssignedVehicleAndDriver) {
                     /*
                     |--------------------------------------------------------------------------
                     | Reservation needs Vehicle + Driver assignment
@@ -744,8 +735,7 @@ class ReservationController extends Controller
                             'dispatcher',
                         ],
                         title: 'Reservation Needs Assignment',
-                        message:
-                            "Reservation {$reservation->reservation_number} needs an available vehicle and driver assignment before approval.",
+                        message: "Reservation {$reservation->reservation_number} needs an available vehicle and driver assignment before approval.",
                         default: true,
                         link: route('reservation.index'),
                         excludeUserId: $request->user()->id
@@ -771,14 +761,13 @@ class ReservationController extends Controller
                             'dispatcher',
                         ],
                         title: 'Pending Reservation',
-                        message:
-                            "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is waiting for approval.",
+                        message: "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is waiting for approval.",
                         default: true,
                         link: route('reservation.index'),
                         excludeUserId: $request->user()->id
                     );
                 }
-            } elseif ($isEmergencyTransfer) {
+            } elseif ($isEmergencyRequest) {
                 /*
                 |--------------------------------------------------------------------------
                 | Emergency Transfer
@@ -790,7 +779,7 @@ class ReservationController extends Controller
                 */
                 FleetNotificationService::createWhenEnabled(
                     'reservationPending',
-                    'Emergency Transfer',
+                    'Emergency Reservation',
                     "Emergency reservation {$reservation->reservation_number} has been automatically approved and is ready for immediate Route Planning.",
                     true,
                     route('reservation.index')
@@ -801,9 +790,8 @@ class ReservationController extends Controller
                         'fleet_manager',
                         'dispatcher',
                     ],
-                    title: 'Emergency Transfer',
-                    message:
-                        "Emergency reservation {$reservation->reservation_number} requires immediate processing.",
+                    title: 'Emergency Reservation',
+                    message: "Emergency reservation {$reservation->reservation_number} requires immediate processing.",
                     default: true,
                     link: route('reservation.index'),
                     excludeUserId: $request->user()->id
@@ -838,7 +826,7 @@ class ReservationController extends Controller
             'pickupHospital',
             'destinationHospital',
             'requiredCapabilities',
-            //'shipment',
+            // 'shipment',
         ]);
 
         return response()->json([
@@ -858,8 +846,7 @@ class ReservationController extends Controller
         if ($reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived reservations cannot be edited.',
+                'message' => 'Archived reservations cannot be edited.',
             ], 422);
         }
 
@@ -873,15 +860,13 @@ class ReservationController extends Controller
         if ($reservation->dispatch) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation can no longer be modified because a dispatch has already been created.',
+                'message' => 'This reservation can no longer be modified because a dispatch has already been created.',
             ], 422);
         }
         if ($reservation->routePlan) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation can no longer be modified because a route plan has already been created.',
+                'message' => 'This reservation can no longer be modified because a route plan has already been created.',
             ], 422);
         }
 
@@ -889,10 +874,37 @@ class ReservationController extends Controller
 
         $reservationSettings =
             $this->getReservationSettings();
+        $isEmergencyRequest = Reservation::isEmergencyRequestType(
+            $request->input('request_type')
+        );
+        $emergencyValues = $isEmergencyRequest
+            ? $this->emergencyReservationValues()
+            : [];
+        if (
+            $isEmergencyRequest &&
+            ! in_array($reservation->status, ['Pending', 'Approved'], true)
+        ) {
+            $emergencyValues['status'] = $reservation->status;
+        }
+        if ($isEmergencyRequest) {
+            $request->merge($emergencyValues);
+        }
+        $isChangingFromEmergency = Reservation::isEmergencyRequestType(
+            $reservation->request_type
+        ) && ! $isEmergencyRequest;
+        $priorityRules = [
+            'required',
+            Rule::in(Reservation::supportedPriorities()),
+        ];
+        if ($isChangingFromEmergency) {
+            $priorityRules[] = Rule::notIn(['emergency', 'Emergency']);
+        }
         $minimumDate =
-            $reservationSettings['allowSameDay']
+            $isEmergencyRequest
                 ? now()->toDateString()
-                : now()->addDay()->toDateString();
+                : ($reservationSettings['allowSameDay']
+                ? now()->toDateString()
+                : now()->addDay()->toDateString());
         $maximumDate =
             now()
                 ->addDays(
@@ -918,7 +930,7 @@ class ReservationController extends Controller
                         'required',
                         'string',
                         'max:50',
-                        'unique:reservations,reservation_number,' .
+                        'unique:reservations,reservation_number,'.
                             $reservation->id,
                     ],
                     'patient_name' => [
@@ -948,7 +960,7 @@ class ReservationController extends Controller
                         'string',
                         'max:255',
                         Rule::requiredIf(function () use ($request) {
-                            return !Reservation::isSupplyDeliveryType(
+                            return ! Reservation::isSupplyDeliveryType(
                                 $request->input('request_type')
                             );
                         }),
@@ -966,7 +978,7 @@ class ReservationController extends Controller
                         'string',
                         'max:255',
                         Rule::requiredIf(function () use ($request) {
-                            return !Reservation::isSupplyDeliveryType(
+                            return ! Reservation::isSupplyDeliveryType(
                                 $request->input('request_type')
                             );
                         }),
@@ -982,44 +994,39 @@ class ReservationController extends Controller
                     'schedule_date' => [
                         'required',
                         'date',
-                        'after_or_equal:' . $minimumDate,
-                        'before_or_equal:' . $maximumDate,
+                        'after_or_equal:'.$minimumDate,
+                        'before_or_equal:'.$maximumDate,
                     ],
                     'schedule_time' => [
                         'required',
                     ],
-                    'priority' => [
-                        'required',
-                        Rule::in(Reservation::supportedPriorities()),
-                    ],
+                    'priority' => $priorityRules,
                     'status' => [
                         'nullable',
                         'in:Pending,Approved,Scheduled,Completed,Rejected,Cancelled',
                     ],
-                'contact_number' => [
-                    'nullable',
-                    'string',
-                    'max:50',
-                ],
-                'required_capabilities' => ['nullable', 'array'],
-                'required_capabilities.*' => [
-                    'integer',
-                    Rule::exists('vehicle_capabilities', 'id'),
-                ],
-                'notes' => [
+                    'contact_number' => [
+                        'nullable',
+                        'string',
+                        'max:50',
+                    ],
+                    'required_capabilities' => ['nullable', 'array'],
+                    'required_capabilities.*' => [
+                        'integer',
+                        Rule::exists('vehicle_capabilities', 'id'),
+                    ],
+                    'notes' => [
                         'nullable',
                         'string',
                     ],
                 ],
                 [
-                    'schedule_date.after_or_equal' =>
-                        $reservationSettings['allowSameDay']
+                    'schedule_date.after_or_equal' => $reservationSettings['allowSameDay']
                             ? 'Reservation date cannot be earlier than today.'
                             : 'Same-day reservations are disabled. Please select a future date.',
 
-                    'schedule_date.before_or_equal' =>
-                        'Reservation date cannot be more than ' .
-                        $reservationSettings['maxAdvanceDays'] .
+                    'schedule_date.before_or_equal' => 'Reservation date cannot be more than '.
+                        $reservationSettings['maxAdvanceDays'].
                         ' days in advance.',
                 ]
             );
@@ -1027,16 +1034,19 @@ class ReservationController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Please check the reservation information.',
-                    'errors' =>
-                        $validator->errors(),
+                    'message' => 'Please check the reservation information.',
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
             try {
-                $validated =
-                    $validator->validated();
+                $validated = [
+                    ...$validator->validated(),
+                    ...$emergencyValues,
+                ];
+                if ($reservation->status !== 'Pending') {
+                    $validated['status'] = $reservation->status;
+                }
                 /*
                 |--------------------------------------------------------------------------
                 | Hospital Facility Resolution
@@ -1047,12 +1057,12 @@ class ReservationController extends Controller
                     $validated['destination_hospital_id'] = null;
 
                 } else {
-                    if (!empty($validated['pickup_hospital_id'])) {
+                    if (! empty($validated['pickup_hospital_id'])) {
 
                         $pickupHospital = HospitalFacility::query()
                             ->where('status', true)
                             ->find($validated['pickup_hospital_id']);
-                        if (!$pickupHospital) {
+                        if (! $pickupHospital) {
                             throw new \Exception(
                                 'The selected pickup hospital or facility is no longer available.'
                             );
@@ -1060,11 +1070,11 @@ class ReservationController extends Controller
                         $validated['pickup_location'] =
                             $pickupHospital->name;
                     }
-                    if (!empty($validated['destination_hospital_id'])) {
+                    if (! empty($validated['destination_hospital_id'])) {
                         $destinationHospital = HospitalFacility::query()
                             ->where('status', true)
                             ->find($validated['destination_hospital_id']);
-                        if (!$destinationHospital) {
+                        if (! $destinationHospital) {
                             throw new \Exception(
                                 'The selected destination hospital or facility is no longer available.'
                             );
@@ -1080,10 +1090,10 @@ class ReservationController extends Controller
                 | Dispatcher form currently has no Status field.
                 | If status is not submitted, keep the current reservation status.
                 */
-                if (!$request->has('status')) {
+                if (! $request->has('status')) {
                     unset($validated['status']);
                 }
-                
+
                 $this->validateVehicleAndDriverAvailability(
                     $validated['vehicle_id'] ?? null,
                     $validated['driver_id'] ?? null
@@ -1140,16 +1150,13 @@ class ReservationController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' =>
-                        'Reservation updated successfully.',
-                    'reservation' =>
-                        $reservation,
+                    'message' => 'Reservation updated successfully.',
+                    'reservation' => $reservation,
                 ]);
             } catch (\Exception $e) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        $e->getMessage(),
+                    'message' => $e->getMessage(),
                 ], 422);
             }
         }
@@ -1169,11 +1176,10 @@ class ReservationController extends Controller
         | - ownership
         */
         if ($user->hasRole('department_head')) {
-            if (!$user->department) {
+            if (! $user->department) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Your account does not have an assigned department.',
+                    'message' => 'Your account does not have an assigned department.',
                 ], 422);
             }
 
@@ -1199,7 +1205,7 @@ class ReservationController extends Controller
                         'string',
                         'max:255',
                         Rule::requiredIf(function () use ($request) {
-                            return !Reservation::isSupplyDeliveryType(
+                            return ! Reservation::isSupplyDeliveryType(
                                 $request->input('request_type')
                             );
                         }),
@@ -1217,7 +1223,7 @@ class ReservationController extends Controller
                         'string',
                         'max:255',
                         Rule::requiredIf(function () use ($request) {
-                            return !Reservation::isSupplyDeliveryType(
+                            return ! Reservation::isSupplyDeliveryType(
                                 $request->input('request_type')
                             );
                         }),
@@ -1233,40 +1239,35 @@ class ReservationController extends Controller
                     'schedule_date' => [
                         'required',
                         'date',
-                        'after_or_equal:' . $minimumDate,
-                        'before_or_equal:' . $maximumDate,
+                        'after_or_equal:'.$minimumDate,
+                        'before_or_equal:'.$maximumDate,
                     ],
                     'schedule_time' => [
                         'required',
                     ],
-                    'priority' => [
-                        'required',
-                        Rule::in(Reservation::supportedPriorities()),
+                    'priority' => $priorityRules,
+                    'contact_number' => [
+                        'nullable',
+                        'string',
+                        'max:50',
                     ],
-                'contact_number' => [
-                    'nullable',
-                    'string',
-                    'max:50',
-                ],
-                'required_capabilities' => ['nullable', 'array'],
-                'required_capabilities.*' => [
-                    'integer',
-                    Rule::exists('vehicle_capabilities', 'id'),
-                ],
-                'notes' => [
+                    'required_capabilities' => ['nullable', 'array'],
+                    'required_capabilities.*' => [
+                        'integer',
+                        Rule::exists('vehicle_capabilities', 'id'),
+                    ],
+                    'notes' => [
                         'nullable',
                         'string',
                     ],
                 ],
                 [
-                    'schedule_date.after_or_equal' =>
-                        $reservationSettings['allowSameDay']
+                    'schedule_date.after_or_equal' => $reservationSettings['allowSameDay']
                             ? 'Reservation date cannot be earlier than today.'
                             : 'Same-day reservations are disabled. Please select a future date.',
 
-                    'schedule_date.before_or_equal' =>
-                        'Reservation date cannot be more than ' .
-                        $reservationSettings['maxAdvanceDays'] .
+                    'schedule_date.before_or_equal' => 'Reservation date cannot be more than '.
+                        $reservationSettings['maxAdvanceDays'].
                         ' days in advance.',
                 ]
             );
@@ -1274,16 +1275,16 @@ class ReservationController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Please check the reservation information.',
-                    'errors' =>
-                        $validator->errors(),
+                    'message' => 'Please check the reservation information.',
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
-            $validated =
-                $validator->validated();
-            
+            $validated = [
+                ...$validator->validated(),
+                ...$emergencyValues,
+            ];
+
             /*
             |--------------------------------------------------------------------------
             | Hospital Facility Resolution
@@ -1301,17 +1302,16 @@ class ReservationController extends Controller
                 | Resolve Selected Pickup Facility
                 |--------------------------------------------------------------------------
                 */
-                if (!empty($validated['pickup_hospital_id'])) {
+                if (! empty($validated['pickup_hospital_id'])) {
 
                     $pickupHospital = HospitalFacility::query()
                         ->where('status', true)
                         ->find($validated['pickup_hospital_id']);
 
-                    if (!$pickupHospital) {
+                    if (! $pickupHospital) {
                         return response()->json([
                             'success' => false,
-                            'message' =>
-                                'The selected pickup hospital or facility is no longer available.',
+                            'message' => 'The selected pickup hospital or facility is no longer available.',
                         ], 422);
                     }
 
@@ -1324,17 +1324,16 @@ class ReservationController extends Controller
                 | Resolve Selected Destination Facility
                 |--------------------------------------------------------------------------
                 */
-                if (!empty($validated['destination_hospital_id'])) {
+                if (! empty($validated['destination_hospital_id'])) {
 
                     $destinationHospital = HospitalFacility::query()
                         ->where('status', true)
                         ->find($validated['destination_hospital_id']);
 
-                    if (!$destinationHospital) {
+                    if (! $destinationHospital) {
                         return response()->json([
                             'success' => false,
-                            'message' =>
-                                'The selected destination hospital or facility is no longer available.',
+                            'message' => 'The selected destination hospital or facility is no longer available.',
                         ], 422);
                     }
 
@@ -1374,7 +1373,7 @@ class ReservationController extends Controller
             |--------------------------------------------------------------------------
             */
             if (
-                !$hadCompleteAssignment &&
+                ! $hadCompleteAssignment &&
                 $hasCompleteAssignment &&
                 $reservation->status === 'Pending'
             ) {
@@ -1392,8 +1391,7 @@ class ReservationController extends Controller
                         'dispatcher',
                     ],
                     title: 'Pending Reservation',
-                    message:
-                        "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is now waiting for approval.",
+                    message: "Reservation {$reservation->reservation_number} has a vehicle and driver assigned and is now waiting for approval.",
                     default: true,
                     link: route('reservation.index'),
                     excludeUserId: $request->user()->id
@@ -1421,10 +1419,8 @@ class ReservationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Reservation updated successfully.',
-                'reservation' =>
-                    $reservation,
+                'message' => 'Reservation updated successfully.',
+                'reservation' => $reservation,
             ]);
         }
 
@@ -1452,24 +1448,21 @@ class ReservationController extends Controller
         if ($reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived reservations cannot be approved.',
+                'message' => 'Archived reservations cannot be approved.',
             ], 422);
         }
 
         if ($reservation->status !== 'Pending') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Only Pending reservations can be approved.',
+                'message' => 'Only Pending reservations can be approved.',
             ], 422);
         }
 
-        if (!$reservation->vehicle_id || !$reservation->driver_id) {
+        if (! $reservation->vehicle_id || ! $reservation->driver_id) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'A vehicle and driver must both be assigned before the reservation can be approved.',
+                'message' => 'A vehicle and driver must both be assigned before the reservation can be approved.',
             ], 422);
         }
 
@@ -1488,8 +1481,7 @@ class ReservationController extends Controller
         if ($reservation->dispatch) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation already has a dispatch.',
+                'message' => 'This reservation already has a dispatch.',
             ], 422);
         }
 
@@ -1520,8 +1512,7 @@ class ReservationController extends Controller
         AuditLogService::log(
             module: 'Reservation Management',
             action: 'Approved',
-            description:
-                "Approved reservation {$reservation->reservation_number}.",
+            description: "Approved reservation {$reservation->reservation_number}.",
             record: $reservation,
             oldValues: $oldValues,
             newValues: $newValues
@@ -1535,16 +1526,15 @@ class ReservationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Reservation approved successfully.',
-            'reservation' =>
-                $reservation->fresh()->load([
-                    'vehicle',
-                    'driver',
-                    'requester',
-                ]),
+            'message' => 'Reservation approved successfully.',
+            'reservation' => $reservation->fresh()->load([
+                'vehicle',
+                'driver',
+                'requester',
+            ]),
         ]);
     }
+
     /**
      * Reject a pending reservation.
      */
@@ -1561,24 +1551,21 @@ class ReservationController extends Controller
         if ($reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived reservations cannot be rejected.',
+                'message' => 'Archived reservations cannot be rejected.',
             ], 422);
         }
 
         if ($reservation->status !== 'Pending') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Only Pending reservations can be rejected.',
+                'message' => 'Only Pending reservations can be rejected.',
             ], 422);
         }
 
-        if (!$reservation->vehicle_id || !$reservation->driver_id) {
+        if (! $reservation->vehicle_id || ! $reservation->driver_id) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'A vehicle and driver must both be assigned before the reservation can be rejected.',
+                'message' => 'A vehicle and driver must both be assigned before the reservation can be rejected.',
             ], 422);
         }
 
@@ -1621,8 +1608,7 @@ class ReservationController extends Controller
         AuditLogService::log(
             module: 'Reservation Management',
             action: 'Rejected',
-            description:
-                "Rejected reservation {$reservation->reservation_number}.",
+            description: "Rejected reservation {$reservation->reservation_number}.",
             record: $reservation,
             oldValues: $oldValues,
             newValues: $newValues
@@ -1636,14 +1622,12 @@ class ReservationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Reservation rejected successfully.',
-            'reservation' =>
-                $reservation->fresh()->load([
-                    'vehicle',
-                    'driver',
-                    'requester',
-                ]),
+            'message' => 'Reservation rejected successfully.',
+            'reservation' => $reservation->fresh()->load([
+                'vehicle',
+                'driver',
+                'requester',
+            ]),
         ]);
     }
 
@@ -1671,32 +1655,28 @@ class ReservationController extends Controller
         if ($reservation->dispatch) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation can no longer accept an AI recommendation because a dispatch already exists.',
+                'message' => 'This reservation can no longer accept an AI recommendation because a dispatch already exists.',
             ], 422);
         }
 
-        if (!$reservation->routePlan) {
+        if (! $reservation->routePlan) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'A route plan is required before applying an AI dispatch recommendation.',
+                'message' => 'A route plan is required before applying an AI dispatch recommendation.',
             ], 422);
         }
 
         if ($reservation->status !== 'Approved') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Only approved reservations can accept an AI dispatch recommendation.',
+                'message' => 'Only approved reservations can accept an AI dispatch recommendation.',
             ], 422);
         }
 
         if ($reservation->routePlan->status !== 'Ready For Dispatch') {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'The route plan must be Ready For Dispatch before applying an AI recommendation.',
+                'message' => 'The route plan must be Ready For Dispatch before applying an AI recommendation.',
             ], 422);
         }
 
@@ -1724,10 +1704,8 @@ class ReservationController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Invalid AI recommendation assignment.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Invalid AI recommendation assignment.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -1738,7 +1716,7 @@ class ReservationController extends Controller
                 $validated['shipment_id'] = $reservation->shipment_id;
             } else {
                 $validated['shipment_id'] = null;
-}
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -1753,32 +1731,29 @@ class ReservationController extends Controller
                 $validated['driver_id']
             );
 
-            if (!$vehicle || !$driver) {
+            if (! $vehicle || ! $driver) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'The recommended vehicle or driver no longer exists.',
+                    'message' => 'The recommended vehicle or driver no longer exists.',
                 ], 422);
             }
 
             if ($vehicle->status !== 'Available') {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        "Vehicle {$vehicle->brand} {$vehicle->model} is currently {$vehicle->status} and cannot be assigned.",
+                    'message' => "Vehicle {$vehicle->brand} {$vehicle->model} is currently {$vehicle->status} and cannot be assigned.",
                 ], 422);
             }
 
             if ($driver->status !== 'Available') {
                 $driverName = trim(
-                    ($driver->first_name ?? '') . ' ' .
+                    ($driver->first_name ?? '').' '.
                     ($driver->last_name ?? '')
                 );
 
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        "Driver {$driverName} is currently {$driver->status} and cannot be assigned.",
+                    'message' => "Driver {$driverName} is currently {$driver->status} and cannot be assigned.",
                 ], 422);
             }
 
@@ -1788,8 +1763,7 @@ class ReservationController extends Controller
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'The recommended driver is not assigned to the recommended vehicle.',
+                    'message' => 'The recommended driver is not assigned to the recommended vehicle.',
                 ], 422);
             }
 
@@ -1850,8 +1824,7 @@ class ReservationController extends Controller
             AuditLogService::log(
                 module: 'Dispatch Management',
                 action: 'AI Recommendation Applied',
-                description:
-                    "Applied AI dispatch recommendation to reservation {$reservation->reservation_number}.",
+                description: "Applied AI dispatch recommendation to reservation {$reservation->reservation_number}.",
                 record: $reservation,
                 oldValues: $changedOldValues,
                 newValues: $changedNewValues
@@ -1871,17 +1844,14 @@ class ReservationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'AI dispatch recommendation applied successfully.',
-                'reservation' =>
-                    $reservation,
+                'message' => 'AI dispatch recommendation applied successfully.',
+                'reservation' => $reservation,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1901,8 +1871,7 @@ class ReservationController extends Controller
         if ($reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Reservation is already archived.',
+                'message' => 'Reservation is already archived.',
             ], 422);
         }
 
@@ -1919,16 +1888,14 @@ class ReservationController extends Controller
         if ($reservation->dispatch) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation cannot be archived because it already has a dispatch.',
+                'message' => 'This reservation cannot be archived because it already has a dispatch.',
             ], 422);
         }
 
         if ($reservation->routePlan) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This reservation cannot be archived because it already has a route plan.',
+                'message' => 'This reservation cannot be archived because it already has a route plan.',
             ], 422);
         }
 
@@ -1944,32 +1911,27 @@ class ReservationController extends Controller
         ) {
             $reservation->update([
                 'archived_at' => now(),
-                'archived_by' =>
-                    $request->user()->id,
+                'archived_by' => $request->user()->id,
             ]);
 
             AuditLogService::log(
                 module: 'Reservation Management',
                 action: 'Archived',
-                description:
-                    "Archived reservation {$reservation->reservation_number}.",
+                description: "Archived reservation {$reservation->reservation_number}.",
                 record: $reservation,
                 oldValues: $oldValues,
                 newValues: [
-                    'archived_at' =>
-                        $reservation->archived_at
-                            ?->toDateTimeString(),
+                    'archived_at' => $reservation->archived_at
+                        ?->toDateTimeString(),
 
-                    'archived_by' =>
-                        $request->user()->id,
+                    'archived_by' => $request->user()->id,
                 ]
             );
         });
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Reservation archived successfully.',
+            'message' => 'Reservation archived successfully.',
         ]);
     }
 
@@ -1982,21 +1944,18 @@ class ReservationController extends Controller
             $reservation
         );
 
-        if (!$reservation->archived_at) {
+        if (! $reservation->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Reservation is not archived.',
+                'message' => 'Reservation is not archived.',
             ], 422);
         }
 
         $oldValues = [
-            'archived_at' =>
-                $reservation->archived_at
-                    ?->toDateTimeString(),
+            'archived_at' => $reservation->archived_at
+                ?->toDateTimeString(),
 
-            'archived_by' =>
-                $reservation->archived_by,
+            'archived_by' => $reservation->archived_by,
         ];
 
         $reservation->update([
@@ -2007,8 +1966,7 @@ class ReservationController extends Controller
         AuditLogService::log(
             module: 'Reservation Management',
             action: 'Restored',
-            description:
-                "Restored reservation {$reservation->reservation_number}.",
+            description: "Restored reservation {$reservation->reservation_number}.",
             record: $reservation,
             oldValues: $oldValues,
             newValues: [
@@ -2019,14 +1977,12 @@ class ReservationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' =>
-                'Reservation restored successfully.',
-            'reservation' =>
-                $reservation->fresh()->load([
-                    'vehicle',
-                    'driver',
-                    'requester',
-                ]),
+            'message' => 'Reservation restored successfully.',
+            'reservation' => $reservation->fresh()->load([
+                'vehicle',
+                'driver',
+                'requester',
+            ]),
         ]);
     }
 
@@ -2058,10 +2014,8 @@ class ReservationController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please select valid reservations.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please select valid reservations.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -2073,12 +2027,12 @@ class ReservationController extends Controller
                     'routePlan',
                     'dispatch',
                 ])
-                ->whereIn(
-                    'id',
-                    $validator->validated()['ids']
-                )
-                ->whereNull('archived_at')
-                ->get();
+                    ->whereIn(
+                        'id',
+                        $validator->validated()['ids']
+                    )
+                    ->whereNull('archived_at')
+                    ->get();
 
             DB::transaction(
                 function () use (
@@ -2102,24 +2056,20 @@ class ReservationController extends Controller
 
                         $reservation->update([
                             'archived_at' => now(),
-                            'archived_by' =>
-                                $request->user()->id,
+                            'archived_by' => $request->user()->id,
                         ]);
 
                         AuditLogService::log(
                             module: 'Reservation Management',
                             action: 'Archived',
-                            description:
-                                "Archived reservation {$reservation->reservation_number}.",
+                            description: "Archived reservation {$reservation->reservation_number}.",
                             record: $reservation,
                             oldValues: $oldValues,
                             newValues: [
-                                'archived_at' =>
-                                    $reservation->archived_at
-                                        ?->toDateTimeString(),
+                                'archived_at' => $reservation->archived_at
+                                    ?->toDateTimeString(),
 
-                                'archived_by' =>
-                                    $request->user()->id,
+                                'archived_by' => $request->user()->id,
                             ]
                         );
 
@@ -2132,28 +2082,24 @@ class ReservationController extends Controller
             if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Selected reservations cannot be archived because they are already linked to route planning or dispatch.',
+                    'message' => 'Selected reservations cannot be archived because they are already linked to route planning or dispatch.',
                     'archived_ids' => [],
                 ], 422);
             }
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    count($archivedIds) === 1
+                'message' => count($archivedIds) === 1
                         ? 'Reservation archived successfully.'
-                        : count($archivedIds) .
+                        : count($archivedIds).
                             ' reservations archived successfully.',
-                'archived_ids' =>
-                    $archivedIds,
+                'archived_ids' => $archivedIds,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Failed to archive reservations.',
+                'message' => 'Failed to archive reservations.',
             ], 500);
         }
     }
@@ -2200,43 +2146,37 @@ class ReservationController extends Controller
         }
 
         return response()->json([
-            'total' =>
-                (clone $query)->count(),
-            'pending' =>
-                (clone $query)
-                    ->where(
-                        'status',
-                        'Pending'
-                    )
-                    ->count(),
-            'approved' =>
-                (clone $query)
-                    ->where(
-                        'status',
-                        'Approved'
-                    )
-                    ->count(),
-            'scheduled' =>
-                (clone $query)
-                    ->where(
-                        'status',
-                        'Scheduled'
-                    )
-                    ->count(),
-            'completed' =>
-                (clone $query)
-                    ->where(
-                        'status',
-                        'Completed'
-                    )
-                    ->count(),
-            'cancelled' =>
-                (clone $query)
-                    ->where(
-                        'status',
-                        'Cancelled'
-                    )
-                    ->count(),
+            'total' => (clone $query)->count(),
+            'pending' => (clone $query)
+                ->where(
+                    'status',
+                    'Pending'
+                )
+                ->count(),
+            'approved' => (clone $query)
+                ->where(
+                    'status',
+                    'Approved'
+                )
+                ->count(),
+            'scheduled' => (clone $query)
+                ->where(
+                    'status',
+                    'Scheduled'
+                )
+                ->count(),
+            'completed' => (clone $query)
+                ->where(
+                    'status',
+                    'Completed'
+                )
+                ->count(),
+            'cancelled' => (clone $query)
+                ->where(
+                    'status',
+                    'Cancelled'
+                )
+                ->count(),
         ]);
     }
 
@@ -2306,20 +2246,15 @@ class ReservationController extends Controller
             )
         ) {
             FleetNotification::create([
-                'user_id' =>
-                    $requester->id,
+                'user_id' => $requester->id,
 
-                'title' =>
-                    $title,
+                'title' => $title,
 
-                'message' =>
-                    $requesterMessage,
+                'message' => $requesterMessage,
 
-                'status' =>
-                    'Unread',
+                'status' => 'Unread',
 
-                'link' =>
-                    $link,
+                'link' => $link,
             ]);
         }
 
@@ -2355,12 +2290,12 @@ class ReservationController extends Controller
             ->where(
                 'reservation_number',
                 'like',
-                $prefix . '%'
+                $prefix.'%'
             )
             ->orderByDesc('id')
             ->first();
 
-        if (!$latestReservation) {
+        if (! $latestReservation) {
             $nextSequence = 1;
         } else {
             $lastSequence = (int) substr(
@@ -2369,7 +2304,8 @@ class ReservationController extends Controller
             );
             $nextSequence = $lastSequence + 1;
         }
-        return $prefix . str_pad(
+
+        return $prefix.str_pad(
             $nextSequence,
             3,
             '0',
@@ -2383,8 +2319,7 @@ class ReservationController extends Controller
 
         return response()->json([
             'success' => true,
-            'reservation_number' =>
-                $this->generateReservationNumber(),
+            'reservation_number' => $this->generateReservationNumber(),
         ]);
     }
 
@@ -2393,7 +2328,7 @@ class ReservationController extends Controller
         $this->authorize('viewAny', Reservation::class);
 
         return response()->json([
-            'capabilities' => \App\Models\VehicleCapability::query()
+            'capabilities' => VehicleCapability::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'slug', 'description']),
         ]);
@@ -2403,6 +2338,7 @@ class ReservationController extends Controller
         Reservation $reservation
     ): array {
         $reservation->loadMissing('requiredCapabilities');
+
         /*
         |--------------------------------------------------------------------------
         | Audit-safe Reservation Snapshot
@@ -2413,57 +2349,41 @@ class ReservationController extends Controller
         |--------------------------------------------------------------------------
         */
         return [
-            'reservation_number' =>
-                $reservation->reservation_number,
+            'reservation_number' => $reservation->reservation_number,
 
-            'request_type' =>
-                $reservation->request_type,
+            'request_type' => $reservation->request_type,
 
-            'shipment_id' =>
-                $reservation->shipment_id,
+            'shipment_id' => $reservation->shipment_id,
 
-            'vehicle_id' =>
-                $reservation->vehicle_id,
+            'vehicle_id' => $reservation->vehicle_id,
 
-            'driver_id' =>
-                $reservation->driver_id,
+            'driver_id' => $reservation->driver_id,
 
-            'department' =>
-                $reservation->department,
+            'department' => $reservation->department,
 
-            'pickup_location' =>
-                $reservation->pickup_location,
+            'pickup_location' => $reservation->pickup_location,
 
-            'pickup_hospital_id' =>
-                $reservation->pickup_hospital_id,
+            'pickup_hospital_id' => $reservation->pickup_hospital_id,
 
-            'destination' =>
-                $reservation->destination,
+            'destination' => $reservation->destination,
 
-            'destination_hospital_id' =>
-                $reservation->destination_hospital_id,
+            'destination_hospital_id' => $reservation->destination_hospital_id,
 
-            'schedule_date' =>
-                $reservation->schedule_date
-                    ?->format('Y-m-d'),
+            'schedule_date' => $reservation->schedule_date
+                ?->format('Y-m-d'),
 
-            'schedule_time' =>
-                $reservation->schedule_time,
+            'schedule_time' => $reservation->schedule_time,
 
-            'priority' =>
-                $reservation->priority,
+            'priority' => $reservation->priority,
 
-            'status' =>
-                $reservation->status,
+            'status' => $reservation->status,
 
-            'requested_by' =>
-                $reservation->requested_by,
+            'requested_by' => $reservation->requested_by,
 
-            'required_capabilities' =>
-                $reservation->requiredCapabilities
-                    ->pluck('slug')
-                    ->sort()
-                    ->implode(','),
+            'required_capabilities' => $reservation->requiredCapabilities
+                ->pluck('slug')
+                ->sort()
+                ->implode(','),
         ];
     }
 
@@ -2510,44 +2430,32 @@ class ReservationController extends Controller
             $newStatus
         ) {
             $action = match ($newStatus) {
-                'Approved' =>
-                    'Approved',
+                'Approved' => 'Approved',
 
-                'Rejected' =>
-                    'Rejected',
+                'Rejected' => 'Rejected',
 
-                'Cancelled' =>
-                    'Cancelled',
+                'Cancelled' => 'Cancelled',
 
-                'Scheduled' =>
-                    'Scheduled',
+                'Scheduled' => 'Scheduled',
 
-                'Completed' =>
-                    'Completed',
+                'Completed' => 'Completed',
 
-                default =>
-                    'Updated',
+                default => 'Updated',
             };
         }
 
         $description = match ($action) {
-            'Approved' =>
-                "Approved reservation {$reservation->reservation_number}.",
+            'Approved' => "Approved reservation {$reservation->reservation_number}.",
 
-            'Rejected' =>
-                "Rejected reservation {$reservation->reservation_number}.",
+            'Rejected' => "Rejected reservation {$reservation->reservation_number}.",
 
-            'Cancelled' =>
-                "Cancelled reservation {$reservation->reservation_number}.",
+            'Cancelled' => "Cancelled reservation {$reservation->reservation_number}.",
 
-            'Scheduled' =>
-                "Scheduled reservation {$reservation->reservation_number}.",
+            'Scheduled' => "Scheduled reservation {$reservation->reservation_number}.",
 
-            'Completed' =>
-                "Completed reservation {$reservation->reservation_number}.",
+            'Completed' => "Completed reservation {$reservation->reservation_number}.",
 
-            default =>
-                "Updated reservation {$reservation->reservation_number}.",
+            default => "Updated reservation {$reservation->reservation_number}.",
         };
 
         AuditLogService::log(
@@ -2569,8 +2477,7 @@ class ReservationController extends Controller
             'integration_ready' => true,
             'integration_connected' => false,
             'shipments' => [],
-            'message' =>
-                'Logistics integration is not connected yet.',
+            'message' => 'Logistics integration is not connected yet.',
         ]);
     }
 
@@ -2591,21 +2498,21 @@ class ReservationController extends Controller
                         'like',
                         "%{$search}%"
                     )
-                    ->orWhere(
-                        'address',
-                        'like',
-                        "%{$search}%"
-                    )
-                    ->orWhere(
-                        'city',
-                        'like',
-                        "%{$search}%"
-                    )
-                    ->orWhere(
-                        'province',
-                        'like',
-                        "%{$search}%"
-                    );
+                        ->orWhere(
+                            'address',
+                            'like',
+                            "%{$search}%"
+                        )
+                        ->orWhere(
+                            'city',
+                            'like',
+                            "%{$search}%"
+                        )
+                        ->orWhere(
+                            'province',
+                            'like',
+                            "%{$search}%"
+                        );
                 });
             })
             ->orderBy('name')
@@ -2629,7 +2536,7 @@ class ReservationController extends Controller
 
     private function syncRequiredCapabilities(Reservation $reservation, array $caps): void
     {
-        $capIds = \App\Models\VehicleCapability::query()
+        $capIds = VehicleCapability::query()
             ->whereIn('id', $caps)
             ->orWhereIn('slug', $caps)
             ->pluck('id');

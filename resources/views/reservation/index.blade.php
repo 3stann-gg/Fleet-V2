@@ -367,6 +367,10 @@
           @json(auth()->user()?->role);
       window.FLEET_RBAC.reservations =
           @json($reservationPermissions ?? []);
+      window.RESERVATION_CONTEXT = {
+          applicationTimezone: @json(config('app.timezone')),
+          emergencyRequestTypes: @json(\App\Models\Reservation::emergencyRequestTypes()),
+      };
   </script>
 
   <script src="{{ asset('assets/js/helpers/rbac.js') }}"></script>
