@@ -270,6 +270,7 @@
                         aria-label="Fleet Management"
                         data-tooltip="Fleet Management"
                     >
+                        <i class="ph-fill ph-car sidebar-group-icon" aria-hidden="true"></i>
                         <span class="sidebar-group-label">Fleet Management</span>
                         <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
                     </button>
@@ -355,6 +356,7 @@
                         aria-label="Driver Management"
                         data-tooltip="Driver Management"
                     >
+                        <i class="ph-fill ph-user-circle sidebar-group-icon" aria-hidden="true"></i>
                         <span class="sidebar-group-label">Driver Management</span>
                         <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
                     </button>
@@ -422,6 +424,7 @@
                         aria-label="Operations"
                         data-tooltip="Operations"
                     >
+                        <i class="ph-fill ph-wrench sidebar-group-icon" aria-hidden="true"></i>
                         <span class="sidebar-group-label">Operations</span>
                         <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
                     </button>
@@ -524,6 +527,7 @@
                         aria-label="Analytics"
                         data-tooltip="Analytics"
                     >
+                        <i class="ph-fill ph-chart-bar sidebar-group-icon" aria-hidden="true"></i>
                         <span class="sidebar-group-label">Analytics</span>
                         <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
                     </button>
@@ -591,6 +595,7 @@
                         aria-label="System"
                         data-tooltip="System"
                     >
+                        <i class="ph-fill ph-gear sidebar-group-icon" aria-hidden="true"></i>
                         <span class="sidebar-group-label">System</span>
                         <i class="ph ph-caret-down sidebar-group-caret" aria-hidden="true"></i>
                     </button>

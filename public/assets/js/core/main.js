@@ -705,7 +705,7 @@ function initSidebarProfileDropdown() {
         }
     });
 
-    menu.addEventListener("click", (event) => {
+    menu.addEventListener("click", async (event) => {
         if (event.target?.closest?.("[data-theme-option]")) {
             return;
         }
@@ -772,11 +772,16 @@ function initSidebarProfileDropdown() {
             if (typeof performFleetLogout === "function") {
                 performFleetLogout();
             } else if (typeof logout === "function") {
-                if (
-                    window.confirm(
-                        "Sign out of HIMS Fleet?\n\nYou will need to sign in again to continue.\nTheme, profile, and fleet settings will be kept.",
-                    )
-                ) {
+                const confirmed = await window.showFleetConfirm({
+                    title: "Sign Out of HIMS Fleet?",
+                    message:
+                        "You will need to sign in again to continue. Theme, profile, and fleet settings will be kept.",
+                    confirmLabel: "Sign Out",
+                    confirmIcon: "ph ph-sign-out",
+                    tone: "danger",
+                });
+
+                if (confirmed) {
                     logout();
                     window.location.replace("/login");
                 }

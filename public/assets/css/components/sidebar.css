@@ -202,6 +202,10 @@
   white-space: nowrap;
 }
 
+.sidebar-group-icon {
+  display: none;
+}
+
 .sidebar-group-caret {
   flex-shrink: 0;
   font-size: 15px;
@@ -830,8 +834,17 @@ button.profile-menu-item {
   }
 
   body.sidebar-collapsed .sidebar-group-caret {
-    font-size: 19px;
-    transform: rotate(-90deg);
+    display: none;
+  }
+
+  body.sidebar-collapsed .sidebar-group-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    min-width: 22px;
+    font-size: 22px;
+    line-height: 1;
   }
 
   body.sidebar-collapsed .sidebar-group-panel {
