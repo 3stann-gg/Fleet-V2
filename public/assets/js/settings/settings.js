@@ -1534,12 +1534,14 @@ async function resetFleetSettingsDefaults() {
     const requireConfirm =
         settingsGetCheckbox("settingsDataConfirmDestructive", true) !== false;
     if (requireConfirm) {
-        const ok = window.confirm(
-            "Reset Fleet Settings to defaults?\n\n" +
-                "Fleet configuration stored in the database will be reset.\n" +
-                "Operational Fleet records will not be deleted.\n" +
-                "Your theme preference will be preserved.",
-        );
+        const ok = await window.showFleetConfirm({
+            title: "Reset Fleet Settings?",
+            message:
+                "Fleet configuration stored in the database will be reset. Operational Fleet records will not be deleted, and your theme preference will be preserved.",
+            confirmLabel: "Reset Settings",
+            confirmIcon: "ph ph-arrow-counter-clockwise",
+            tone: "danger",
+        });
         if (!ok) {
             return;
         }

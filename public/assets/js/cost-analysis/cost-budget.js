@@ -665,9 +665,13 @@ async function clearActiveCostBudget() {
     if (!canManageCostBudget()) {
         return;
     }
-    const ok = window.confirm(
-        "Clear the active budget configuration?\n\nBudget history will be kept.",
-    );
+    const ok = await window.showFleetConfirm({
+        title: "Clear Active Budget?",
+        message: "Clear the active budget configuration? Budget history will be kept.",
+        confirmLabel: "Clear Budget",
+        confirmIcon: "ph ph-trash",
+        tone: "danger",
+    });
     if (!ok) {
         return;
     }
@@ -701,7 +705,13 @@ async function clearCostBudgetHistory() {
     if (!canManageCostBudget()) {
         return;
     }
-    const ok = window.confirm("Clear all budget history entries?");
+    const ok = await window.showFleetConfirm({
+        title: "Clear Budget History?",
+        message: "Clear all budget history entries? This cannot be undone.",
+        confirmLabel: "Clear History",
+        confirmIcon: "ph ph-trash",
+        tone: "danger",
+    });
     if (!ok) {
         return;
     }

@@ -296,13 +296,78 @@
 }
 
 .delete-modal .btn-outline,
-.delete-modal .btn-danger {
+.delete-modal .btn-danger,
+.delete-modal .btn-primary {
   min-width: 140px;
   height: var(--control-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-button);
+}
+
+.fleet-confirm-modal .fleet-confirm-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+.fleet-confirm-modal--primary .fleet-confirm-icon {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.fleet-input-modal {
+  width: min(100%, 520px);
+}
+
+.fleet-input-modal form {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fleet-input-message {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+  white-space: pre-line;
+}
+
+.fleet-input-modal .field-error {
+  display: block;
+  min-height: 1.25rem;
+  margin-top: var(--space-1);
+  color: var(--color-danger);
+}
+
+@media (max-width: 480px) {
+  .fleet-confirm-modal {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .fleet-confirm-modal .modal-footer,
+  .fleet-confirm-modal .btn-outline,
+  .fleet-confirm-modal .btn-danger,
+  .fleet-confirm-modal .btn-primary {
+    width: 100%;
+  }
+
+  .fleet-input-modal .modal-header,
+  .fleet-input-modal .modal-body,
+  .fleet-input-modal .modal-footer {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  .fleet-input-modal .modal-footer,
+  .fleet-input-modal .btn-outline,
+  .fleet-input-modal .btn-primary {
+    width: 100%;
+  }
 }
 
 /* ==========================================

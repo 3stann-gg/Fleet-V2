@@ -119,7 +119,12 @@ function initDispatchLifecycle() {
         const acceptButton = event.target.closest(".dispatch-accept");
 
         if (acceptButton) {
-            const confirmed = window.confirm("Accept this dispatch?");
+            const confirmed = await window.showFleetConfirm({
+                title: "Accept Dispatch?",
+                message: "Are you sure you want to accept this dispatch?",
+                confirmLabel: "Accept",
+                confirmIcon: "ph ph-check",
+            });
 
             if (!confirmed) {
                 return;
@@ -133,7 +138,12 @@ function initDispatchLifecycle() {
         const startTripButton = event.target.closest(".dispatch-start-trip");
 
         if (startTripButton) {
-            const confirmed = window.confirm("Start this trip?");
+            const confirmed = await window.showFleetConfirm({
+                title: "Start Trip?",
+                message: "Are you sure you want to start this trip?",
+                confirmLabel: "Start Trip",
+                confirmIcon: "ph ph-play",
+            });
 
             if (!confirmed) {
                 return;
@@ -151,7 +161,12 @@ function initDispatchLifecycle() {
         const arrivedButton = event.target.closest(".dispatch-arrived");
 
         if (arrivedButton) {
-            const confirmed = window.confirm("Mark this dispatch as Arrived?");
+            const confirmed = await window.showFleetConfirm({
+                title: "Mark Dispatch as Arrived?",
+                message: "Are you sure you want to mark this dispatch as Arrived?",
+                confirmLabel: "Mark Arrived",
+                confirmIcon: "ph ph-map-pin",
+            });
 
             if (!confirmed) {
                 return;
@@ -169,7 +184,12 @@ function initDispatchLifecycle() {
         const completeButton = event.target.closest(".dispatch-complete");
 
         if (completeButton) {
-            const confirmed = window.confirm("Complete this dispatch?");
+            const confirmed = await window.showFleetConfirm({
+                title: "Complete Dispatch?",
+                message: "Are you sure you want to complete this dispatch?",
+                confirmLabel: "Complete",
+                confirmIcon: "ph ph-check-circle",
+            });
 
             if (!confirmed) {
                 return;

@@ -34,8 +34,14 @@ function renderRouteTemplateSelect() {
   if (apply) apply.disabled = !has;
 }
 
-function saveRouteAsTemplateFromForm() {
-  const name = window.prompt("Template name");
+async function saveRouteAsTemplateFromForm() {
+  const name = await window.showInputPrompt({
+    title: "Save Route Template",
+    message: "Enter a name for this route template.",
+    label: "Template name",
+    placeholder: "Template name",
+    confirmText: "Save Template",
+  });
   if (name == null) return;
   const trimmed = name.trim();
   if (!trimmed) {
@@ -59,11 +65,12 @@ function saveRouteAsTemplateFromForm() {
     (t) => t.name.toLowerCase() === trimmed.toLowerCase(),
   );
   if (existing) {
-    const ok = window.confirm(
-      'A template named "' +
-        trimmed +
-        '" already exists. Replace it?',
-    );
+    const ok = await window.showFleetConfirm({
+      title: "Replace Route Template?",
+      message: 'A template named "' + trimmed + '" already exists. Replace it?',
+      confirmLabel: "Replace",
+      confirmIcon: "ph ph-arrows-clockwise",
+    });
     if (!ok) return;
   }
 
@@ -153,7 +160,7 @@ function applySelectedRouteTemplate() {
     }
 }
 
-function renameSelectedRouteTemplate() {
+async function renameSelectedRouteTemplate() {
   const select = document.getElementById("routeTemplateSelect");
   const id = select?.value;
   if (!id) return;
@@ -161,7 +168,13 @@ function renameSelectedRouteTemplate() {
   const template = list.find((t) => t.id === id);
   if (!template) return;
 
-  const next = window.prompt("Rename template", template.name);
+  const next = await window.showInputPrompt({
+    title: "Rename Route Template",
+    message: "Enter a new name for this route template.",
+    label: "Template name",
+    value: template.name,
+    confirmText: "Rename Template",
+  });
   if (next == null) return;
   const name = next.trim();
   if (!name) {
@@ -191,7 +204,7 @@ function renameSelectedRouteTemplate() {
   }
 }
 
-function deleteSelectedRouteTemplate() {
+async function deleteSelectedRouteTemplate() {
   const select = document.getElementById("routeTemplateSelect");
   const id = select?.value;
   if (!id) return;
@@ -199,9 +212,13 @@ function deleteSelectedRouteTemplate() {
   const template = list.find((t) => t.id === id);
   if (!template) return;
 
-  const ok = window.confirm(
-    'Delete template "' + template.name + '"?\n\nThis cannot be undone.',
-  );
+  const ok = await window.showFleetConfirm({
+    title: "Delete Route Template?",
+    message: 'Delete template "' + template.name + '"? This cannot be undone.',
+    confirmLabel: "Delete",
+    confirmIcon: "ph ph-trash",
+    tone: "danger",
+  });
   if (!ok) return;
 
   if (!writeRouteTemplates(list.filter((t) => t.id !== id))) return;

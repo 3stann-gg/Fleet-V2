@@ -176,7 +176,7 @@ function removeFuelSelectionId(id) {
     selectedFuelIds.delete(key);
 }
 
-function requestBulkDeleteFuel(opener) {
+async function requestBulkDeleteFuel(opener) {
     const ids = Array.from(selectedFuelIds);
 
     if (ids.length === 0) {
@@ -189,13 +189,18 @@ function requestBulkDeleteFuel(opener) {
         return;
     }
 
-    const confirmed = window.confirm(
-        "Delete " +
+    const confirmed = await window.showFleetConfirm({
+        title: "Delete Fuel Records?",
+        message:
+            "Delete " +
             ids.length +
             " selected fuel record" +
             (ids.length === 1 ? "" : "s") +
-            "?\n\nThis action cannot be undone.",
-    );
+            "? This action cannot be undone.",
+        confirmLabel: "Delete",
+        confirmIcon: "ph ph-trash",
+        tone: "danger",
+    });
 
     if (!confirmed) {
         return;

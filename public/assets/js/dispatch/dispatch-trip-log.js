@@ -67,7 +67,7 @@
             return;
         }
 
-        alert(message);
+        console.error(message);
     }
 
     function escapeHtml(value) {
