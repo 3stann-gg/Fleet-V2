@@ -17,11 +17,18 @@
             </div>
         </div>
 
+        <section class="audit-filter-panel" aria-labelledby="auditFilterHeading">
+            <div class="audit-filter-heading">
+                <div>
+                    <h2 id="auditFilterHeading">Audit Filters</h2>
+                    <p>Filter read-only activity by search terms, module, event, or date.</p>
+                </div>
+            </div>
         <div class="toolbar">
             <div class="toolbar-left">
 
                 <div class="search-box">
-                    <i class="ph ph-magnifying-glass"></i>
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 
                     <form
                         method="GET"
@@ -161,11 +168,12 @@
                     href="{{ route('audit-logs.index') }}"
                     class="btn-outline"
                 >
-                    <i class="ph ph-x"></i>
+                    <i class="ph ph-x" aria-hidden="true"></i>
                     Clear Filters
                 </a>
             </div>
         </div>
+        </section>
 
         <div class="card">
             <div class="card-header">
@@ -179,7 +187,7 @@
             </div>
 
             <div class="table-responsive">
-                <table class="fleet-table">
+                <table class="fleet-table audit-logs-table" aria-label="System audit activity">
                     <thead>
                         <tr>
                             <th>Date & Time</th>
@@ -196,13 +204,15 @@
                     <tbody>
                         @forelse($auditLogs as $auditLog)
                             <tr>
-                                <td>
-                                    {{ optional($auditLog->created_at)
-                                        ->format('M d, Y h:i A') }}
+                                <td class="audit-timestamp-cell">
+                                    <time datetime="{{ optional($auditLog->created_at)->toIso8601String() }}">
+                                        {{ optional($auditLog->created_at)
+                                            ->format('M d, Y h:i A') }}
+                                    </time>
                                 </td>
 
                                 <td>
-                                    <strong>
+                                    <strong class="audit-user-name">
                                         {{ $auditLog->user_name
                                             ?: 'Guest / System' }}
                                     </strong>
@@ -227,21 +237,31 @@
                                     }}
                                 </td>
 
-                                <td>
+                                <td class="audit-module-cell">
                                     {{ $auditLog->module }}
                                 </td>
 
                                 <td>
-                                    <span class="status-badge">
+                                    @php
+                                        $auditAction = \Illuminate\Support\Str::lower($auditLog->action ?? '');
+                                        $auditEventTone = match (true) {
+                                            \Illuminate\Support\Str::contains($auditAction, ['deleted', 'failed', 'rejected', 'cleared']) => 'status-chip--danger',
+                                            \Illuminate\Support\Str::contains($auditAction, ['archived', 'cancelled', 'returned to draft']) => 'status-chip--warning',
+                                            \Illuminate\Support\Str::contains($auditAction, ['created', 'restored', 'completed', 'approved', 'login']) => 'status-chip--success',
+                                            \Illuminate\Support\Str::contains($auditAction, ['updated', 'edited', 'reviewed', 'changed', 'assigned', 'settlement', 'exported', 'printed', 'password']) => 'status-chip--info',
+                                            default => 'status-chip--neutral',
+                                        };
+                                    @endphp
+                                    <span class="status-chip audit-event-badge {{ $auditEventTone }}">
                                         {{ $auditLog->action }}
                                     </span>
                                 </td>
 
-                                <td>
+                                <td class="audit-description-cell">
                                     {{ $auditLog->description }}
                                 </td>
 
-                                <td>
+                                <td class="audit-ip-cell">
                                     {{ $auditLog->ip_address ?: '—' }}
                                 </td>
 
@@ -250,6 +270,7 @@
                                         type="button"
                                         class="btn-outline audit-view-btn"
                                         data-audit-id="{{ $auditLog->id }}"
+                                        aria-label="View audit log details"
                                     >
                                         View
                                     </button>
@@ -320,7 +341,7 @@
                         aria-label="Previous page"
                         disabled
                     >
-                        <i class="ph ph-caret-left"></i>
+                        <i class="ph ph-caret-left" aria-hidden="true"></i>
                     </button>
                 @else
                     <a
@@ -328,7 +349,7 @@
                         class="audit-page-btn"
                         aria-label="Previous page"
                     >
-                        <i class="ph ph-caret-left"></i>
+                        <i class="ph ph-caret-left" aria-hidden="true"></i>
                     </a>
                 @endif
 
@@ -373,7 +394,7 @@
                         class="audit-page-btn"
                         aria-label="Next page"
                     >
-                        <i class="ph ph-caret-right"></i>
+                        <i class="ph ph-caret-right" aria-hidden="true"></i>
                     </a>
                 @else
                     <button
@@ -382,7 +403,7 @@
                         aria-label="Next page"
                         disabled
                     >
-                        <i class="ph ph-caret-right"></i>
+                        <i class="ph ph-caret-right" aria-hidden="true"></i>
                     </button>
                 @endif
 
@@ -400,6 +421,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="auditDetailsModalTitle"
+    aria-describedby="auditDetailsModalDescription"
     hidden
 >
     <div class="custom-modal">
@@ -410,7 +432,7 @@
                     Audit Log Details
                 </h2>
 
-                <p>
+                <p id="auditDetailsModalDescription">
                     Complete information for the selected audit event.
                 </p>
             </div>
@@ -421,13 +443,17 @@
                 id="closeAuditDetailsModal"
                 aria-label="Close audit details"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
         <div class="modal-body">
 
             <div class="audit-details-grid">
+
+                <div class="detail-section-heading">
+                    <h3>User / Actor</h3>
+                </div>
 
                 <div class="audit-detail-item">
                     <label>User</label>
@@ -459,6 +485,10 @@
                     </p>
                 </div>
 
+                <div class="detail-section-heading">
+                    <h3>Event &amp; Resource</h3>
+                </div>
+
                 <div class="audit-detail-item">
                     <label>Module</label>
                     <p
@@ -487,6 +517,10 @@
                     >
                         —
                     </p>
+                </div>
+
+                <div class="detail-section-heading">
+                    <h3>Request / Context</h3>
                 </div>
 
                 <div class="audit-detail-item">
@@ -524,6 +558,9 @@
             </div>
 
 
+            <div class="detail-section-heading detail-section-heading--standalone">
+                <h3>Event Description</h3>
+            </div>
             <div class="audit-long-section">
                 <label>Description</label>
 
@@ -533,6 +570,9 @@
             </div>
 
 
+            <div class="detail-section-heading detail-section-heading--standalone">
+                <h3>Changes</h3>
+            </div>
             <div class="audit-json-section">
                 <label>Old Values</label>
 
@@ -553,6 +593,9 @@
             </div>
 
 
+            <div class="detail-section-heading detail-section-heading--standalone">
+                <h3>Network Information</h3>
+            </div>
             <div class="audit-long-section">
                 <label>User Agent</label>
 

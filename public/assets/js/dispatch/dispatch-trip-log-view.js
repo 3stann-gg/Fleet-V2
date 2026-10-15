@@ -68,7 +68,7 @@
             return;
         }
 
-        alert(message);
+        console.error(message);
     }
 
     function getDriverName(driver) {

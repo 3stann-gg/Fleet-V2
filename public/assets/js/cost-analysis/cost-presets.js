@@ -201,7 +201,7 @@ function renderCostPresetSelect() {
   });
 }
 
-function saveCostAnalysisPreset() {
+async function saveCostAnalysisPreset() {
   const nameInput = document.getElementById("costPresetName");
   const name = (nameInput?.value || "").trim();
   if (!name) {
@@ -224,9 +224,12 @@ function saveCostAnalysisPreset() {
     (p) => p.name.toLowerCase() === name.toLowerCase(),
   );
   if (existing) {
-    const ok = window.confirm(
-      'A preset named "' + name + '" already exists. Replace it?',
-    );
+    const ok = await window.showFleetConfirm({
+      title: "Replace Cost Analysis Preset?",
+      message: 'A preset named "' + name + '" already exists. Replace it?',
+      confirmLabel: "Replace",
+      confirmIcon: "ph ph-arrows-clockwise",
+    });
     if (!ok) return;
     preset.id = existing.id;
     preset.createdAt = existing.createdAt;
@@ -319,14 +322,20 @@ function initCostAnalysisPresets() {
       }
     });
 
-  document.getElementById("renameCostPreset")?.addEventListener("click", (e) => {
+  document.getElementById("renameCostPreset")?.addEventListener("click", async (e) => {
     e.preventDefault();
     const id = select.value;
     if (!id) return;
     const list = loadCostAnalysisPresets();
     const preset = list.find((p) => p.id === id);
     if (!preset) return;
-    const next = window.prompt("Rename preset", preset.name);
+    const next = await window.showInputPrompt({
+      title: "Rename Cost Analysis Preset",
+      message: "Enter a new name for this Cost Analysis preset.",
+      label: "Preset name",
+      value: preset.name,
+      confirmText: "Rename Preset",
+    });
     if (next == null) return;
     const name = next.trim();
     if (!name) return;
@@ -359,14 +368,21 @@ function initCostAnalysisPresets() {
     }
   });
 
-  document.getElementById("deleteCostPreset")?.addEventListener("click", (e) => {
+  document.getElementById("deleteCostPreset")?.addEventListener("click", async (e) => {
     e.preventDefault();
     const id = select.value;
     if (!id) return;
     const list = loadCostAnalysisPresets();
     const preset = list.find((p) => p.id === id);
     if (!preset) return;
-    if (!window.confirm('Delete preset "' + preset.name + '"?')) return;
+    const confirmed = await window.showFleetConfirm({
+      title: "Delete Cost Analysis Preset?",
+      message: 'Delete preset "' + preset.name + '"? This cannot be undone.',
+      confirmLabel: "Delete",
+      confirmIcon: "ph ph-trash",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     persistCostAnalysisPresets(list.filter((p) => p.id !== id));
     renderCostPresetSelect();
     if (typeof showToast === "function") {

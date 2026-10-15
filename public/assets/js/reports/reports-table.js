@@ -277,6 +277,7 @@ function renderReportsTable() {
     columns
       .map((col) => {
         const sortable = col.type !== "actions";
+        const numeric = ["currency", "percent", "number"].includes(col.type);
         const sorted =
           reportsTableState.sortField === col.key
             ? reportsTableState.sortDir
@@ -287,7 +288,7 @@ function renderReportsTable() {
             : sorted === "desc"
               ? "ph-caret-down"
               : "ph-caret-up-down";
-        return `<th class="${sortable ? "sortable" : ""}" data-field="${escapeReportsTableHtml(col.key)}" ${
+        return `<th class="${sortable ? "sortable" : ""}${numeric ? " numeric-cell" : ""}" data-field="${escapeReportsTableHtml(col.key)}" ${
             sorted
                 ? `aria-sort="${sorted === "asc" ? "ascending" : "descending"}"`
                 : ""
@@ -333,7 +334,7 @@ function renderReportsTable() {
             .map((col) => {
               const display = formatReportCell(row[col.key], col.type);
               return `
-                <td>
+                <td class="${["currency", "percent", "number"].includes(col.type) ? "numeric-cell" : ""}">
                   ${escapeReportsTableHtml(display)}
                 </td>
               `;

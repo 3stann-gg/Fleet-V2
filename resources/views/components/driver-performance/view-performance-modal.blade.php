@@ -21,10 +21,11 @@
                 id="closeDriverPerformanceModal"
                 aria-label="Close driver performance details"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
+        <div class="modal-body">
         <div class="vehicle-profile driver-profile driver-performance-profile">
             <div class="driver-performance-photo-wrap">
                 <img id="performanceDetailPhoto" alt="">
@@ -36,9 +37,8 @@
             <span id="performanceDetailStatus" class="status-badge inactive">—</span>
         </div>
 
-        <div class="modal-body">
             <section class="driver-performance-detail-section" aria-labelledby="performanceIdentityHeading">
-                <h3 id="performanceIdentityHeading">Driver Identity</h3>
+                <h3 id="performanceIdentityHeading">Driver Summary</h3>
                 <div class="view-driver-details">
                     <div class="view-driver-detail-item">
                         <label>Driver ID</label>
@@ -70,8 +70,9 @@
             </section>
 
             <section class="driver-performance-detail-section" aria-labelledby="performanceSummaryHeading">
-                <h3 id="performanceSummaryHeading">Performance Summary</h3>
+                <h3 id="performanceSummaryHeading">Trip Activity &amp; Utilization</h3>
                 <div class="view-driver-summary driver-performance-summary">
+                    <div class="driver-performance-summary-group">Trip Activity &amp; Distance</div>
                     <div class="view-driver-summary-item">
                         <span class="view-driver-summary-label">Completed Trips</span>
                         <strong id="performanceDetailCompleted">0</strong>
@@ -84,6 +85,7 @@
                         <span class="view-driver-summary-label">Total Distance</span>
                         <strong id="performanceDetailDistance">0 km</strong>
                     </div>
+                    <div class="driver-performance-summary-group">Fuel &amp; Energy</div>
                     <div class="view-driver-summary-item">
                         <span class="view-driver-summary-label">Fuel Used</span>
                         <strong id="performanceDetailFuel">0 L</strong>
@@ -98,7 +100,7 @@
             <section class="driver-performance-detail-section" aria-labelledby="performanceRecentTripsHeading">
                 <h3 id="performanceRecentTripsHeading">Recent Trips</h3>
                 <div class="table-responsive">
-                    <table class="fleet-table driver-performance-recent-table">
+                    <table class="fleet-table driver-performance-recent-table" aria-label="Recent driver trips">
                         <thead>
                             <tr>
                                 <th>Dispatch</th>

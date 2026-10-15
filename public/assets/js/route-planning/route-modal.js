@@ -1949,9 +1949,14 @@ async function duplicateRouteFromView(routeId) {
             })
             .join("\n");
 
-        const input = window.prompt(
-            "Select the target reservation by number:\n\n" + choices,
-        );
+        const input = await window.showInputPrompt({
+            title: "Duplicate Route Plan",
+            message: "Select the target reservation by number:\n\n" + choices,
+            label: "Reservation number",
+            placeholder: "Enter a reservation number",
+            confirmText: "Duplicate Route",
+            inputMode: "numeric",
+        });
 
         if (input === null) {
             return;

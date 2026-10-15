@@ -20,13 +20,18 @@
         id="closeAddFuelModal"
         aria-label="Close add fuel modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="fuelForm">
+    <form id="fuelForm" class="operational-modal-form">
+      <div class="modal-body">
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Transaction &amp; Vehicle</h3>
+            <p>Identify the refueling event, fleet vehicle, and assigned driver.</p>
+          </div>
+
           <div class="form-group">
             <label for="fuelNumber">Fuel Record Number *</label>
             <input type="text" id="fuelNumber" readonly required />
@@ -87,6 +92,11 @@
             />
           </div>
 
+          <div class="form-section-heading">
+            <h3>Fuel Details</h3>
+            <p>Record the liquid-fuel type and quantity in liters.</p>
+          </div>
+
           <div class="form-group">
             <label for="fuelType">Fuel Type *</label>
             <select id="fuelType" required disabled>
@@ -107,6 +117,11 @@
               placeholder="0.00"
               required
             />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Cost &amp; Odometer</h3>
+            <p>Record unit cost, calculated total, and vehicle mileage.</p>
           </div>
 
           <div class="form-group">
@@ -145,6 +160,11 @@
             />
           </div>
 
+          <div class="form-section-heading">
+            <h3>Station &amp; Transaction Reference</h3>
+            <p>Capture the source, receipt, and payment information.</p>
+          </div>
+
           <div class="form-group">
             <label for="fuelStation">
                 Fuel Station
@@ -171,17 +191,21 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Additional Information</h3>
+          </div>
+
           <div class="form-group full-width">
             <label for="fuelNotes">Notes</label>
             <textarea id="fuelNotes" rows="3" placeholder="Add optional notes"></textarea>
           </div>
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelAddFuel">Cancel</button>
           <button type="submit" class="btn-primary" id="saveFuelBtn">Save Fuel Record</button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

@@ -6,11 +6,6 @@
   display: none;
 }
 
-.status-badge.out {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
 @media print {
   #sidebar,
   #navbar,
@@ -91,5 +86,45 @@
   font-weight: 600;
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+/* Operational list hierarchy */
+.driver-page .driver-name {
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.driver-page .driver-info small,
+.driver-page .driver-table-meta {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-snug);
+}
+
+.driver-page .driver-avatar {
+  flex: 0 0 36px;
+  border: 1px solid var(--color-border);
+}
+
+.driver-page .action-buttons {
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+}
+
+#addDriverModal .vehicle-image-upload img,
+#editDriverModal .vehicle-image-upload img,
+#viewDriverModal .driver-profile img {
+  object-fit: cover;
+  border-color: var(--color-border);
+}
+
+@media (max-width: 640px) {
+  .driver-page .toolbar-left,
+  .driver-page .toolbar-right,
+  .driver-page .filter-select {
+    width: 100%;
+  }
 }
 

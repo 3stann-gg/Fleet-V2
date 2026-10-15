@@ -89,7 +89,7 @@ function statusBadgeClass(status) {
         return "scheduled";
     }
     if (value.includes("archiv")) {
-        return "cancelled";
+        return "archived";
     }
 
     return "cancelled";
@@ -694,13 +694,13 @@ function buildRouteTableRow(record) {
       </span>
     </td>
 
-    <td>
+    <td class="numeric-cell">
       <span class="route-distance">
         ${escapeRouteHtml(formatRouteDistance(record.estimatedDistance))}
       </span>
     </td>
 
-    <td>
+    <td class="numeric-cell">
       <span class="route-time">
         ${escapeRouteHtml(record.estimatedTravelTime || "—")}
       </span>
@@ -734,7 +734,7 @@ function buildRouteTableRow(record) {
             aria-label="View ${escapeRouteHtml(record.routeNumber)}"
             title="View Route"
             >
-            <i class="ph ph-eye"></i>
+            <i class="ph ph-eye" aria-hidden="true"></i>
             </button>
 
             ${
@@ -751,7 +751,7 @@ function buildRouteTableRow(record) {
                         }"
                         ${canEdit ? "" : "disabled"}
                         >
-                        <i class="ph ph-pencil-simple"></i>
+                        <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                         </button>
                     `
                     : ""
@@ -771,7 +771,7 @@ function buildRouteTableRow(record) {
                         }"
                         ${canDelete ? "" : "disabled"}
                         >
-                        <i class="ph ph-trash"></i>
+                        <i class="ph ph-trash" aria-hidden="true"></i>
                         </button>
                     `
                     : ""

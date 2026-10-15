@@ -25,7 +25,7 @@
 
     <div class="card">
       <div class="table-responsive">
-        <table class="fleet-table">
+        <table class="fleet-table" aria-label="Vehicle sanitation requests">
           <thead>
             <tr>
               <th>Vehicle</th>

@@ -4,12 +4,13 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="addDispatchModalTitle"
+  aria-describedby="addDispatchModalDescription"
 >
   <div class="custom-modal">
     <div class="modal-header">
       <div>
         <h2 id="addDispatchModalTitle">Request Dispatch</h2>
-        <p>Create a hospital transport dispatch request.</p>
+        <p id="addDispatchModalDescription">Create a hospital transport dispatch request.</p>
       </div>
 
       <button
@@ -18,13 +19,18 @@
         id="closeAddDispatchModal"
         aria-label="Close modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="dispatchForm">
+    <form id="dispatchForm" class="operational-modal-form">
+      <div class="modal-body">
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Dispatch Request</h3>
+            <p>Select the approved reservation and review its transport details.</p>
+          </div>
+
           <!-- Dispatch Number -->
           <div class="form-group">
             <label for="dispatchNumber">Dispatch Number</label>
@@ -69,6 +75,11 @@
               name="dispatchRequestType"
               readonly
             />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Vehicle &amp; Driver Assignment</h3>
+            <p>Review the assigned resources before creating the dispatch.</p>
           </div>
 
           <!-- Vehicle -->
@@ -296,8 +307,18 @@
             </div>
         </div>
 
+          <div class="form-section-heading">
+            <h3>Candidate Comparison</h3>
+            <p>Compare current readiness, compatibility, qualification, and capability advisories.</p>
+          </div>
+
           <div class="form-group full-width">
             <x-dispatch.candidate-vehicle-comparison prefix="dispatch" />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Schedule &amp; Route</h3>
+            <p>Confirm the route, schedule, and priority from the reservation.</p>
           </div>
 
           <!-- Pickup -->
@@ -355,6 +376,11 @@
             />
           </div>
 
+          <div class="form-section-heading">
+            <h3>Operational Advisories</h3>
+            <p>Review readiness, energy, capability, and driver qualification information.</p>
+          </div>
+
           <div class="form-group">
             <label for="dispatchReadiness">Operational Readiness</label>
             <input type="text" id="dispatchReadiness" readonly />
@@ -400,6 +426,11 @@
             <input type="text" id="dispatchDriverAdvisory" readonly />
           </div>
 
+          <div class="form-section-heading">
+            <h3>Status &amp; Additional Information</h3>
+            <p>Review the initial status, contact, and dispatch notes.</p>
+          </div>
+
           <!-- Status -->
           <div class="form-group">
               <label for="dispatchStatus">Status</label>
@@ -435,9 +466,10 @@
             ></textarea>
           </div>
         </div>
+      </div>
 
-        <!-- Footer -->
-        <div class="modal-footer">
+      <!-- Footer -->
+      <div class="modal-footer">
           <button
             type="button"
             class="btn-outline"
@@ -454,8 +486,7 @@
             Save Dispatch
           </button>
 
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

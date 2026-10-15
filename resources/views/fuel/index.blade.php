@@ -20,14 +20,14 @@
                       id="addFuelBtn"
                       class="btn-primary"
                   >
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Request Fuel Record
                   </button>
               @endif
 
               @if(auth()->user()?->hasPermission('charging.create'))
                   <button type="button" id="addChargingBtn" class="btn-primary" hidden>
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Add Charging Transaction
                   </button>
               @endif
@@ -35,14 +35,22 @@
 
             <div class="energy-tabs" role="tablist" aria-label="Fuel and energy transactions">
               <button type="button" class="energy-tab is-active" id="fuelTransactionsTab" role="tab" aria-selected="true" aria-controls="fuelTransactionsPanel">
-                <i class="ph ph-gas-pump"></i> Fuel Transactions
+                <i class="ph ph-gas-pump" aria-hidden="true"></i> Fuel Transactions
               </button>
               <button type="button" class="energy-tab" id="chargingTransactionsTab" role="tab" aria-selected="false" aria-controls="chargingTransactionsPanel">
-                <i class="ph ph-lightning"></i> Charging Transactions
+                <i class="ph ph-lightning" aria-hidden="true"></i> Charging Transactions
               </button>
             </div>
 
             <div id="fuelTransactionsPanel" role="tabpanel" aria-labelledby="fuelTransactionsTab">
+
+            <div class="energy-panel-heading">
+              <div>
+                <h2>Fuel Management</h2>
+                <p>Monitor liquid-fuel transactions, volume, cost, and odometer records.</p>
+              </div>
+              <span class="energy-unit-badge">Liters</span>
+            </div>
 
             <div class="stats-grid">
               <div class="stat-card">
@@ -89,7 +97,7 @@
             <div class="toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
-                  <i class="ph ph-magnifying-glass"></i>
+                  <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
                   <input
                     type="text"
                     id="fuelSearch"
@@ -127,7 +135,7 @@
 
               <div class="toolbar-right">
                 <button type="button" class="btn-outline" id="refreshFuel">
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
@@ -147,7 +155,7 @@
                   class="btn-danger"
                   aria-label="Delete selected fuel records"
                 >
-                  <i class="ph ph-trash"></i>
+                <i class="ph ph-trash" aria-hidden="true"></i>
                   Delete Selected
                 </button>
               </div>
@@ -216,7 +224,7 @@
               </div>
 
               <div class="table-responsive">
-                <table class="fleet-table">
+                <table class="fleet-table" aria-label="Fuel transactions">
                   <thead>
                     <tr>
                       <th>
@@ -246,16 +254,16 @@
                         Fuel Type
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th class="sortable" data-column="7">
+                      <th class="sortable numeric-cell" data-column="7">
                         Quantity
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th>Cost / L</th>
-                      <th class="sortable" data-column="9">
+                      <th class="numeric-cell">Cost / L</th>
+                      <th class="sortable numeric-cell" data-column="9">
                         Total Cost
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
-                      <th class="sortable" data-column="10">
+                      <th class="sortable numeric-cell" data-column="10">
                         Odometer
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
@@ -277,17 +285,24 @@
               </div>
               <div class="pagination" id="fuelPagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
             </div>
 
             <div id="chargingTransactionsPanel" role="tabpanel" aria-labelledby="chargingTransactionsTab" hidden>
+              <div class="energy-panel-heading">
+                <div>
+                  <h2>Charging &amp; Energy Management</h2>
+                  <p>Monitor charging sessions, battery change, energy delivered, and charging cost.</p>
+                </div>
+                <span class="energy-unit-badge">kWh</span>
+              </div>
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-icon"><i class="ph-fill ph-lightning"></i></div>
@@ -309,19 +324,19 @@
 
               <div class="toolbar">
                 <div class="toolbar-left">
-                  <div class="search-box"><i class="ph ph-magnifying-glass"></i><input type="search" id="chargingSearch" placeholder="Search vehicle, driver, location" aria-label="Search charging transactions"></div>
+                  <div class="search-box"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input type="search" id="chargingSearch" placeholder="Search vehicle, driver, location" aria-label="Search charging transactions"></div>
                   <select class="filter-select" id="chargingVehicleFilter" aria-label="Filter charging transactions by vehicle"><option value="all">All Vehicles</option></select>
                   <select class="filter-select" id="chargingPowertrainFilter" aria-label="Filter charging transactions by powertrain"><option value="all">All Powertrains</option><option value="plug_in_hybrid">Plug-in Hybrid (PHEV)</option><option value="electric">Electric (BEV)</option></select>
                   <input type="date" class="filter-select" id="chargingDateFilter" aria-label="Filter charging transactions by date">
                 </div>
-                <div class="toolbar-right"><button type="button" class="btn-outline" id="refreshCharging"><i class="ph ph-arrows-clockwise"></i> Refresh</button></div>
+                <div class="toolbar-right"><button type="button" class="btn-outline" id="refreshCharging"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Refresh</button></div>
               </div>
 
               <div class="card">
                 <div class="card-header"><div><h3>Charging Transactions</h3><p class="card-subtitle">View recorded charging activity for plug-in hybrid and electric vehicles.</p></div></div>
                 <div class="table-responsive">
-                  <table class="fleet-table">
-                    <thead><tr><th>Vehicle</th><th>Powertrain</th><th>Driver</th><th>Date / Time</th><th>Battery Before</th><th>Battery After</th><th>Energy Added</th><th>Charging Location</th><th>Cost</th><th>Actions</th></tr></thead>
+                  <table class="fleet-table" aria-label="Vehicle charging transactions">
+                    <thead><tr><th>Vehicle</th><th>Powertrain</th><th>Driver</th><th>Date / Time</th><th class="numeric-cell">Battery Before</th><th class="numeric-cell">Battery After</th><th class="numeric-cell">Energy Added</th><th>Charging Location</th><th class="numeric-cell">Cost</th><th>Actions</th></tr></thead>
                     <tbody id="chargingTableBody"><tr class="helper-row"><td colspan="10">Loading charging transactions...</td></tr></tbody>
                   </table>
                 </div>

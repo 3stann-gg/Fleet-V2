@@ -20,7 +20,7 @@
         id="closeViewFuelModal"
         aria-label="Close fuel details"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
@@ -45,6 +45,10 @@
       </div>
 
       <div class="view-fuel-details">
+        <div class="detail-section-heading">
+          <h3>Transaction &amp; Vehicle</h3>
+        </div>
+
         <div class="view-fuel-detail-item">
           <label>Refueling Date</label>
           <p id="viewFuelDate"></p>
@@ -61,6 +65,11 @@
           <label>Driver</label>
           <p id="viewFuelDriver"></p>
         </div>
+
+        <div class="detail-section-heading">
+          <h3>Fuel, Cost &amp; Odometer</h3>
+        </div>
+
         <div class="view-fuel-detail-item">
           <label>Quantity</label>
           <p id="viewFuelQuantity"></p>
@@ -73,6 +82,11 @@
           <label>Odometer</label>
           <p id="viewFuelOdometer"></p>
         </div>
+
+        <div class="detail-section-heading">
+          <h3>Station &amp; Transaction Reference</h3>
+        </div>
+
         <div class="view-fuel-detail-item">
           <label>Fuel Station</label>
           <p id="viewFuelStation"></p>
@@ -87,6 +101,10 @@
         </div>
       </div>
 
+      <div class="detail-section-heading detail-section-heading--standalone">
+        <h3>Additional Information</h3>
+      </div>
+
       <div class="view-fuel-notes">
         <label>Notes</label>
         <p id="viewFuelNotes"></p>
@@ -97,7 +115,7 @@
       <button type="button" class="btn-outline" id="closeViewFuelBtn">Close</button>
       @if($fuelPermissions['canUpdate'] ?? false)
         <button type="button" class="btn-primary" id="editFuelFromViewBtn">
-          <i class="ph ph-pencil-simple"></i>
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
           Edit Fuel Record
         </button>
       @endif

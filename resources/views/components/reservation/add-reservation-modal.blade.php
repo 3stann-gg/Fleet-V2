@@ -4,6 +4,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="addReservationModalTitle"
+    aria-describedby="addReservationModalDescription"
 >
     <div class="custom-modal">
 
@@ -13,7 +14,7 @@
                 <h2 id="addReservationModalTitle">
                     Request New Reservation
                 </h2>
-                <p>
+                <p id="addReservationModalDescription">
                     Create a hospital transport reservation request.
                 </p>
             </div>
@@ -24,18 +25,22 @@
                 id="closeAddReservationModal"
                 aria-label="Close add reservation modal"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
-        <!-- Body -->
-        <div class="modal-body">
-
-            <form
-                id="reservationForm"
-                class="reservation-form"
-            >
+        <form
+            id="reservationForm"
+            class="reservation-form operational-modal-form"
+        >
+            <!-- Body -->
+            <div class="modal-body">
                 <div class="form-grid">
+
+                    <div class="form-section-heading">
+                        <h3>Request Information</h3>
+                        <p>Identify the request and the patient or transport subject.</p>
+                    </div>
 
                     <!-- Reservation Number -->
                     <div class="form-group">
@@ -114,6 +119,11 @@
                         </small>
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Assignment</h3>
+                        <p>Select the available vehicle and its assigned driver.</p>
+                    </div>
+
                     <!-- Vehicle -->
                     <div class="form-group">
                         <label for="reservationVehicle">
@@ -153,6 +163,11 @@
                         <small class="form-hint">
                             Driver is based on the selected vehicle.
                         </small>
+                    </div>
+
+                    <div class="form-section-heading">
+                        <h3>Origin &amp; Destination</h3>
+                        <p>Confirm the pickup and destination locations.</p>
                     </div>
 
                     <!-- Pickup Location -->
@@ -336,6 +351,11 @@
                         </small>
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Schedule &amp; Priority</h3>
+                        <p>Set the requested transport time and operational priority.</p>
+                    </div>
+
                     <!-- Schedule Date -->
                     <div class="form-group">
                         <label for="reservationDate">
@@ -415,6 +435,11 @@
                         </small>
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Transport Requirements</h3>
+                        <p>Record required capabilities and the request status.</p>
+                    </div>
+
                     <!-- Status -->
                     <div class="form-group full-width">
                         <label>Required Vehicle Capabilities</label>
@@ -451,6 +476,11 @@
                         </small>
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Contact &amp; Notes</h3>
+                        <p>Add coordination details and any additional instructions.</p>
+                    </div>
+
                     <!-- Contact Number -->
                     <div class="form-group">
                         <label for="reservationContact">
@@ -479,9 +509,10 @@
                     </div>
 
                 </div>
+            </div>
 
-                <!-- Footer -->
-                <div class="modal-footer">
+            <!-- Footer -->
+            <div class="modal-footer">
 
                     <button
                         type="button"
@@ -499,10 +530,7 @@
                         Save Reservation
                     </button>
 
-                </div>
-
-            </form>
-
-        </div>
+            </div>
+        </form>
     </div>
 </div>

@@ -20,13 +20,18 @@
         id="closeEditFuelModal"
         aria-label="Close edit fuel modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="editFuelForm">
+    <form id="editFuelForm" class="operational-modal-form">
+      <div class="modal-body">
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Transaction &amp; Vehicle</h3>
+            <p>Review the refueling event, fleet vehicle, and assigned driver.</p>
+          </div>
+
           <div class="form-group">
             <label for="editFuelNumber">Fuel Record Number *</label>
             <input type="text" id="editFuelNumber" readonly />
@@ -86,6 +91,11 @@
             />
           </div>
 
+          <div class="form-section-heading">
+            <h3>Fuel Details</h3>
+            <p>Review the liquid-fuel type and recorded quantity in liters.</p>
+          </div>
+
           <div class="form-group">
             <label for="editFuelType">Fuel Type *</label>
             <select id="editFuelType" disabled required>
@@ -99,6 +109,11 @@
           <div class="form-group">
             <label for="editFuelQuantity">Quantity (Liters) *</label>
             <input type="number" id="editFuelQuantity" min="0.01" step="0.01" readonly />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Cost &amp; Odometer</h3>
+            <p>Maintain unit cost while preserving calculated and mileage values.</p>
           </div>
 
           <div class="form-group">
@@ -119,6 +134,11 @@
           <div class="form-group">
             <label for="editFuelOdometer">Odometer Reading *</label>
             <input type="number" id="editFuelOdometer" min="0" step="1" readonly />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Station &amp; Transaction Reference</h3>
+            <p>Update the source, receipt, and payment information.</p>
           </div>
 
           <div class="form-group">
@@ -147,17 +167,21 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Additional Information</h3>
+          </div>
+
           <div class="form-group full-width">
             <label for="editFuelNotes">Notes</label>
             <textarea id="editFuelNotes" rows="3"></textarea>
           </div>
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelEditFuel">Cancel</button>
           <button type="submit" class="btn-primary" id="updateFuelBtn">Update Fuel Record</button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

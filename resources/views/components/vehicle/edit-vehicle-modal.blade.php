@@ -4,12 +4,13 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="editVehicleModalTitle"
+  aria-describedby="editVehicleModalDescription"
 >
   <div class="custom-modal">
     <div class="modal-header">
       <div>
         <h2 id="editVehicleModalTitle">Edit Vehicle</h2>
-        <p>Update vehicle information.</p>
+        <p id="editVehicleModalDescription">Update vehicle information.</p>
       </div>
 
       <button
@@ -18,18 +19,22 @@
         id="closeEditVehicleModal"
         aria-label="Close edit vehicle dialog"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form
-          class="vehicle-form"
-          id="editVehicleForm"
-          data-id=""
-      >
+    <form
+        class="vehicle-form"
+        id="editVehicleForm"
+        data-id=""
+    >
+      <div class="modal-body">
+        <p class="form-required-note"><span class="required" aria-hidden="true">*</span> Required field</p>
         <input type="hidden" id="editVehicleId">
         <div class="form-grid">
+          <div class="vehicle-form-section-title full-width">
+            <span>Vehicle Information</span>
+          </div>
           <!--
           <div class="form-group">
               <label for="editVehicleBrand">Brand</label>
@@ -57,7 +62,7 @@
           <div class="form-group">
             <label for="editVehiclePlate">
                 Plate Number
-                <span id="editVehiclePlateRequiredMark">*</span>
+                <span id="editVehiclePlateRequiredMark" class="required" aria-hidden="true">*</span>
             </label>
             <input
               type="text"
@@ -69,7 +74,7 @@
           </div>
 
           <div class="form-group">
-            <label for="editVehicleType">Vehicle Type</label>
+            <label for="editVehicleType">Vehicle Type <span class="required" aria-hidden="true">*</span></label>
             <select id="editVehicleType" name="vehicle_type" required>
               <option value="">Select Vehicle Type</option>
               <option>Ambulance</option>
@@ -96,6 +101,8 @@
                   Department
                   <span
                       id="editVehicleDepartmentRequiredMark"
+                      class="required"
+                      aria-hidden="true"
                       hidden
                   >*</span>
               </label>
@@ -114,7 +121,7 @@
           </div>
         
           <div class="form-group">
-              <label for="editVehicleCapacity">Capacity</label>
+              <label for="editVehicleCapacity">Capacity <span class="required" aria-hidden="true">*</span></label>
 
               <input
                   type="number"
@@ -132,12 +139,12 @@
             </select>
           </div>
 
-          <div class="vehicle-energy-section-title full-width">
-            <span>Power / Energy Information</span>
+          <div class="vehicle-form-section-title full-width">
+            <span>Powertrain &amp; Energy</span>
           </div>
 
           <div class="form-group">
-            <label for="editVehiclePowertrain">Powertrain Type *</label>
+            <label for="editVehiclePowertrain">Powertrain Type <span class="required" aria-hidden="true">*</span></label>
             <select id="editVehiclePowertrain" name="powertrain_type" required>
               <option value="">Select Powertrain Type</option>
               <option value="gasoline">Gasoline</option>
@@ -213,6 +220,10 @@
             />
           </div>-->
 
+          <div class="vehicle-form-section-title full-width">
+            <span>Operational Information</span>
+          </div>
+
           <div class="form-group">
             <label for="editVehicleMileage">Current Mileage</label>
             <input
@@ -224,7 +235,7 @@
           </div>
 
           <div class="form-group">
-            <label for="editVehicleStatus">Status</label>
+            <label for="editVehicleStatus">Status <span class="required" aria-hidden="true">*</span></label>
             <select id="editVehicleStatus" name="status" required>
               <option value="">Select Status</option>
               <option>Available</option>
@@ -248,11 +259,6 @@
             </select>
           </div>
 
-          <div class="form-group" data-motorcycle-field data-motorcycle-engine-field>
-            <label for="editVehicleEngineDisplacement">Engine Displacement (cc)</label>
-            <input type="number" id="editVehicleEngineDisplacement" min="0" step="1" />
-          </div>
-
           <div class="form-group">
             <label for="editVehicleTransmissionType">Transmission</label>
             <select id="editVehicleTransmissionType">
@@ -261,6 +267,15 @@
               <option value="manual">Manual</option>
               <option value="semi_automatic">Semi-Automatic</option>
             </select>
+          </div>
+
+          <div class="vehicle-form-section-title full-width" data-motorcycle-field>
+            <span>Motorcycle Details</span>
+          </div>
+
+          <div class="form-group" data-motorcycle-field data-motorcycle-engine-field>
+            <label for="editVehicleEngineDisplacement">Engine Displacement (cc)</label>
+            <input type="number" id="editVehicleEngineDisplacement" min="0" step="1" />
           </div>
 
           <div class="form-group" data-motorcycle-field>
@@ -291,12 +306,20 @@
             <input type="date" id="editVehicleRegistrationExpiry" />
           </div>
 
+          <div class="vehicle-form-section-title full-width">
+            <span>Capabilities</span>
+          </div>
+
           <div class="form-group full-width">
             <label>Vehicle Capabilities</label>
             <div id="editVehicleCapabilities" class="checklist-options">
               <span class="form-hint">Loading capabilities...</span>
             </div>
           </div>
+        </div>
+
+        <div class="vehicle-form-section-title">
+          <span>Notes &amp; Additional Details</span>
         </div>
 
         <div class="form-group">
@@ -310,17 +333,18 @@
           ></textarea>
         </div>
 
-        <div class="modal-footer">
+      </div>
+
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelEditVehicle">
             Cancel
           </button>
 
           <button type="submit" id="updateVehicleBtn" class="btn-primary">
-            <i class="ph ph-floppy-disk"></i>
+            <i class="ph ph-floppy-disk" aria-hidden="true"></i>
             Update Vehicle
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

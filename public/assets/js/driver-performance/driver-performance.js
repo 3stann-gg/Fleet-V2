@@ -366,11 +366,11 @@
             </td>
             <td>${escapeHtml(record.driver_number || "—")}</td>
             <td>${escapeHtml(record.assigned_vehicle || "Unassigned")}</td>
-            <td>${formatNumber(record.completed_trips)}</td>
-            <td>${formatNumber(record.cancelled_trips)}</td>
-            <td>${formatNumber(record.total_distance, 2)} km</td>
-            <td>${formatNumber(record.fuel_used, 2)} L</td>
-            <td>${formatNumber(record.electricity_used, 2)} kWh</td>
+            <td class="numeric-cell">${formatNumber(record.completed_trips)}</td>
+            <td class="numeric-cell">${formatNumber(record.cancelled_trips)}</td>
+            <td class="numeric-cell">${formatNumber(record.total_distance, 2)} km</td>
+            <td class="numeric-cell">${formatNumber(record.fuel_used, 2)} L</td>
+            <td class="numeric-cell">${formatNumber(record.electricity_used, 2)} kWh</td>
             <td>
               <span class="status-badge ${performanceClass(record.performance_level)}">
                 ${escapeHtml(record.performance_level)}
@@ -384,7 +384,7 @@
                 title="View Details"
                 aria-label="View performance details for ${escapeHtml(record.name)}"
               >
-                <i class="ph ph-eye"></i>
+                <i class="ph ph-eye" aria-hidden="true"></i>
                 View Details
               </button>
             </td>
@@ -440,6 +440,10 @@
       button.textContent = label;
       button.disabled = options.disabled === true;
 
+      if (options.ariaLabel) {
+        button.setAttribute("aria-label", options.ariaLabel);
+      }
+
       if (options.active) {
         button.classList.add("active");
         button.setAttribute("aria-current", "page");
@@ -455,6 +459,7 @@
 
     addButton("‹", Math.max(1, state.currentPage - 1), {
       disabled: state.currentPage === 1,
+      ariaLabel: "Previous page",
     });
 
     for (let page = 1; page <= totalPages; page += 1) {
@@ -463,6 +468,7 @@
 
     addButton("›", Math.min(totalPages, state.currentPage + 1), {
       disabled: state.currentPage === totalPages,
+      ariaLabel: "Next page",
     });
   }
 
@@ -617,7 +623,7 @@
     if (tableBody) {
       tableBody.innerHTML = `
         <tr class="helper-row">
-          <td colspan="9">Loading driver performance records...</td>
+          <td colspan="10">Loading driver performance records...</td>
         </tr>
       `;
     }

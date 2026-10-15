@@ -4,6 +4,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="requestReassignmentModalTitle"
+    aria-describedby="requestReassignmentModalDescription"
     hidden
 >
     <div class="custom-modal">
@@ -14,7 +15,7 @@
                     Request Reassignment
                 </h2>
 
-                <p>
+                <p id="requestReassignmentModalDescription">
                     Provide a reason for requesting a different driver.
                 </p>
             </div>
@@ -25,13 +26,12 @@
                 id="closeRequestReassignmentModal"
                 aria-label="Close modal"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
-        <div class="modal-body">
-
-            <form id="requestReassignmentForm">
+        <form id="requestReassignmentForm" class="operational-modal-form">
+            <div class="modal-body">
 
                 <input
                     type="hidden"
@@ -57,7 +57,9 @@
                     </small>
                 </div>
 
-                <div class="modal-footer">
+            </div>
+
+            <div class="modal-footer">
 
                     <button
                         type="button"
@@ -76,11 +78,8 @@
                         Submit Request
                     </button>
 
-                </div>
-
-            </form>
-
-        </div>
+            </div>
+        </form>
     </div>
 </div>
 

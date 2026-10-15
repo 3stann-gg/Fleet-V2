@@ -96,7 +96,8 @@ function startReservationLiveUpdates() {
 function getReservationPriorityClass(priority) {
     if (["emergency", "Emergency"].includes(priority)) return "status-chip--danger";
     if (["urgent", "High"].includes(priority)) return "status-chip--warning";
-    return "status-chip--info";
+    if (["routine", "Normal"].includes(priority)) return "status-chip--info";
+    return "status-chip--neutral";
 }
 
 function getReservationStatusClass(status) {
@@ -106,7 +107,7 @@ function getReservationStatusClass(status) {
         .replace(/[\s-]+/g, "");
 
     if (value === "pending") return "pending";
-    if (value === "approved") return "trip";
+    if (value === "approved") return "approved";
     if (value === "scheduled") return "scheduled";
     if (value === "completed") return "completed";
     if (value === "rejected") return "rejected";
@@ -334,7 +335,7 @@ function renderReservationTable(reservations) {
                             data-id="${reservation.id}"
                             aria-label="View ${reservation.reservation_number}"
                         >
-                            <i class="ph ph-eye"></i>
+                            <i class="ph ph-eye" aria-hidden="true"></i>
                         </button>
                         ${
                             canEditThisReservation && !reservation.archived_at
@@ -345,7 +346,7 @@ function renderReservationTable(reservations) {
                                         data-id="${reservation.id}"
                                         aria-label="Edit ${reservation.reservation_number}"
                                     >
-                                        <i class="ph ph-pencil-simple"></i>
+                                        <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -364,7 +365,7 @@ function renderReservationTable(reservations) {
                                         aria-label="Approve ${reservation.reservation_number}"
                                         title="Approve Reservation"
                                     >
-                                        <i class="ph ph-check"></i>
+                                        <i class="ph ph-check" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -383,7 +384,7 @@ function renderReservationTable(reservations) {
                                         aria-label="Reject ${reservation.reservation_number}"
                                         title="Reject Reservation"
                                     >
-                                        <i class="ph ph-x"></i>
+                                        <i class="ph ph-x" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -400,7 +401,7 @@ function renderReservationTable(reservations) {
                                         aria-label="Archive ${reservation.reservation_number}"
                                         title="Archive"
                                     >
-                                        <i class="ph ph-archive"></i>
+                                        <i class="ph ph-archive" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -415,7 +416,7 @@ function renderReservationTable(reservations) {
                                         aria-label="Restore ${reservation.reservation_number}"
                                         title="Restore"
                                     >
-                                        <i class="ph ph-arrow-counter-clockwise"></i>
+                                        <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""

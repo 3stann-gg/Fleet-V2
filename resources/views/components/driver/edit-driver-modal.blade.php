@@ -20,13 +20,18 @@
         id="closeEditDriverModal"
         aria-label="Close Edit Driver modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="editDriverForm" class="driver-form vehicle-form">
+    <form id="editDriverForm" class="driver-form vehicle-form operational-modal-form">
+      <div class="modal-body">
         @csrf
+        <div class="form-section-heading form-section-heading--outside-grid">
+          <h3>Formal Photo</h3>
+          <p>Keep the current photo or choose a replacement.</p>
+        </div>
+
         <div class="vehicle-image-section">
           <label class="vehicle-image-label" for="editDriverImage">
             Driver Photo
@@ -55,6 +60,11 @@
         </div>
 
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Basic Information</h3>
+            <p>Review the driver's identity and employment record.</p>
+          </div>
+
           <div class="form-group">
             <label for="editDriverFirstName">First Name *</label>
             <input
@@ -82,6 +92,11 @@
                 id="editDriverEmployeeId"
                 readonly
             >
+          </div>
+
+          <div class="form-section-heading">
+            <h3>License &amp; LTO</h3>
+            <p>Maintain legal license details, DL codes, and clutch authorization.</p>
           </div>
 
           <div class="form-group">
@@ -138,6 +153,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Contact Information</h3>
+            <p>Maintain current contact details for operational coordination.</p>
+          </div>
+
           <div class="form-group">
             <label for="editDriverPhone">Phone Number *</label>
             <input
@@ -156,6 +176,11 @@
           <div class="form-group">
             <label for="editDriverEmail">Email *</label>
             <input type="email" id="editDriverEmail" />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Status &amp; Availability</h3>
+            <p>Update the current assignment, experience, and availability.</p>
           </div>
 
           <div class="form-group">
@@ -187,6 +212,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Hospital Qualifications</h3>
+            <p>Maintain internal vehicle-type authorization separately from LTO credentials.</p>
+          </div>
+
           <div class="form-group full-width">
             <label>Authorized Vehicle Types</label>
             <div class="checklist-options" id="editDriverQualificationOptions">
@@ -198,6 +228,11 @@
               @endforeach
             </div>
             <small class="form-hint">Leave blank when qualification information is unavailable.</small>
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Additional Information</h3>
+            <p>Update address, emergency contact, and relevant notes.</p>
           </div>
 
           <div class="form-group full-width">
@@ -215,8 +250,9 @@
             <textarea id="editDriverNotes" name="notes" rows="4"></textarea>
           </div>
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelEditDriver">
             Cancel
           </button>
@@ -225,8 +261,7 @@
             <i class="ph ph-floppy-disk"></i>
             Update Driver
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

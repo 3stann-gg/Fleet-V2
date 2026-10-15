@@ -56,19 +56,19 @@
 /* Primary */
 .btn-primary {
   border: none;
-  background: var(--color-primary);
+  background: var(--btn-primary-bg);
   color: var(--color-text-inverse);
   box-shadow: var(--shadow-xs);
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-hover);
   box-shadow: var(--shadow-primary);
   color: var(--color-text-inverse);
 }
 
 .btn-primary:active {
-  background: var(--color-primary-active, var(--color-primary-dark));
+  background: var(--btn-primary-active);
   box-shadow: none;
 }
 
@@ -151,14 +151,14 @@
 
 /* Success */
 .btn-success {
-  background: var(--color-success);
+  background: var(--btn-primary-bg);
   color: var(--color-text-inverse);
   border: none;
   box-shadow: var(--shadow-xs);
 }
 
 .btn-success:hover {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-hover);
   color: var(--color-text-inverse);
 }
 
@@ -236,7 +236,7 @@
   padding: 0 12px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  background: var(--btn-primary-bg);
   color: var(--color-text-inverse);
   font-family: var(--font-family);
   font-size: var(--font-size-meta);
@@ -246,7 +246,7 @@
 }
 
 .table-btn:hover {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-hover);
 }
 
 .table-btn:focus-visible {

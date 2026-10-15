@@ -172,7 +172,7 @@
             return;
         }
 
-        window.alert(message);
+        console.error(message);
     }
 
     /*

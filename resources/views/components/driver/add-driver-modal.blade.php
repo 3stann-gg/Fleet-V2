@@ -23,13 +23,18 @@
         id="closeAddDriverModal"
         aria-label="Close Add Driver modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="modal-body">
-      <form id="driverForm" class="driver-form vehicle-form">
+    <form id="driverForm" class="driver-form vehicle-form operational-modal-form">
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="form-section-heading form-section-heading--outside-grid">
+          <h3>Formal Photo</h3>
+          <p>Add the driver's official profile photo.</p>
+        </div>
+
         <!-- Driver Photo -->
         <div class="vehicle-image-section">
           <label class="vehicle-image-label" for="driverImage">
@@ -59,6 +64,11 @@
         </div>
 
           <div class="form-grid">
+            <div class="form-section-heading">
+              <h3>Basic Information</h3>
+              <p>Enter the driver's identity and employment record.</p>
+            </div>
+
             <div class="form-group">
               <label for="driverFirstName">First Name *</label>
               <input
@@ -77,6 +87,11 @@
                   name="last_name"
                   required
               >
+          </div>
+
+          <div class="form-section-heading">
+            <h3>License &amp; LTO</h3>
+            <p>Record legal license details, DL codes, and clutch authorization.</p>
           </div>
 
           <div class="form-group">
@@ -139,6 +154,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Contact Information</h3>
+            <p>Add current contact details for operational coordination.</p>
+          </div>
+
           <div class="form-group">
             <label for="driverPhone">Phone Number *</label>
             <input
@@ -157,6 +177,11 @@
                 name="email"
                 required
             />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Status &amp; Availability</h3>
+            <p>Set the current assignment, experience, and availability.</p>
           </div>
 
           <div class="form-group">
@@ -189,6 +214,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Hospital Qualifications</h3>
+            <p>Record internally authorized vehicle types separately from LTO credentials.</p>
+          </div>
+
           <div class="form-group full-width">
             <label>Authorized Vehicle Types</label>
             <div class="checklist-options" id="driverQualificationOptions">
@@ -200,6 +230,11 @@
               @endforeach
             </div>
             <small class="form-hint">Leave blank when qualification information is unavailable.</small>
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Additional Information</h3>
+            <p>Add address, emergency contact, and relevant notes.</p>
           </div>
 
           <div class="form-group full-width">
@@ -225,8 +260,9 @@
             <textarea id="driverNotes" name="notes" rows="4"></textarea>
           </div>
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelAddDriver">
             Cancel
           </button>
@@ -235,8 +271,7 @@
             <i class="ph ph-floppy-disk"></i>
             Save Driver
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

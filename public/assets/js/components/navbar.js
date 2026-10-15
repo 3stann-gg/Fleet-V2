@@ -40,8 +40,16 @@ function fleetNavModuleFromUrl(url) {
         return "dispatch";
     }
 
+    if (pathname.startsWith("/driver-performance")) {
+        return "driverPerformance";
+    }
+
     if (pathname.startsWith("/driver")) {
         return "drivers";
+    }
+
+    if (pathname.startsWith("/traffic-violations")) {
+        return "trafficViolations";
     }
 
     if (pathname.startsWith("/maintenance")) {
@@ -62,6 +70,10 @@ function fleetNavModuleFromUrl(url) {
 
     if (pathname.startsWith("/reports")) {
         return "reports";
+    }
+
+    if (pathname.startsWith("/audit-logs")) {
+        return "auditLogs";
     }
 
     if (pathname.startsWith("/settings")) {
@@ -118,11 +130,14 @@ const FLEET_NAV_ROUTES = {
     reservations: "/reservation",
     dispatch: "/dispatch",
     drivers: "/driver",
+    driverPerformance: "/driver-performance",
+    trafficViolations: "/traffic-violations",
     maintenance: "/maintenance",
     fuel: "/fuel",
     routes: "/route-planning",
     cost: "/cost-analysis",
     reports: "/reports",
+    auditLogs: "/audit-logs",
     settings: "/settings",
     dashboard: "/dashboard",
 };

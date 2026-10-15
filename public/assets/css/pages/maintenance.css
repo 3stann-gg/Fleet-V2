@@ -10,6 +10,44 @@
   background: var(--color-primary-soft);
 }
 
+.maintenance-page .toolbar-left {
+  flex: 1 1 720px;
+  flex-wrap: wrap;
+}
+
+.maintenance-page .search-box {
+  flex: 1 1 320px;
+}
+
+.maintenance-page .filter-select {
+  flex: 0 1 190px;
+}
+
+.maintenance-page .maintenance-number,
+.maintenance-page .maintenance-vehicle,
+.maintenance-page .maintenance-service-type {
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.maintenance-page .maintenance-technician,
+.maintenance-page .maintenance-scheduled-date,
+.maintenance-page .maintenance-completion-date {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.maintenance-page .maintenance-cost,
+.maintenance-page .numeric-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.maintenance-page .action-buttons {
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+}
+
 /* ==========================================
    View Maintenance Modal
 ========================================= */
@@ -103,7 +141,7 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-top: 16px;
@@ -154,4 +192,13 @@
   font-weight: 600;
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .maintenance-page .toolbar-left,
+  .maintenance-page .toolbar-right,
+  .maintenance-page .search-box,
+  .maintenance-page .filter-select {
+    width: 100%;
+  }
 }

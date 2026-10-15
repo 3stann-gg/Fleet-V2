@@ -33,7 +33,13 @@
 .status-badge.Available,
 .status-badge.active,
 .status-badge.Active,
-.status.Active {
+.status.Active,
+.status-badge.approved,
+.status-badge.Approved,
+.status-badge.settled,
+.status-badge.Settled,
+.status-badge.compatible,
+.status-badge.Compatible {
   background: var(--color-success-soft);
   color: var(--color-success-text);
 }
@@ -42,7 +48,11 @@
 .status-badge.trip,
 .status-badge.OnTrip,
 .status-badge.ongoing,
-.status-badge.Ongoing {
+.status-badge.Ongoing,
+.status-badge.in-use,
+.status-badge.en-route,
+.status-badge.arrived,
+.status-badge.assigned {
   background: var(--color-info-soft);
   color: var(--color-info-text);
 }
@@ -58,7 +68,11 @@
 
 .status-badge.pending,
 .status-badge.Pending,
-.status.pending {
+.status.pending,
+.status-badge.advisory,
+.status-badge.under-review,
+.status-badge.insufficient-information,
+.status-badge.for-settlement {
   background: var(--color-warning-soft);
   color: var(--color-warning-text);
 }
@@ -73,7 +87,13 @@
 .status-badge.cancelled,
 .status-badge.Cancelled,
 .status-badge.canceled,
-.status.cancelled {
+.status.cancelled,
+.status-badge.rejected,
+.status-badge.Rejected,
+.status-badge.unavailable,
+.status-badge.expired,
+.status-badge.not-compatible,
+.status-badge.not-recommended {
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
 }
@@ -82,7 +102,11 @@
 .status-badge.Inactive,
 .status-badge.offline,
 .status-badge.Offline,
-.status.inactive {
+.status.inactive,
+.status-badge.out,
+.status-badge.closed,
+.status-badge.dismissed,
+.status-badge.not-recorded {
   background: var(--color-surface-secondary);
   color: var(--color-text-muted);
   border-color: var(--color-border);
@@ -154,4 +178,10 @@
   background: var(--color-info-soft);
   border-color: transparent;
   color: var(--color-info-text);
+}
+
+.status-chip--neutral {
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
 }

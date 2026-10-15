@@ -195,6 +195,17 @@ function renderDriverTable(drivers) {
             : Array.isArray(driver.license_codes)
               ? driver.license_codes.map((licenseCode) => licenseCode.code)
               : [];
+        const licenseExpiry = escapeDriverHtml(
+            driver.license_expiry || "Not recorded",
+        );
+        const dlCodeSummary = escapeDriverHtml(
+            dlCodes.length > 0 ? dlCodes.join(", ") : "Not recorded",
+        );
+        const qualificationSummary = escapeDriverHtml(
+            qualifications.length > 0
+                ? qualifications.join(", ")
+                : "Not recorded",
+        );
 
         const vehicleText = driver.vehicle
             ? `${driver.vehicle.brand ?? ""} ${driver.vehicle.model ?? ""} — ${
@@ -288,11 +299,17 @@ function renderDriverTable(drivers) {
                 <!-- License Number -->
                 <td>
                     ${driver.license_number ?? "—"}
+                    <small class="driver-table-meta">
+                        Expires: ${licenseExpiry}
+                    </small>
                 </td>
 
                 <!-- License Class -->
                 <td>
                     ${driver.license_class ?? "—"}
+                    <small class="driver-table-meta">
+                        DL Codes: ${dlCodeSummary}
+                    </small>
                 </td>
 
                 <!-- Assigned Vehicle -->
@@ -315,6 +332,9 @@ function renderDriverTable(drivers) {
                             `
                             : "Unassigned"
                     }
+                    <small class="driver-table-meta">
+                        Hospital qualified: ${qualificationSummary}
+                    </small>
                 </td>
 
                 <!-- Status -->
@@ -341,8 +361,9 @@ function renderDriverTable(drivers) {
                             class="action-btn view"
                             data-id="${driver.id ?? ""}"
                             title="View"
+                            aria-label="View ${escapeDriverHtml(fullName || driver.driver_number || "driver")}"
                         >
-                            <i class="ph ph-eye"></i>
+                            <i class="ph ph-eye" aria-hidden="true"></i>
                         </button>
 
                         ${
@@ -354,8 +375,9 @@ function renderDriverTable(drivers) {
                                         class="action-btn edit"
                                         data-id="${driver.id ?? ""}"
                                         title="Edit"
+                                        aria-label="Edit ${escapeDriverHtml(fullName || driver.driver_number || "driver")}"
                                     >
-                                        <i class="ph ph-pencil-simple"></i>
+                                        <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -370,8 +392,9 @@ function renderDriverTable(drivers) {
                                         class="action-btn archive"
                                         data-id="${driver.id ?? ""}"
                                         title="Archive"
+                                        aria-label="Archive ${escapeDriverHtml(fullName || driver.driver_number || "driver")}"
                                     >
-                                        <i class="ph ph-archive"></i>
+                                        <i class="ph ph-archive" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""
@@ -386,8 +409,9 @@ function renderDriverTable(drivers) {
                                         class="action-btn restore"
                                         data-id="${driver.id ?? ""}"
                                         title="Restore"
+                                        aria-label="Restore ${escapeDriverHtml(fullName || driver.driver_number || "driver")}"
                                     >
-                                        <i class="ph ph-arrow-counter-clockwise"></i>
+                                        <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                     </button>
                                 `
                                 : ""

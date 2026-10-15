@@ -559,12 +559,16 @@
                 >
                     <div class="card-header">
                         <div>
+                            <span class="profile-section-label">
+                                Security
+                            </span>
+
                             <h3 id="accountHeading">
-                                Account Information
+                                Account &amp; Security Information
                             </h3>
 
                             <p class="card-subtitle">
-                                Read-only information for your authenticated account.
+                                Review your access details and manage your account security.
                             </p>
                         </div>
 
@@ -614,7 +618,9 @@
                             </label>
 
                             <p id="profileAccountRole">
-                                {{ $roleLabel }}
+                                <span class="status-chip status-chip--neutral">
+                                    {{ $roleLabel }}
+                                </span>
                             </p>
                         </div>
 
@@ -624,7 +630,9 @@
                             </label>
 
                             <p id="profileAccountStatus">
-                                {{ $statusLabel }}
+                                <span class="status-badge {{ $user->status === 'active' ? 'active' : 'inactive' }}">
+                                    {{ $statusLabel }}
+                                </span>
                             </p>
                         </div>
 
@@ -661,7 +669,7 @@
                     <div class="profile-action-meta">
 
                         <span id="profileDirtyHint">
-                            All changes saved
+                            Profile information is saved
                         </span>
 
                         <span
@@ -696,7 +704,7 @@
                                 aria-hidden="true"
                             ></i>
 
-                            Save Changes
+                            Save Profile Information
                         </button>
 
                     </div>

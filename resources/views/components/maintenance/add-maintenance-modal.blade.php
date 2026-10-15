@@ -21,13 +21,18 @@
         id="closeAddMaintenanceModal"
         aria-label="Close add maintenance modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <div class="modal-body">
-      <form id="maintenanceForm">
+    <form id="maintenanceForm" class="operational-modal-form">
+      <div class="modal-body">
         <div class="form-grid">
+
+          <div class="form-section-heading">
+            <h3>Vehicle &amp; Service</h3>
+            <p>Identify the fleet vehicle and requested maintenance work.</p>
+          </div>
 
           <!-- Maintenance Number -->
           <div class="form-group">
@@ -113,6 +118,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Schedule &amp; Completion</h3>
+            <p>Set the planned service date and record completion when applicable.</p>
+          </div>
+
           <!-- Scheduled Date -->
           <div class="form-group">
             <label for="maintenanceScheduledDate">
@@ -136,6 +146,11 @@
               type="date"
               id="maintenanceCompletionDate"
             />
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Cost, Priority &amp; Status</h3>
+            <p>Record the approved cost and current maintenance state.</p>
           </div>
 
           <!-- Cost -->
@@ -213,6 +228,11 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Odometer &amp; Service Details</h3>
+            <p>Capture mileage and the work, parts, and notes associated with this record.</p>
+          </div>
+
           <!-- Odometer -->
           <div class="form-group">
             <label for="maintenanceOdometer">
@@ -268,8 +288,9 @@
           </div>
 
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button
             type="button"
             class="btn-outline"
@@ -285,8 +306,7 @@
           >
             Save Maintenance
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

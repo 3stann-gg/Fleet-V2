@@ -19,6 +19,13 @@
               </div>
             </div>
 
+            <section class="reports-control-panel" aria-labelledby="reportsConfigurationHeading">
+              <div class="reports-control-heading">
+                <div>
+                  <h2 id="reportsConfigurationHeading">Report Configuration</h2>
+                  <p>Choose the report type, reporting period, and operational scope.</p>
+                </div>
+              </div>
             <div class="toolbar reports-filter-bar">
               <div class="toolbar-left reports-filter-grid">
                 <select
@@ -85,11 +92,12 @@
 
               <div class="toolbar-right">
                 <button type="button" class="btn-outline" id="refreshReports">
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
             </div>
+            </section>
 
             <div class="reports-presets-bar" aria-label="Report presets">
               <input
@@ -144,11 +152,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon">
-                        <i class="ph-fill ph-car"></i>
+                        <i class="ph-fill ph-car" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiTotalVehicles">0</h3>
                         <p>Total Vehicles</p>
+                        <span class="stat-helper">Fleet records in scope</span>
                     </div>
                 @if(auth()->user()->canViewModule('vehicles'))
                     </a>
@@ -165,11 +174,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon success">
-                        <i class="ph-fill ph-check-circle"></i>
+                        <i class="ph-fill ph-check-circle" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiAvailableVehicles">0</h3>
                         <p>Available Vehicles</p>
+                        <span class="stat-helper">Currently available</span>
                     </div>
                 @if(auth()->user()->canViewModule('vehicles'))
                     </a>
@@ -186,11 +196,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon">
-                        <i class="ph-fill ph-truck"></i>
+                        <i class="ph-fill ph-truck" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiCompletedTrips">0</h3>
                         <p>Completed Trips</p>
+                        <span class="stat-helper">Selected reporting period</span>
                     </div>
                 @if(auth()->user()->canViewModule('dispatch'))
                     </a>
@@ -207,11 +218,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon warning">
-                        <i class="ph-fill ph-calendar-check"></i>
+                        <i class="ph-fill ph-calendar-check" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiActiveReservations">0</h3>
                         <p>Active Reservations</p>
+                        <span class="stat-helper">Current reservation activity</span>
                     </div>
                 @if(auth()->user()->canViewModule('reservations'))
                     </a>
@@ -228,11 +240,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon">
-                        <i class="ph-fill ph-wrench"></i>
+                        <i class="ph-fill ph-wrench" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiMaintenanceCost">₱0.00</h3>
                         <p>Maintenance Cost</p>
+                        <span class="stat-helper">Selected reporting period</span>
                     </div>
                 @if(auth()->user()->canViewModule('maintenance'))
                     </a>
@@ -249,11 +262,12 @@
                     <div class="stat-card">
                 @endif
                     <div class="stat-icon">
-                        <i class="ph-fill ph-gas-pump"></i>
+                        <i class="ph-fill ph-gas-pump" aria-hidden="true"></i>
                     </div>
                     <div class="stat-content">
                         <h3 id="kpiFuelCost">₱0.00</h3>
                         <p>Fuel Cost</p>
+                        <span class="stat-helper">Selected reporting period</span>
                     </div>
                 @if(auth()->user()->canViewModule('fuel'))
                     </a>
@@ -358,8 +372,8 @@
                   <div class="report-chart-body">
                     <div class="report-bars"></div>
                     <div class="report-chart-key">
-                      <span><i style="background:#00a86b"></i> Fuel</span>
-                      <span><i style="background:#3b82f6"></i> Maintenance</span>
+                      <span><i style="background:#00a86b" aria-hidden="true"></i> Fuel</span>
+                      <span><i style="background:#3b82f6" aria-hidden="true"></i> Maintenance</span>
                     </div>
                   </div>
                 </div>
@@ -503,7 +517,7 @@
             </div>
 
             <!-- Shared summary table -->
-            <div class="card">
+            <div class="card reports-results-card">
               <div class="card-header">
                 <div>
                   <h3>Summary Report</h3>
@@ -517,7 +531,7 @@
               <div class="toolbar reports-table-toolbar">
                 <div class="toolbar-left">
                   <div class="search-box">
-                    <i class="ph ph-magnifying-glass"></i>
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
                     <input
                       type="text"
                       id="reportsTableSearch"
@@ -543,7 +557,7 @@
               </div>
 
               <div class="table-responsive">
-                <table class="fleet-table" id="reportsSummaryTable">
+                <table class="fleet-table" id="reportsSummaryTable" aria-label="Report result summary">
                   <thead id="reportsTableHead"></thead>
                   <tbody id="reportsTableBody"></tbody>
                 </table>
@@ -556,11 +570,11 @@
               </div>
               <div class="pagination" id="reportsTablePagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

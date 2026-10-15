@@ -22,7 +22,7 @@
         id="closeViewMaintenanceModal"
         aria-label="Close maintenance details"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
@@ -50,6 +50,10 @@
       </div>
 
       <div class="view-maintenance-details">
+        <div class="detail-section-heading">
+          <h3>Service Details</h3>
+        </div>
+
         <div class="view-maintenance-detail-item">
           <label>Service Type</label>
           <p id="viewMaintenanceServiceType"></p>
@@ -63,6 +67,10 @@
         <div class="view-maintenance-detail-item">
           <label>Technician / Workshop</label>
           <p id="viewMaintenanceTechnician"></p>
+        </div>
+
+        <div class="detail-section-heading">
+          <h3>Schedule, Cost &amp; Odometer</h3>
         </div>
 
         <div class="view-maintenance-detail-item">
@@ -84,6 +92,10 @@
           <label>Odometer Reading</label>
           <p id="viewMaintenanceOdometer"></p>
         </div>
+      </div>
+
+      <div class="detail-section-heading detail-section-heading--standalone">
+        <h3>Service Information &amp; Notes</h3>
       </div>
 
       <div class="view-maintenance-notes">
@@ -109,7 +121,7 @@
               class="btn-primary"
               id="editMaintenanceFromViewBtn"
           >
-              <i class="ph ph-pencil-simple"></i>
+              <i class="ph ph-pencil-simple" aria-hidden="true"></i>
               Edit Maintenance
           </button>
       @endif

@@ -14,6 +14,58 @@
   overflow-x: auto;
 }
 
+.driver-performance-page .stat-helper {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.driver-performance-page .numeric-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.driver-performance-page .analytics-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.driver-performance-page .analytics-card-header h4,
+.driver-performance-page .analytics-card-header .card-subtitle {
+  margin-top: 0;
+}
+
+.driver-performance-page .analytics-unit {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+}
+
+.driver-performance-page .report-chart-body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.driver-performance-page .report-chart-empty {
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.driver-performance-page .report-chart-empty:not([hidden]) {
+  display: flex;
+}
+
 .driver-performance-driver {
   display: flex;
   align-items: center;
@@ -117,6 +169,17 @@
   font-weight: var(--font-semibold);
 }
 
+#viewDriverPerformanceModal .driver-performance-summary-group {
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .driver-performance-recent-table {
   min-width: 720px;
 }
@@ -127,9 +190,29 @@
   white-space: normal;
 }
 
+#viewDriverPerformanceModal .driver-performance-modal {
+  max-height: min(90vh, 900px);
+  overflow: hidden;
+}
+
+#viewDriverPerformanceModal .driver-performance-profile {
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
 @media (max-width: 767px) {
   .driver-performance-modal {
     max-height: calc(100vh - 20px);
+  }
+
+  #viewDriverPerformanceModal .driver-performance-modal {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .driver-performance-page .analytics-card-header {
+    flex-direction: column;
   }
 
   .driver-performance-records .toolbar-left,

@@ -13,7 +13,7 @@
       id="closeDeleteFuelModal"
       aria-label="Close delete fuel modal"
     >
-      <i class="ph ph-x"></i>
+            <i class="ph ph-x" aria-hidden="true"></i>
     </button>
 
     <div class="delete-icon">

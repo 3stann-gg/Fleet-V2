@@ -40,7 +40,7 @@
             return;
         }
 
-        alert(message);
+        console.error(message);
     }
 
     function openModal(dispatchId) {

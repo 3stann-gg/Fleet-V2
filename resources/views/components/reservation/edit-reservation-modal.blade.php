@@ -23,14 +23,18 @@
         id="closeEditReservationModal"
         aria-label="Close edit reservation modal"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="modal-body">
-      <form id="editReservationForm" class="reservation-form">
+    <form id="editReservationForm" class="reservation-form operational-modal-form">
+      <!-- Body -->
+      <div class="modal-body">
         <div class="form-grid">
+          <div class="form-section-heading">
+            <h3>Request Information</h3>
+            <p>Review the request reference, subject, and transport type.</p>
+          </div>
           <div class="form-group">
             <label for="editReservationNumber">Reservation Number *</label>
             <input
@@ -82,6 +86,11 @@
             </small>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Assignment</h3>
+            <p>Update the vehicle and driver assigned to this request.</p>
+          </div>
+
           <div class="form-group">
             <label for="editReservationVehicle">Vehicle *</label>
             <select id="editReservationVehicle">
@@ -97,6 +106,11 @@
             <small class="form-hint">
                 Driver is based on the selected vehicle.
             </small>
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Origin &amp; Destination</h3>
+            <p>Confirm the pickup and destination locations.</p>
           </div>
 
           <!-- Pickup Location -->
@@ -267,6 +281,11 @@
               </small>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Schedule &amp; Priority</h3>
+            <p>Update the requested transport time and operational priority.</p>
+          </div>
+
           <div class="form-group">
             <label for="editReservationDate">Schedule Date *</label>
             <input
@@ -322,12 +341,22 @@
             </select>
           </div>
 
+          <div class="form-section-heading">
+            <h3>Transport Requirements</h3>
+            <p>Review required capabilities and the current workflow status.</p>
+          </div>
+
           <div class="form-group full-width">
             <label>Required Vehicle Capabilities</label>
             <div id="editReservationRequiredCapabilities" class="checklist-options">
               <span class="form-hint">Loading capabilities...</span>
             </div>
             <small class="form-hint">Leave blank when no special capability is required.</small>
+          </div>
+
+          <div class="form-section-heading">
+            <h3>Contact &amp; Notes</h3>
+            <p>Maintain coordination details and additional instructions.</p>
           </div>
 
           <div class="form-group">
@@ -346,8 +375,9 @@
             ></textarea>
           </div>
         </div>
+      </div>
 
-        <div class="modal-footer">
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelEditReservation">
             Cancel
           </button>
@@ -355,8 +385,7 @@
           <button type="submit" class="btn-primary" id="updateReservationBtn">
             Update Reservation
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

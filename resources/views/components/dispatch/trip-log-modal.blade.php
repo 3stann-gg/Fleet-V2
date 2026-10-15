@@ -24,13 +24,14 @@
                 type="button"
                 class="modal-close"
                 id="closeTripLogModal"
-                aria-label="Close modal"
+                aria-label="Close trip log form"
             >
-                <i class="ph ph-x"></i>
+                <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
-        <div class="modal-body">
+        <form id="tripLogForm" class="operational-modal-form">
+          <div class="modal-body">
 
             <div class="trip-log-dispatch-summary">
 
@@ -74,8 +75,6 @@
                 </div>
 
             </div>
-
-            <form id="tripLogForm">
 
                 <input
                     type="hidden"
@@ -253,7 +252,9 @@
 
                 </div>
 
-                <div class="modal-footer">
+          </div>
+
+          <div class="modal-footer">
 
                     <button
                         type="button"
@@ -272,10 +273,7 @@
                         Submit Trip Log
                     </button>
 
-                </div>
-
-            </form>
-
-        </div>
+          </div>
+        </form>
     </div>
 </div>

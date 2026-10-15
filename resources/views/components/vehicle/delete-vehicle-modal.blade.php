@@ -4,10 +4,11 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="deleteVehicleTitle"
+  aria-describedby="deleteVehicleMessage"
 >
   <div class="custom-modal delete-modal">
     <div class="delete-icon">
-      <i class="ph-fill ph-warning-circle"></i>
+      <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
     </div>
 
     <h2 id="deleteVehicleTitle">Archive Vehicle</h2>
@@ -35,7 +36,7 @@
         class="btn-danger"
         id="confirmDeleteVehicle"
       >
-        <i class="ph ph-archive"></i>
+        <i class="ph ph-archive" aria-hidden="true"></i>
         Archive Vehicle
       </button>
     </div>

@@ -179,7 +179,7 @@ function renderReportPresetsSelect() {
   if (renameBtn) renameBtn.disabled = !hasSelection;
 }
 
-function saveCurrentReportPreset() {
+async function saveCurrentReportPreset() {
   const nameInput = document.getElementById("reportPresetName");
   const name = (nameInput?.value || "").trim();
 
@@ -205,9 +205,12 @@ function saveCurrentReportPreset() {
   );
 
   if (existingIndex >= 0) {
-      const confirmed = window.confirm(
-          'A preset named "' + name + '" already exists. Replace it?',
-      );
+      const confirmed = await window.showFleetConfirm({
+          title: "Replace Report Preset?",
+          message: 'A preset named "' + name + '" already exists. Replace it?',
+          confirmLabel: "Replace",
+          confirmIcon: "ph ph-arrows-clockwise",
+      });
       if (!confirmed) {
           return;
       }
@@ -244,7 +247,7 @@ function saveCurrentReportPreset() {
   }
 }
 
-function renameSelectedReportPreset() {
+async function renameSelectedReportPreset() {
   const select = document.getElementById("reportPresetSelect");
   const id = select?.value;
   if (!id) return;
@@ -256,7 +259,13 @@ function renameSelectedReportPreset() {
     return;
   }
 
-  const next = window.prompt("Rename preset", preset.name);
+  const next = await window.showInputPrompt({
+    title: "Rename Report Preset",
+    message: "Enter a new name for this report preset.",
+    label: "Preset name",
+    value: preset.name,
+    confirmText: "Rename Preset",
+  });
   if (next == null) return;
 
   const name = next.trim();
@@ -295,7 +304,7 @@ function renameSelectedReportPreset() {
   }
 }
 
-function deleteSelectedReportPreset() {
+async function deleteSelectedReportPreset() {
   const select = document.getElementById("reportPresetSelect");
   const id = select?.value;
   if (!id) return;
@@ -307,9 +316,13 @@ function deleteSelectedReportPreset() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Delete preset "' + preset.name + '"?\n\nThis cannot be undone.',
-  );
+  const confirmed = await window.showFleetConfirm({
+    title: "Delete Report Preset?",
+    message: 'Delete preset "' + preset.name + '"? This cannot be undone.',
+    confirmLabel: "Delete",
+    confirmIcon: "ph ph-trash",
+    tone: "danger",
+  });
   if (!confirmed) return;
 
   if (!writeReportPresets(list.filter((p) => p.id !== id))) return;

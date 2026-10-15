@@ -1,7 +1,7 @@
 <header class="navbar-custom">
   <div class="navbar-left">
     <button type="button" class="menu-toggle" aria-label="Toggle navigation menu">
-      <i class="ph ph-list"></i>
+      <i class="ph ph-list" aria-hidden="true"></i>
     </button>
 
     <div class="app-identity">
@@ -53,6 +53,9 @@
       driverPerformance:
           @json(auth()->user()?->canViewModule('driver_performance') ?? false),
 
+      trafficViolations:
+          @json(auth()->user()?->canViewModule('traffic_violations') ?? false),
+
       maintenance:
           @json(auth()->user()?->canViewModule('maintenance') ?? false),
 
@@ -67,6 +70,9 @@
 
       reports:
           @json(auth()->user()?->canViewModule('reports') ?? false),
+
+      auditLogs:
+          @json(auth()->user()?->hasPermission('audit_logs.view') ?? false),
 
       settings:
           @json(auth()->user()?->canViewModule('settings') ?? false),

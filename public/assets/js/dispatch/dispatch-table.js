@@ -110,9 +110,11 @@ function getDispatchRoutePlan(reservation) {
 }
 
 function getDispatchPriorityClass(priority) {
-    if (priority === "Emergency") return "status-chip--danger";
-    if (priority === "Urgent") return "status-chip--warning";
-    return "status-chip--info";
+    const normalizedPriority = String(priority || "").trim().toLowerCase();
+    if (normalizedPriority === "emergency") return "status-chip--danger";
+    if (normalizedPriority === "urgent") return "status-chip--warning";
+    if (normalizedPriority === "routine") return "status-chip--info";
+    return "status-chip--neutral";
 }
 
 function getDispatchTableVehicleLabel(vehicle) {
@@ -189,7 +191,7 @@ function getDispatchStatusClass(status) {
     }
 
     if (value === "arrived") {
-        return "approved";
+        return "trip";
     }
 
     if (value === "completed") {
@@ -505,7 +507,7 @@ function renderDispatchTable(dispatches) {
                                 aria-label="View ${safeDispatchNumber}"
                                 title="View Dispatch"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
                             ${
                                 dispatch.pre_trip_checklist
@@ -514,7 +516,7 @@ function renderDispatchTable(dispatches) {
                                             data-checklist-action="view" data-checklist-type="pre"
                                             data-checklist-id="${escapeDispatchHtml(dispatch.pre_trip_checklist.id)}"
                                             title="View Pre-Trip Checklist" aria-label="View pre-trip checklist">
-                                            <i class="ph ph-clipboard-text"></i>
+                                            <i class="ph ph-clipboard-text" aria-hidden="true"></i>
                                         </button>`
                                     : canEdit && !["Completed", "Cancelled"].includes(status)
                                       ? `
@@ -525,7 +527,7 @@ function renderDispatchTable(dispatches) {
                                             data-powertrain-type="${escapeDispatchHtml(vehicle?.powertrain_type || "")}"
                                             data-capabilities="${escapeDispatchHtml((vehicle?.capabilities || []).map((capability) => capability.slug).join("|"))}"
                                             title="Complete Pre-Trip Checklist" aria-label="Complete pre-trip checklist">
-                                            <i class="ph ph-clipboard"></i>
+                                            <i class="ph ph-clipboard" aria-hidden="true"></i>
                                         </button>`
                                       : ""
                             }
@@ -536,7 +538,7 @@ function renderDispatchTable(dispatches) {
                                             data-checklist-action="view" data-checklist-type="post"
                                             data-checklist-id="${escapeDispatchHtml(dispatch.post_trip_checklist.id)}"
                                             title="View Post-Trip Checklist" aria-label="View post-trip checklist">
-                                            <i class="ph ph-clipboard-text"></i>
+                                            <i class="ph ph-clipboard-text" aria-hidden="true"></i>
                                         </button>`
                                     : canEdit && status === "Completed"
                                       ? `
@@ -545,7 +547,7 @@ function renderDispatchTable(dispatches) {
                                             data-dispatch-id="${escapeDispatchHtml(dispatch.id)}"
                                             data-powertrain-type="${escapeDispatchHtml(vehicle?.powertrain_type || "")}"
                                             title="Complete Post-Trip Checklist" aria-label="Complete post-trip checklist">
-                                            <i class="ph ph-check-square"></i>
+                                            <i class="ph ph-check-square" aria-hidden="true"></i>
                                         </button>`
                                       : ""
                             }
@@ -563,7 +565,7 @@ function renderDispatchTable(dispatches) {
                                                     : "Edit Dispatch"
                                             }"
                                         >
-                                            <i class="ph ph-pencil-simple"></i>
+                                            <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -581,7 +583,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Accept ${safeDispatchNumber}"
                                             title="Accept Dispatch"
                                         >
-                                            <i class="ph ph-check"></i>
+                                            <i class="ph ph-check" aria-hidden="true"></i>
                                         </button>
 
                                         <button
@@ -591,7 +593,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Request reassignment for ${safeDispatchNumber}"
                                             title="Request Reassignment"
                                         >
-                                            <i class="ph ph-arrows-left-right"></i>
+                                            <i class="ph ph-arrows-left-right" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -606,7 +608,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Archive ${safeDispatchNumber}"
                                             title="Archive Dispatch"
                                         >
-                                            <i class="ph ph-archive"></i>
+                                            <i class="ph ph-archive" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -621,7 +623,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Restore ${safeDispatchNumber}"
                                             title="Restore Dispatch"
                                         >
-                                            <i class="ph ph-arrow-counter-clockwise"></i>
+                                            <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -639,7 +641,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Review reassignment for ${safeDispatchNumber}"
                                             title="Review Reassignment Request"
                                         >
-                                            <i class="ph ph-arrows-left-right"></i>
+                                            <i class="ph ph-arrows-left-right" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -656,7 +658,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="Submit Trip Log for ${safeDispatchNumber}"
                                             title="Submit Trip Log"
                                         >
-                                            <i class="ph ph-notebook"></i>
+                                            <i class="ph ph-notebook" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""
@@ -673,7 +675,7 @@ function renderDispatchTable(dispatches) {
                                             aria-label="View Trip Log for ${safeDispatchNumber}"
                                             title="View Trip Log"
                                         >
-                                            <i class="ph ph-notebook"></i>
+                                            <i class="ph ph-notebook" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""

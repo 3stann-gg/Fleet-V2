@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class TrafficViolation extends Model
 {
@@ -96,22 +97,41 @@ class TrafficViolation extends Model
 
     public function getViolationTypeLabelAttribute(): string
     {
-        return self::TYPE_LABELS[$this->violation_type] ?? $this->violation_type;
+        return $this->resolveLabel('violation_type', self::TYPE_LABELS, 'Not Specified');
     }
 
     public function getResponsibilityLabelAttribute(): string
     {
-        return self::RESPONSIBILITY_LABELS[$this->responsibility] ?? $this->responsibility;
+        return $this->resolveLabel('responsibility', self::RESPONSIBILITY_LABELS, 'Not Specified');
     }
 
     public function getStatusLabelAttribute(): string
     {
-        return self::STATUS_LABELS[$this->status] ?? $this->status;
+        return $this->resolveLabel('status', self::STATUS_LABELS, 'Not Specified');
     }
 
     public function getPaymentStatusLabelAttribute(): string
     {
-        return self::PAYMENT_STATUS_LABELS[$this->payment_status] ?? $this->payment_status;
+        return $this->resolveLabel('payment_status', self::PAYMENT_STATUS_LABELS, 'Not Applicable');
+    }
+
+    /**
+     * @param  array<string, string>  $labels
+     */
+    private function resolveLabel(string $attribute, array $labels, string $blankLabel): string
+    {
+        if (! array_key_exists($attribute, $this->attributes)) {
+            return 'Not Available';
+        }
+
+        $value = $this->attributes[$attribute];
+        $normalizedValue = Str::of($value ?? '')->trim()->toString();
+
+        if ($normalizedValue === '') {
+            return $blankLabel;
+        }
+
+        return $labels[$normalizedValue] ?? Str::headline($normalizedValue);
     }
 
     public function canTransitionTo(string $status): bool

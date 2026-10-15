@@ -3,6 +3,75 @@ document.addEventListener("DOMContentLoaded", () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
     const formModal = document.getElementById("trafficViolationFormModal");
     const recordForm = document.getElementById("trafficViolationForm");
+    const filterForm = document.getElementById("trafficViolationFilterForm");
+
+    if (filterForm && filterForm.dataset.autoFilterInitialized !== "true") {
+        filterForm.dataset.autoFilterInitialized = "true";
+
+        const searchInput = document.getElementById("trafficViolationSearch");
+        const refreshButton = document.getElementById("refreshTrafficViolations");
+        const automaticFilterNames = [
+            "violation_type",
+            "responsibility",
+            "status",
+            "payment_status",
+            "date_from",
+            "date_to",
+            "show_archived",
+        ];
+        let searchDebounceTimer;
+        let isFilterSubmitting = false;
+        let lastSubmittedSearch = searchInput?.value ?? "";
+
+        function submitFilters() {
+            window.clearTimeout(searchDebounceTimer);
+
+            if (isFilterSubmitting) return;
+
+            if (typeof filterForm.requestSubmit === "function") {
+                filterForm.requestSubmit();
+                return;
+            }
+
+            isFilterSubmitting = true;
+            filterForm.submit();
+        }
+
+        filterForm.addEventListener("submit", (event) => {
+            window.clearTimeout(searchDebounceTimer);
+
+            if (isFilterSubmitting) {
+                event.preventDefault();
+                return;
+            }
+
+            isFilterSubmitting = true;
+        });
+
+        searchInput?.addEventListener("input", () => {
+            window.clearTimeout(searchDebounceTimer);
+            const currentSearch = searchInput.value;
+
+            if (currentSearch === lastSubmittedSearch) return;
+
+            searchDebounceTimer = window.setTimeout(() => {
+                lastSubmittedSearch = currentSearch;
+                submitFilters();
+            }, 450);
+        });
+
+        automaticFilterNames.forEach((name) => {
+            filterForm.elements.namedItem(name)?.addEventListener("change", submitFilters);
+        });
+
+        refreshButton?.addEventListener("click", () => {
+            if (refreshButton.disabled) return;
+
+            refreshButton.disabled = true;
+            refreshButton.setAttribute("aria-busy", "true");
+            window.location.reload();
+        });
+    }
 
     function openModal(modal) {
         if (!modal) return;
@@ -156,7 +225,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const { action, id } = button.dataset;
             try {
                 if (action === "archive" || action === "restore") {
-                    if (!window.confirm(`${action === "archive" ? "Archive" : "Restore"} this traffic violation record?`)) return;
+                    const isArchive = action === "archive";
+                    const confirmed = await window.showFleetConfirm({
+                        title: `${isArchive ? "Archive" : "Restore"} Traffic Violation?`,
+                        message: `Are you sure you want to ${action} this traffic violation record?`,
+                        confirmLabel: isArchive ? "Archive" : "Restore",
+                        confirmIcon: isArchive ? "ph ph-archive" : "ph ph-arrow-counter-clockwise",
+                        tone: isArchive ? "danger" : "primary",
+                    });
+
+                    if (!confirmed) return;
+
                     const data = await request(`${baseUrl}/${id}/${action}`, { method: "POST", body: "{}" });
                     window.showToast?.(data.message, "success");
                     window.location.reload();
@@ -167,28 +246,80 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (action === "view") {
                     const details = document.getElementById("trafficViolationDetails");
                     const driverName = record.driver ? `${record.driver.first_name} ${record.driver.last_name}` : "Not identified";
-                    const rows = {
-                        "Citation Number": value(record.citation_number), Date: value(record.violation_date), Time: value(record.violation_time),
-                        "Issuing Agency": value(record.issuing_agency), Location: value(record.location), Vehicle: value(record.vehicle?.plate_number),
-                        Driver: driverName, Violation: value(record.violation_type_label), Responsibility: value(record.responsibility_label),
-                        Status: value(record.status_label), Dispatch: value(record.dispatch?.dispatch_number), Description: value(record.description),
-                        Notes: value(record.notes), "Responsibility Notes": value(record.responsibility_notes),
-                    };
+                    const sections = [
+                        {
+                            title: "Citation",
+                            rows: {
+                                "Citation Number": value(record.citation_number),
+                                Date: value(record.violation_date),
+                                Time: value(record.violation_time),
+                                "Issuing Agency": value(record.issuing_agency),
+                                Location: value(record.location),
+                                Violation: value(record.violation_type_label),
+                                Description: value(record.description),
+                            },
+                        },
+                        {
+                            title: "Driver / Vehicle",
+                            rows: {
+                                Vehicle: value(record.vehicle?.plate_number),
+                                Driver: driverName,
+                            },
+                        },
+                        {
+                            title: "Dispatch / Trip Context",
+                            rows: {
+                                Dispatch: value(record.dispatch?.dispatch_number),
+                            },
+                        },
+                        {
+                            title: "Responsibility & Status",
+                            rows: {
+                                Responsibility: value(record.responsibility_label),
+                                Status: value(record.status_label),
+                                "Responsibility Notes": value(record.responsibility_notes),
+                            },
+                        },
+                    ];
                     if (Object.hasOwn(record, "fine_amount")) {
-                        rows["Fine Amount"] = record.fine_amount === null ? "Not recorded" : `₱${Number(record.fine_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-                        rows["Payment Status"] = value(record.payment_status_label);
-                        rows["Payment Date"] = value(record.payment_date);
-                        rows["Payment Reference"] = value(record.payment_reference);
-                        rows["Settlement Notes"] = value(record.settlement_notes);
+                        sections.push({
+                            title: "Fine & Payment",
+                            rows: {
+                                "Fine Amount": record.fine_amount === null ? "Not recorded" : `₱${Number(record.fine_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                                "Due Date": value(record.due_date),
+                                "Payment Status": value(record.payment_status_label),
+                                "Payment Date": value(record.payment_date),
+                                "Payment Reference": value(record.payment_reference),
+                                "Settlement Notes": value(record.settlement_notes),
+                            },
+                        });
                     }
-                    details.replaceChildren(...Object.entries(rows).map(([label, detail]) => {
-                        const wrapper = document.createElement("div");
-                        const term = document.createElement("dt");
-                        const description = document.createElement("dd");
-                        term.textContent = label;
-                        description.textContent = detail;
-                        wrapper.append(term, description);
-                        return wrapper;
+                    sections.push({
+                        title: "Additional Notes",
+                        rows: { Notes: value(record.notes) },
+                    });
+                    details.replaceChildren(...sections.map((section) => {
+                        const group = document.createElement("section");
+                        group.className = "traffic-detail-section";
+                        const heading = document.createElement("h3");
+                        heading.textContent = section.title;
+                        const list = document.createElement("dl");
+                        list.className = "traffic-detail-grid";
+                        Object.entries(section.rows).forEach(([label, detail]) => {
+                            const wrapper = document.createElement("div");
+                            wrapper.className = "traffic-detail-item";
+                            if (["Description", "Responsibility Notes", "Settlement Notes", "Notes"].includes(label)) {
+                                wrapper.classList.add("traffic-span-2");
+                            }
+                            const term = document.createElement("dt");
+                            const description = document.createElement("dd");
+                            term.textContent = label;
+                            description.textContent = detail;
+                            wrapper.append(term, description);
+                            list.appendChild(wrapper);
+                        });
+                        group.append(heading, list);
+                        return group;
                     }));
                     openModal(document.getElementById("viewTrafficViolationModal"));
                 } else if (action === "edit") {

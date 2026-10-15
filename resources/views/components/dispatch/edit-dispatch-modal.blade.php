@@ -22,13 +22,17 @@
                 id="closeEditDispatchModal"
                 aria-label="Close edit dispatch modal"
             >
-                <i class="ph ph-x"></i>
+            <i class="ph ph-x" aria-hidden="true"></i>
             </button>
         </div>
 
-        <div class="modal-body">
-            <form id="editDispatchForm">
+        <form id="editDispatchForm" class="operational-modal-form">
+            <div class="modal-body">
                 <div class="form-grid">
+                    <div class="form-section-heading">
+                        <h3>Dispatch Request</h3>
+                        <p>Review the dispatch and linked reservation details.</p>
+                    </div>
 
                     <!-- Dispatch Number -->
                     <div class="form-group">
@@ -86,6 +90,11 @@
                         />
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Vehicle &amp; Driver Assignment</h3>
+                        <p>Review the resources currently assigned to this dispatch.</p>
+                    </div>
+
                     <!-- Vehicle -->
                     <div class="form-group">
                         <label for="editDispatchVehicle">
@@ -114,8 +123,18 @@
                         />
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Candidate Comparison</h3>
+                        <p>Compare current operational suitability before making a human selection.</p>
+                    </div>
+
                     <div class="form-group full-width">
                         <x-dispatch.candidate-vehicle-comparison prefix="editDispatch" />
+                    </div>
+
+                    <div class="form-section-heading">
+                        <h3>Schedule &amp; Route</h3>
+                        <p>Review the route, schedule, and priority from the reservation.</p>
                     </div>
 
                     <!-- Pickup -->
@@ -188,6 +207,11 @@
                         />
                     </div>
 
+                    <div class="form-section-heading">
+                        <h3>Status &amp; Additional Information</h3>
+                        <p>Update the workflow status and review coordination details.</p>
+                    </div>
+
                     <!-- Status -->
                     <div class="form-group">
                         <label for="editDispatchStatus">
@@ -237,8 +261,9 @@
                     </div>
 
                 </div>
+            </div>
 
-                <div class="modal-footer">
+            <div class="modal-footer">
                     <button
                         type="button"
                         class="btn-outline"
@@ -254,8 +279,7 @@
                     >
                         Update Dispatch
                     </button>
-                </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>

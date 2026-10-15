@@ -130,12 +130,12 @@
                     <td><span class="status-badge available">${escapeHtml(powertrainLabels[record.vehicle?.powertrain_type] || "Not specified")}</span></td>
                     <td>${escapeHtml(driverName(record.driver))}</td>
                     <td>${escapeHtml(record.charging_date)}${record.charging_time ? `<small>${escapeHtml(record.charging_time.slice(0, 5))}</small>` : ""}</td>
-                    <td>${Number(record.battery_before_percent).toFixed(1)}%</td>
-                    <td>${Number(record.battery_after_percent).toFixed(1)}%</td>
-                    <td>${Number(record.energy_added_kwh).toFixed(2)} kWh</td>
+                    <td class="numeric-cell">${Number(record.battery_before_percent).toFixed(1)}%</td>
+                    <td class="numeric-cell">${Number(record.battery_after_percent).toFixed(1)}%</td>
+                    <td class="numeric-cell">${Number(record.energy_added_kwh).toFixed(2)} kWh</td>
                     <td>${escapeHtml(record.charging_location)}</td>
-                    <td>${currency(record.charging_cost)}</td>
-                    <td><button type="button" class="action-btn view js-view-charging" data-id="${record.id}" title="View"><i class="ph ph-eye"></i></button></td>
+                    <td class="numeric-cell">${currency(record.charging_cost)}</td>
+                    <td><button type="button" class="action-btn view js-view-charging" data-id="${record.id}" title="View" aria-label="View charging transaction"><i class="ph ph-eye" aria-hidden="true"></i></button></td>
                 </tr>`).join("")
             : '<tr class="helper-row"><td colspan="10">No charging transactions found.</td></tr>';
 
@@ -157,11 +157,12 @@
         document.getElementById("chargingPaginationInfo").innerHTML = `Showing <strong>${first}–${last}</strong> of <strong>${total}</strong> charging transactions`;
         const pagination = document.getElementById("chargingPagination");
         pagination.innerHTML = "";
-        [["ph-caret-left", state.page - 1, state.page === 1], ["ph-caret-right", state.page + 1, state.page === pages]].forEach(([icon, page, disabled]) => {
+        [["ph-caret-left", state.page - 1, state.page === 1, "Previous page"], ["ph-caret-right", state.page + 1, state.page === pages, "Next page"]].forEach(([icon, page, disabled, ariaLabel]) => {
             const button = document.createElement("button");
             button.type = "button";
             button.disabled = disabled;
-            button.innerHTML = `<i class="ph ${icon}"></i>`;
+            button.setAttribute("aria-label", ariaLabel);
+            button.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`;
             button.addEventListener("click", () => { state.page = page; render(); });
             pagination.appendChild(button);
         });

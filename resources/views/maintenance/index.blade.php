@@ -5,7 +5,7 @@
 @section('content')
 
         <section class="page-wrapper">
-          <div class="vehicle-page">
+          <div class="vehicle-page maintenance-page">
             <!-- Header -->
             <div class="page-header">
               <div>
@@ -23,7 +23,7 @@
                       id="addMaintenanceBtn"
                       class="btn-primary"
                   >
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Request Maintenance
                   </button>
               @endif
@@ -33,7 +33,7 @@
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-icon">
-                  <i class="ph-fill ph-wrench"></i>
+                  <i class="ph-fill ph-wrench" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -45,7 +45,7 @@
 
               <div class="stat-card">
                 <div class="stat-icon warning">
-                  <i class="ph-fill ph-clock"></i>
+                  <i class="ph-fill ph-clock" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -56,8 +56,8 @@
               </div>
 
               <div class="stat-card">
-                <div class="stat-icon success">
-                  <i class="ph-fill ph-spinner"></i>
+                <div class="stat-icon info">
+                  <i class="ph-fill ph-spinner" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -68,8 +68,8 @@
               </div>
 
               <div class="stat-card">
-                <div class="stat-icon">
-                  <i class="ph-fill ph-check-square"></i>
+                <div class="stat-icon success">
+                  <i class="ph-fill ph-check-square" aria-hidden="true"></i>
                 </div>
 
                 <div class="stat-content">
@@ -84,7 +84,7 @@
             <div class="toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
-                  <i class="ph ph-magnifying-glass"></i>
+                  <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 
                   <input
                     type="text"
@@ -147,7 +147,7 @@
                   class="btn-outline"
                   id="refreshMaintenance"
                 >
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
@@ -176,7 +176,7 @@
                             class="btn-danger"
                             aria-label="Archive selected maintenance records"
                         >
-                            <i class="ph ph-archive"></i>
+                        <i class="ph ph-archive" aria-hidden="true"></i>
                             Archive Selected
                         </button>
                     </div>
@@ -251,7 +251,7 @@
               </div>
 
               <div class="table-responsive">
-                <table class="fleet-table">
+                <table class="fleet-table" aria-label="Hospital fleet maintenance records">
                   <thead>
                     <tr>
                       <th>
@@ -294,7 +294,7 @@
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
 
-                      <th class="sortable" data-column="7">
+                      <th class="sortable numeric-cell" data-column="7">
                         Cost
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
@@ -329,11 +329,11 @@
 
               <div class="pagination" id="maintenancePagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

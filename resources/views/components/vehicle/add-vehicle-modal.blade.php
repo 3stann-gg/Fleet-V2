@@ -4,13 +4,14 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="vehicleModalTitle"
+  aria-describedby="vehicleModalDescription"
 >
   <div class="custom-modal">
     <!-- Header -->
     <div class="modal-header">
       <div>
         <h2 id="vehicleModalTitle">Request New Vehicle</h2>
-        <p>Register a new hospital fleet vehicle.</p>
+        <p id="vehicleModalDescription">Register a new hospital fleet vehicle.</p>
       </div>
 
       <button
@@ -19,22 +20,22 @@
         id="closeVehicleModal"
         aria-label="Close add vehicle dialog"
       >
-        <i class="ph ph-x"></i>
+        <i class="ph ph-x" aria-hidden="true"></i>
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="modal-body">
-      <form
-          class="vehicle-form"
-          id="vehicleForm"
-          action="{{ route('vehicles.store') }}"
-          method="POST"
-      >
-          @csrf
+    <form
+        class="vehicle-form"
+        id="vehicleForm"
+        action="{{ route('vehicles.store') }}"
+        method="POST"
+    >
+      @csrf
+      <div class="modal-body">
+        <p class="form-required-note"><span class="required" aria-hidden="true">*</span> Required field</p>
         <!-- Vehicle Image -->
         <div class="vehicle-image-section">
-          <label class="vehicle-image-label"> Vehicle Image </label>
+          <label class="vehicle-image-label" for="vehicleImage">Vehicle Image</label>
 
           <div class="vehicle-image-upload">
             <img
@@ -46,16 +47,19 @@
             <input type="file" id="vehicleImage" accept="image/*" hidden />
 
             <label for="vehicleImage" class="btn-outline upload-btn">
-              <i class="ph ph-image"></i>
+              <i class="ph ph-image" aria-hidden="true"></i>
               Choose Image
             </label>
           </div>
         </div>
         <div class="form-grid">
+          <div class="vehicle-form-section-title full-width">
+            <span>Vehicle Information</span>
+          </div>
           <div class="form-group">
             <label for="vehiclePlate">
                 Plate Number
-                <span id="vehiclePlateRequiredMark">*</span>
+                <span id="vehiclePlateRequiredMark" class="required" aria-hidden="true">*</span>
             </label>
             <input
                 type="text"
@@ -67,7 +71,7 @@
           </div>
 
           <div class="form-group">
-            <label for="vehicleType">Vehicle Type *</label>
+            <label for="vehicleType">Vehicle Type <span class="required" aria-hidden="true">*</span></label>
             <select
                 id="vehicleType"
                 name="vehicle_type"
@@ -94,7 +98,7 @@
           </div>
 
           <div class="form-group">
-            <label for="vehicleBrand">Brand *</label>
+            <label for="vehicleBrand">Brand <span class="required" aria-hidden="true">*</span></label>
 
             <input
                 type="text"
@@ -106,7 +110,7 @@
         </div>
 
         <div class="form-group">
-            <label for="vehicleModel">Model *</label>
+            <label for="vehicleModel">Model <span class="required" aria-hidden="true">*</span></label>
 
             <input
                 type="text"
@@ -122,6 +126,8 @@
               Department
               <span
                   id="vehicleDepartmentRequiredMark"
+                  class="required"
+                  aria-hidden="true"
                   hidden
               >*</span>
           </label>
@@ -141,7 +147,7 @@
       </div>
 
           <div class="form-group">
-            <label for="vehicleCapacity">Capacity</label>
+            <label for="vehicleCapacity">Capacity <span class="required" aria-hidden="true">*</span></label>
             <input
                 type="number"
                 id="vehicleCapacity"
@@ -155,12 +161,12 @@
             <select id="vehicleDriver"></select>
           </div>
 
-          <div class="vehicle-energy-section-title full-width">
-            <span>Power / Energy Information</span>
+          <div class="vehicle-form-section-title full-width">
+            <span>Powertrain &amp; Energy</span>
           </div>
 
           <div class="form-group">
-            <label for="vehiclePowertrain">Powertrain Type *</label>
+            <label for="vehiclePowertrain">Powertrain Type <span class="required" aria-hidden="true">*</span></label>
             <select id="vehiclePowertrain" name="powertrain_type" required>
               <option value="">Select Powertrain Type</option>
               <option value="gasoline">Gasoline</option>
@@ -186,7 +192,7 @@
           </div>
 
           <div class="form-group">
-            <label for="vehicleMileage">Current Mileage</label>
+            <label for="vehicleMileage">Current Mileage <span class="required" aria-hidden="true">*</span></label>
             <input
               type="number"
               id="vehicleMileage"
@@ -253,8 +259,12 @@
             />
           </div>
 
+          <div class="vehicle-form-section-title full-width">
+            <span>Operational Information</span>
+          </div>
+
           <div class="form-group">
-            <label for="vehicleStatus">Status *</label>
+            <label for="vehicleStatus">Status <span class="required" aria-hidden="true">*</span></label>
             <select
                 id="vehicleStatus"
                 name="status"
@@ -269,7 +279,7 @@
           </div>
 
           <div class="form-group">
-            <label for="vehicleReadiness">Operational Readiness *</label>
+            <label for="vehicleReadiness">Operational Readiness <span class="required" aria-hidden="true">*</span></label>
             <select id="vehicleReadiness" name="readiness_status" required>
               <option value="ready" selected>Ready for Dispatch</option>
               <option value="in_use">In Use</option>
@@ -291,11 +301,6 @@
             <input type="date" id="vehicleInsuranceExpiry" />
           </div>
 
-          <div class="form-group" data-motorcycle-field data-motorcycle-engine-field>
-            <label for="vehicleEngineDisplacement">Engine Displacement (cc)</label>
-            <input type="number" id="vehicleEngineDisplacement" min="0" step="1" />
-          </div>
-
           <div class="form-group">
             <label for="vehicleTransmissionType">Transmission</label>
             <select id="vehicleTransmissionType">
@@ -304,6 +309,15 @@
               <option value="manual">Manual</option>
               <option value="semi_automatic">Semi-Automatic</option>
             </select>
+          </div>
+
+          <div class="vehicle-form-section-title full-width" data-motorcycle-field>
+            <span>Motorcycle Details</span>
+          </div>
+
+          <div class="form-group" data-motorcycle-field data-motorcycle-engine-field>
+            <label for="vehicleEngineDisplacement">Engine Displacement (cc)</label>
+            <input type="number" id="vehicleEngineDisplacement" min="0" step="1" />
           </div>
 
           <div class="form-group" data-motorcycle-field>
@@ -334,12 +348,20 @@
             <input type="date" id="vehicleRegistrationExpiry" />
           </div>
 
+          <div class="vehicle-form-section-title full-width">
+            <span>Capabilities</span>
+          </div>
+
           <div class="form-group full-width">
             <label>Vehicle Capabilities</label>
             <div id="vehicleCapabilities" class="checklist-options">
               <span class="form-hint">Loading capabilities...</span>
             </div>
           </div>
+        </div>
+
+        <div class="vehicle-form-section-title">
+          <span>Notes &amp; Additional Details</span>
         </div>
 
         <div class="form-group">
@@ -352,17 +374,18 @@
           ></textarea>
         </div>
 
-        <div class="modal-footer">
+      </div>
+
+      <div class="modal-footer">
           <button type="button" class="btn-outline" id="cancelVehicleModal">
             Cancel
           </button>
 
           <button type="submit" class="btn-primary" id="saveVehicleBtn">
-            <i class="ph ph-floppy-disk"></i>
+            <i class="ph ph-floppy-disk" aria-hidden="true"></i>
             Save Vehicle
           </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>

@@ -58,6 +58,8 @@
 .modal-close {
   width: 40px;
   height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border: none;
   background: var(--btn-muted-bg);
   border-radius: var(--radius-control);
@@ -66,6 +68,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  font-size: 18px;
+  line-height: 1;
   flex-shrink: 0;
   transition:
     background var(--transition-fast),
@@ -102,6 +106,64 @@
   background: var(--color-surface);
 }
 
+/* Operational form modals keep actions visible while long content scrolls. */
+.operational-modal-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.operational-modal-form > .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.operational-modal-form > .modal-footer {
+  margin-top: 0;
+}
+
+.form-section-heading,
+.detail-section-heading {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: var(--space-3) 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-section-heading:not(:first-child),
+.detail-section-heading:not(:first-child) {
+  margin-top: var(--space-2);
+}
+
+.form-section-heading--outside-grid {
+  margin-bottom: var(--space-4);
+}
+
+.detail-section-heading--standalone {
+  margin-top: var(--space-5);
+}
+
+.form-section-heading h3,
+.detail-section-heading h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.form-section-heading p,
+.detail-section-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-body);
+}
+
 .secure-export-modal {
   width: min(100%, 620px);
 }
@@ -120,6 +182,21 @@
 .secure-export-checkbox input {
   width: 18px;
   height: 18px;
+}
+
+.secure-export-protection-toggle {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.secure-export-protection-toggle small {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-body);
 }
 
 .secure-export-password-fields {
@@ -199,16 +276,12 @@
 
 .delete-note {
   margin-top: 12px !important;
+  color: var(--color-text-light);
+  font-size: 15px;
 }
 
 .delete-modal strong {
   color: var(--color-text);
-}
-
-.delete-note {
-  margin-top: 10px;
-  color: var(--color-text-light);
-  font-size: 15px;
 }
 
 .delete-modal .modal-footer {
@@ -223,13 +296,78 @@
 }
 
 .delete-modal .btn-outline,
-.delete-modal .btn-danger {
+.delete-modal .btn-danger,
+.delete-modal .btn-primary {
   min-width: 140px;
   height: var(--control-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-button);
+}
+
+.fleet-confirm-modal .fleet-confirm-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+.fleet-confirm-modal--primary .fleet-confirm-icon {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.fleet-input-modal {
+  width: min(100%, 520px);
+}
+
+.fleet-input-modal form {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fleet-input-message {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+  white-space: pre-line;
+}
+
+.fleet-input-modal .field-error {
+  display: block;
+  min-height: 1.25rem;
+  margin-top: var(--space-1);
+  color: var(--color-danger);
+}
+
+@media (max-width: 480px) {
+  .fleet-confirm-modal {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .fleet-confirm-modal .modal-footer,
+  .fleet-confirm-modal .btn-outline,
+  .fleet-confirm-modal .btn-danger,
+  .fleet-confirm-modal .btn-primary {
+    width: 100%;
+  }
+
+  .fleet-input-modal .modal-header,
+  .fleet-input-modal .modal-body,
+  .fleet-input-modal .modal-footer {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  .fleet-input-modal .modal-footer,
+  .fleet-input-modal .btn-outline,
+  .fleet-input-modal .btn-primary {
+    width: 100%;
+  }
 }
 
 /* ==========================================
@@ -468,6 +606,12 @@
 #viewDriverModal .view-driver-notes {
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
+}
+
+#viewDriverModal .driver-profile {
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 /* Reservation summary */
@@ -798,6 +942,12 @@
   gap: 12px;
 
   box-sizing: border-box;
+
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+
+  background: var(--modal-bg);
 }
 
 /* Delete section */
@@ -899,5 +1049,21 @@
 
   #accountManagementModal .modal-footer button {
     width: 100%;
+  }
+}
+
+@supports (height: 100dvh) {
+  #accountManagementModal {
+    height: 100dvh;
+  }
+
+  #accountManagementModal .custom-modal {
+    max-height: calc(100dvh - 48px);
+  }
+
+  @media (max-width: 768px) {
+    #accountManagementModal .custom-modal {
+      max-height: calc(100dvh - 20px);
+    }
   }
 }

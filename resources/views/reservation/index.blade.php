@@ -5,7 +5,7 @@
 @section('content')
 
         <section class="page-wrapper">
-          <div class="vehicle-page">
+          <div class="vehicle-page reservation-page">
             <!-- Header -->
             <div class="page-header">
               <div>
@@ -23,7 +23,7 @@
                       id="addReservationBtn"
                       class="btn-primary"
                   >
-                      <i class="ph ph-plus"></i>
+                      <i class="ph ph-plus" aria-hidden="true"></i>
                       Request Reservation
                   </button>
               @endif
@@ -68,7 +68,7 @@
               </div>
 
               <div class="stat-card">
-                <div class="stat-icon">
+                <div class="stat-icon success">
                   <i class="ph-fill ph-check-square"></i>
                 </div>
 
@@ -84,7 +84,7 @@
             <div class="toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
-                  <i class="ph ph-magnifying-glass"></i>
+                  <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 
                   <input
                     type="text"
@@ -142,7 +142,7 @@
                   class="btn-outline"
                   id="refreshReservations"
                 >
-                  <i class="ph ph-arrows-clockwise"></i>
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                   Refresh
                 </button>
               </div>
@@ -247,7 +247,7 @@
               </div>
 
               <div class="table-responsive">
-                <table class="fleet-table">
+                <table class="fleet-table" aria-label="Hospital transport reservations">
                   <thead>
                     <tr>
                       <th>
@@ -324,11 +324,11 @@
 
               <div class="pagination" id="reservationPagination">
                 <button type="button" aria-label="Previous page">
-                  <i class="ph ph-caret-left"></i>
+                  <i class="ph ph-caret-left" aria-hidden="true"></i>
                 </button>
 
                 <button type="button" aria-label="Next page">
-                  <i class="ph ph-caret-right"></i>
+                  <i class="ph ph-caret-right" aria-hidden="true"></i>
                 </button>
               </div>
             </div>

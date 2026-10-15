@@ -4,36 +4,6 @@
    (sample rows and JS-generated rows share these classes)
 ========================================================== */
 
-.status-badge.pending {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.status-badge.scheduled {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-
-.status-badge.approved {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.status-badge.completed {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.status-badge.cancelled {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.status-badge.rejected {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
 .reservation-archived-toggle {
   display: inline-flex;
   align-items: center;
@@ -46,6 +16,43 @@
 
 .form-hint {
   color: var(--color-text-muted);
+}
+
+/* Operational list hierarchy */
+.reservation-page .reservation-number,
+.reservation-page .patient-name {
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.reservation-page .patient-info small,
+.reservation-page .reservation-vehicle,
+.reservation-page .reservation-driver,
+.reservation-page .reservation-schedule {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.reservation-page .reservation-pickup,
+.reservation-page .reservation-destination {
+  display: block;
+  max-width: 220px;
+  color: var(--color-text);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.reservation-page .action-buttons {
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 640px) {
+  .reservation-page .toolbar-left,
+  .reservation-page .toolbar-right,
+  .reservation-page .filter-select {
+    width: 100%;
+  }
 }
 
 /* ==========================================
@@ -182,7 +189,7 @@
 .reservation-form input::placeholder,
 .reservation-form textarea::placeholder,
 .reservation-form .form-control::placeholder {
-    color: var(--color-text-light) !important;
+    color: var(--color-text-muted) !important;
     opacity: 1;
 }
 
@@ -207,12 +214,18 @@
 .reservation-form input[readonly],
 .reservation-form textarea[readonly] {
     color: var(--color-text-muted) !important;
-    background-color: var(--input-bg) !important;
+    background-color: var(--color-surface-secondary) !important;
 
-    border-color: var(--input-border) !important;
+    border-color: var(--color-border) !important;
 
-    opacity: 0.75;
+    opacity: 1;
     cursor: not-allowed;
+}
+
+.reservation-form input[readonly],
+.reservation-form textarea[readonly] {
+    background-color: var(--color-surface-muted) !important;
+    cursor: default;
 }
 
 /* Select option colors */

@@ -464,6 +464,24 @@ function setDashboardLiveText(id, value) {
     }
 }
 
+function setDashboardAlertTone(id, value, activeTone) {
+    const valueElement = document.getElementById(id);
+    const alertItem = valueElement?.closest(".dashboard-alert-item");
+    if (!alertItem) {
+        return;
+    }
+
+    alertItem.classList.remove(
+        "dashboard-alert-item--neutral",
+        "dashboard-alert-item--info",
+        "dashboard-alert-item--warning",
+        "dashboard-alert-item--danger",
+    );
+    alertItem.classList.add(
+        Number(value || 0) > 0 ? activeTone : "dashboard-alert-item--neutral",
+    );
+}
+
 function getDashboardVehicleStatusClass(status) {
     switch (status) {
         case "Available":
@@ -575,6 +593,46 @@ async function applyDashboardLiveData(data) {
     setDashboardLiveText(
         "dashboardOperationalWarnings",
         Number(data.vehicles_with_operational_warnings || 0).toLocaleString(),
+    );
+    setDashboardAlertTone(
+        "dashboardFailedPreTripChecks",
+        data.failed_pre_trip_checks,
+        "dashboard-alert-item--danger",
+    );
+    setDashboardAlertTone(
+        "dashboardActiveSanitationRecords",
+        data.active_sanitation_records,
+        "dashboard-alert-item--info",
+    );
+    setDashboardAlertTone(
+        "dashboardMaintenancePostTripChecks",
+        data.maintenance_required_post_trip_checks,
+        "dashboard-alert-item--warning",
+    );
+    setDashboardAlertTone(
+        "dashboardExpiredCompliance",
+        data.expired_compliance_items,
+        "dashboard-alert-item--danger",
+    );
+    setDashboardAlertTone(
+        "dashboardExpiringCompliance",
+        data.expiring_within_30_days,
+        "dashboard-alert-item--warning",
+    );
+    setDashboardAlertTone(
+        "dashboardMaintenanceDue",
+        data.maintenance_due_or_overdue,
+        "dashboard-alert-item--danger",
+    );
+    setDashboardAlertTone(
+        "dashboardBatteryHealthReview",
+        data.battery_health_review_needed,
+        "dashboard-alert-item--warning",
+    );
+    setDashboardAlertTone(
+        "dashboardOperationalWarnings",
+        data.vehicles_with_operational_warnings,
+        "dashboard-alert-item--warning",
     );
     /*
     |--------------------------------------------------------------------------
@@ -732,11 +790,8 @@ async function applyDashboardLiveData(data) {
     if (vehicleBody) {
         if (!vehicles.length) {
             vehicleBody.innerHTML = `
-                <tr>
-                    <td
-                        colspan="5"
-                        class="text-center"
-                    >
+                <tr class="helper-row" data-helper-row="true">
+                    <td colspan="5">
                         No vehicle records found.
                     </td>
                 </tr>

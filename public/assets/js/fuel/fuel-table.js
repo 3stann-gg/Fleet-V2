@@ -262,28 +262,28 @@ function renderFuelTable(fuelLogs) {
                     </td>
 
                     <!-- Quantity -->
-                    <td>
+                    <td class="numeric-cell">
                         <span class="fuel-quantity">
                             ${formatFuelTableQuantity(fuelAmount)}
                         </span>
                     </td>
 
                     <!-- Cost / Liter -->
-                    <td>
+                    <td class="numeric-cell">
                         <span class="fuel-cost-per-liter">
                             ${formatFuelTableCurrency(costPerLiter)}
                         </span>
                     </td>
 
                     <!-- Total Cost -->
-                    <td>
+                    <td class="numeric-cell">
                         <span class="fuel-total-cost">
                             ${formatFuelTableCurrency(totalCost)}
                         </span>
                     </td>
 
                     <!-- Odometer -->
-                    <td>
+                    <td class="numeric-cell">
                         <span class="fuel-odometer">
                             ${formatFuelTableOdometer(odometer)}
                         </span>
@@ -306,7 +306,7 @@ function renderFuelTable(fuelLogs) {
                                 data-fuel-id="${fuelId}"
                                 aria-label="View ${fuelNumber}"
                             >
-                                <i class="ph ph-eye"></i>
+                                <i class="ph ph-eye" aria-hidden="true"></i>
                             </button>
 
                             ${
@@ -319,7 +319,7 @@ function renderFuelTable(fuelLogs) {
                                             data-fuel-id="${fuelId}"
                                             aria-label="Edit ${fuelNumber}"
                                         >
-                                            <i class="ph ph-pencil-simple"></i>
+                                            <i class="ph ph-pencil-simple" aria-hidden="true"></i>
                                         </button>
                                     `
                                     : ""

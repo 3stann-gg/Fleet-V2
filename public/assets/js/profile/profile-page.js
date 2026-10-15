@@ -443,7 +443,7 @@ function updateProfileDirtyUi() {
     if (hint) {
         hint.textContent = profileDirty
             ? "You have unsaved changes"
-            : "All changes saved";
+            : "Profile information is saved";
     }
 }
 

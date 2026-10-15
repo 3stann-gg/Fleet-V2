@@ -85,6 +85,50 @@ it('supports canonical payment status :status', function (string $status) {
     expect(TrafficViolation::PAYMENT_STATUS_LABELS)->toHaveKey($status);
 })->with(array_keys(TrafficViolation::PAYMENT_STATUS_LABELS));
 
+it('returns the canonical payment label for :status', function (string $status, string $label) {
+    $violation = new TrafficViolation(['payment_status' => $status]);
+
+    expect($violation->payment_status_label)->toBe($label)->toBeString();
+})->with([
+    'not applicable' => ['not_applicable', 'Not Applicable'],
+    'unpaid' => ['unpaid', 'Unpaid'],
+    'partially paid' => ['partially_paid', 'Partially Paid'],
+    'paid' => ['paid', 'Paid'],
+    'waived' => ['waived', 'Waived'],
+]);
+
+it('returns a safe payment label for incomplete or legacy data', function (?string $status, string $label) {
+    $violation = new TrafficViolation(['payment_status' => $status]);
+
+    expect($violation->payment_status_label)->toBe($label)->toBeString();
+})->with([
+    'null' => [null, 'Not Applicable'],
+    'blank' => ['', 'Not Applicable'],
+    'legacy value' => ['awaiting_review', 'Awaiting Review'],
+]);
+
+it('returns not available when appended source attributes were not selected', function () {
+    $violation = (new TrafficViolation)->newFromBuilder(['id' => 1]);
+
+    expect($violation->violation_type_label)->toBe('Not Available')
+        ->and($violation->responsibility_label)->toBe('Not Available')
+        ->and($violation->status_label)->toBe('Not Available')
+        ->and($violation->payment_status_label)->toBe('Not Available');
+});
+
+it('renders traffic violation index and detail payment labels safely', function () {
+    $manager = violationUser('fleet_manager');
+    $violation = TrafficViolation::factory()->create(['payment_status' => 'paid']);
+
+    $this->actingAs($manager)
+        ->get(route('traffic-violations.index'))
+        ->assertSuccessful();
+
+    $this->getJson(route('traffic-violations.show', $violation))
+        ->assertSuccessful()
+        ->assertJsonPath('traffic_violation.payment_status_label', 'Paid');
+});
+
 it('persists driver and vehicle relationships without cascade deletion', function () {
     $driver = violationDriver();
     $vehicle = violationVehicle();
@@ -95,6 +139,42 @@ it('persists driver and vehicle relationships without cascade deletion', functio
     $driver->delete();
     $vehicle->delete();
     expect($violation->fresh()->driver_id)->toBeNull()->and($violation->fresh()->vehicle_id)->toBeNull();
+});
+
+it('serializes linked violations in vehicle and driver details without exposing omitted payment data', function () {
+    $manager = violationUser('fleet_manager');
+    $driver = violationDriver();
+    $vehicle = violationVehicle();
+    $violation = TrafficViolation::factory()->create([
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'payment_status' => 'paid',
+    ]);
+
+    $vehicleResponse = $this->actingAs($manager)
+        ->getJson(route('vehicles.show', $vehicle))
+        ->assertSuccessful();
+
+    $driverResponse = $this->actingAs($manager)
+        ->getJson(route('drivers.show', $driver))
+        ->assertSuccessful();
+
+    $vehicleResponse
+        ->assertJsonMissingPath('vehicle.traffic_violations.0.payment_status')
+        ->assertJsonMissingPath('vehicle.traffic_violations.0.fine_amount');
+    $driverResponse
+        ->assertJsonMissingPath('traffic_violations.0.payment_status')
+        ->assertJsonMissingPath('traffic_violations.0.fine_amount');
+
+    expect($vehicleResponse->json('vehicle.traffic_violations.0.payment_status_label'))->toBe('Not Available')
+        ->and($driverResponse->json('traffic_violations.0.payment_status_label'))->toBe('Not Available')
+        ->and($violation->fresh()->payment_status)->toBe('paid');
+
+    $this->postJson(route('vehicles.archive', $vehicle))->assertSuccessful();
+    $this->postJson(route('vehicles.restore', $vehicle->fresh()))->assertSuccessful();
+
+    expect($vehicle->fresh()->archived_at)->toBeNull()
+        ->and($violation->fresh()->payment_status)->toBe('paid');
 });
 
 it('creates and audits a citation without automatic liability', function () {
