@@ -106,21 +106,9 @@
                 </select>
                 <select class="filter-select" id="routeVehicleFilter" aria-label="Filter by vehicle">
                   <option value="all">All Vehicles</option>
-                  <option value="Ambulance 01">Ambulance 01</option>
-                  <option value="Ambulance 03">Ambulance 03</option>
-                  <option value="Patient Van 02">Patient Van 02</option>
-                  <option value="Service Vehicle 04">Service Vehicle 04</option>
-                  <option value="Van 02">Van 02</option>
-                  <option value="Van 05">Van 05</option>
-                  <option value="SUV 03">SUV 03</option>
                 </select>
                 <select class="filter-select" id="routeDriverFilter" aria-label="Filter by driver">
                   <option value="all">All Drivers</option>
-                  <option value="Juan Dela Cruz">Juan Dela Cruz</option>
-                  <option value="Maria Santos">Maria Santos</option>
-                  <option value="Pedro Reyes">Pedro Reyes</option>
-                  <option value="Ana Lopez">Ana Lopez</option>
-                  <option value="Carlos Rivera">Carlos Rivera</option>
                 </select>
                 <select class="filter-select" id="routeDepartmentFilter" aria-label="Filter by department">
                   <option value="all">All Departments</option>

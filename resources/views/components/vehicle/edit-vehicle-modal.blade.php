@@ -78,7 +78,6 @@
             <select id="editVehicleType" name="vehicle_type" required>
               <option value="">Select Vehicle Type</option>
               <option>Ambulance</option>
-              <option>Patient Van</option>
               <option>Service Vehicle</option>
               <option>SUV</option>
               <option>Motorcycle</option>

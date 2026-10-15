@@ -67,6 +67,68 @@ class DispatchSuitabilityService
     }
 
     /** @return array<string, mixed> */
+    public function comparePairs(Reservation $reservation): array
+    {
+        $reservation->loadMissing(['requiredCapabilities', 'routePlan']);
+
+        $drivers = Driver::query()
+            ->whereNull('archived_at')
+            ->with(['qualifications', 'licenseCodes'])
+            ->orderBy('id')
+            ->get();
+
+        $candidates = Vehicle::query()
+            ->whereNull('archived_at')
+            ->with([
+                'capabilities',
+                'lastCompletedMaintenance',
+                'latestPreTripChecklist',
+                'latestPostTripChecklist',
+                'activeSanitationLog',
+            ])
+            ->orderBy('id')
+            ->get()
+            ->flatMap(function (Vehicle $vehicle) use ($drivers, $reservation): Collection {
+                return $drivers->map(function (Driver $driver) use ($reservation, $vehicle): array {
+                    $candidate = $this->evaluate($reservation, $vehicle, $driver);
+
+                    return [
+                        ...$candidate,
+                        'driver_id' => $driver->id,
+                        'driver_name' => trim("{$driver->first_name} {$driver->last_name}"),
+                        'driver_status' => $driver->status,
+                        'pair_selectable' => $driver->status === 'Available'
+                            && in_array($candidate['status'], ['suitable', 'suitable_with_advisory'], true),
+                        'selected' => (int) $reservation->vehicle_id === (int) $vehicle->id
+                            && (int) $reservation->driver_id === (int) $driver->id,
+                    ];
+                });
+            })
+            ->sortBy(fn (array $candidate): array => [
+                self::STATUS_ORDER[$candidate['status']] ?? 99,
+                $candidate['readiness']['state'] === 'ready' ? 0 : 1,
+                count($candidate['warnings']),
+                $candidate['vehicle_id'],
+                $candidate['driver_id'],
+            ])
+            ->values();
+
+        return [
+            'reservation_id' => $reservation->id,
+            'priority' => $reservation->priority_label,
+            'planned_distance_km' => $this->plannedDistance($reservation),
+            'candidates' => $candidates->all(),
+            'ordering' => [
+                'Suitable',
+                'Suitable with Advisory',
+                'Insufficient Information',
+                'Not Recommended',
+            ],
+            'decision_notice' => 'Advisory only. The authorized dispatcher retains final control.',
+        ];
+    }
+
+    /** @return array<string, mixed> */
     public function evaluate(Reservation $reservation, Vehicle $vehicle, ?Driver $driver = null): array
     {
         $reservation->loadMissing(['requiredCapabilities', 'routePlan']);
