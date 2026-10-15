@@ -302,12 +302,13 @@ function openMaintenanceServiceTypeEditor(service = null) {
             class="modal-overlay"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="maintenanceServiceTypeEditorTitle"
         >
             <div class="custom-modal">
 
                 <div class="modal-header">
                     <div>
-                        <h2>
+                        <h2 id="maintenanceServiceTypeEditorTitle">
                             ${isEdit ? "Edit Service Type" : "Add Service Type"}
                         </h2>
 
@@ -322,7 +323,7 @@ function openMaintenanceServiceTypeEditor(service = null) {
                         data-close-maintenance-service-modal
                         aria-label="Close"
                     >
-                        <i class="ph ph-x"></i>
+                        <i class="ph ph-x" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -497,11 +498,12 @@ function openMaintenanceProviderEditor(provider = null) {
             class="modal-overlay"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="maintenanceProviderEditorTitle"
         >
             <div class="custom-modal">
                 <div class="modal-header">
                     <div>
-                        <h2>
+                        <h2 id="maintenanceProviderEditorTitle">
                             ${
                                 isEdit
                                     ? "Edit Technician / Workshop"
@@ -518,7 +520,7 @@ function openMaintenanceProviderEditor(provider = null) {
                         data-close-maintenance-provider-modal
                         aria-label="Close"
                     >
-                        <i class="ph ph-x"></i>
+                        <i class="ph ph-x" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="modal-body">
@@ -887,11 +889,12 @@ function openFuelStationEditor(station = null) {
             class="modal-overlay"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="fuelStationEditorTitle"
         >
             <div class="custom-modal">
                 <div class="modal-header">
                     <div>
-                        <h2>
+                        <h2 id="fuelStationEditorTitle">
                             ${
                                 isEdit
                                     ? "Edit Fuel Station"
@@ -909,7 +912,7 @@ function openFuelStationEditor(station = null) {
                         data-close-fuel-station-modal
                         aria-label="Close"
                     >
-                        <i class="ph ph-x"></i>
+                        <i class="ph ph-x" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div class="modal-body">
@@ -1427,7 +1430,7 @@ function updateSettingsDirtyUi() {
     if (hint) {
         hint.textContent = settingsDirty
             ? "You have unsaved changes"
-            : "All changes saved";
+            : "Fleet settings are saved";
     }
     if (saveBtn) saveBtn.disabled = !settingsDirty;
     if (cancelBtn) cancelBtn.disabled = !settingsDirty;
@@ -1651,7 +1654,7 @@ function importFleetSettingsFromFile(file) {
             updateSettingsDirtyUi();
             if (typeof showToast === "function") {
                 showToast(
-                    "Settings imported as draft. Click Save Settings to persist.",
+                    "Settings imported as draft. Click Save Fleet Settings to persist.",
                     "success",
                 );
             }
@@ -1761,7 +1764,13 @@ function initSettingsSectionNav() {
             target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         nav.querySelectorAll("[data-settings-section]").forEach((el) => {
-            el.classList.toggle("is-active", el === link);
+            const isActive = el === link;
+            el.classList.toggle("is-active", isActive);
+            if (isActive) {
+                el.setAttribute("aria-current", "true");
+            } else {
+                el.removeAttribute("aria-current");
+            }
         });
     });
 }

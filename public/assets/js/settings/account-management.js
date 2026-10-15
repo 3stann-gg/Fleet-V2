@@ -1,4 +1,182 @@
 let accountManagementTrigger = null;
+let accountDirectoryUsers = [];
+
+function getAccountDisplayName(user) {
+    return (
+        user.name ||
+        `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+        user.email ||
+        "User"
+    );
+}
+
+function getAccountRoleLabel(role) {
+    const roleLabels = {
+        fleet_manager: "Fleet Manager",
+        it_admin: "IT Admin",
+        dispatcher: "Dispatcher",
+        driver: "Driver",
+        maintenance: "Maintenance",
+        department_head: "Department Head",
+        finance: "Finance",
+    };
+
+    return roleLabels[role] || "Unassigned";
+}
+
+function renderAccountDirectory(users) {
+    const tableBody = document.getElementById("settingsAccountTableBody");
+    const status = document.getElementById("settingsAccountTableStatus");
+    if (!tableBody) {
+        return;
+    }
+
+    if (!users.length) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="settings-empty-state">
+                    No user accounts are available.
+                </td>
+            </tr>
+        `;
+        if (status) {
+            status.textContent = "No user accounts found.";
+        }
+        return;
+    }
+
+    tableBody.innerHTML = users
+        .map((user) => {
+            const displayName = getAccountDisplayName(user);
+            const statusValue = String(user.status || "inactive").toLowerCase();
+            const statusLabel =
+                statusValue === "active" ? "Active" : "Inactive";
+
+            return `
+                <tr>
+                    <td>
+                        <div class="settings-account-identity">
+                            <strong>${escapeAccountHtml(displayName)}</strong>
+                            <span>${escapeAccountHtml(user.email || "No email")}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status-chip status-chip--neutral">
+                            ${escapeAccountHtml(getAccountRoleLabel(user.role))}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusValue === "active" ? "active" : "inactive"}">
+                            ${statusLabel}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="settings-account-actions">
+                            <button
+                                type="button"
+                                class="action-btn"
+                                data-account-directory-action="update"
+                                data-user-id="${user.id}"
+                                aria-label="Edit ${escapeAccountHtml(displayName)}"
+                                title="Edit account"
+                            >
+                                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                type="button"
+                                class="action-btn action-btn--security"
+                                data-account-directory-action="reset_password"
+                                data-user-id="${user.id}"
+                                aria-label="Reset password for ${escapeAccountHtml(displayName)}"
+                                title="Reset password"
+                            >
+                                <i class="ph ph-key" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                type="button"
+                                class="action-btn action-btn--danger"
+                                data-account-directory-action="delete"
+                                data-user-id="${user.id}"
+                                aria-label="Deactivate ${escapeAccountHtml(displayName)}"
+                                title="Deactivate account"
+                            >
+                                <i class="ph ph-trash" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        })
+        .join("");
+
+    if (status) {
+        status.textContent = `${users.length} user account${users.length === 1 ? "" : "s"} shown.`;
+    }
+}
+
+async function refreshAccountDirectory() {
+    const tableBody = document.getElementById("settingsAccountTableBody");
+    const status = document.getElementById("settingsAccountTableStatus");
+    if (!tableBody) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/settings/accounts", {
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data?.message || "Unable to load accounts.");
+        }
+        accountDirectoryUsers = Array.isArray(data?.users) ? data.users : [];
+        renderAccountDirectory(accountDirectoryUsers);
+    } catch (error) {
+        console.error("LOAD ACCOUNT DIRECTORY ERROR:", error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="settings-empty-state">
+                    Unable to load user accounts.
+                </td>
+            </tr>
+        `;
+        if (status) {
+            status.textContent = "Account directory could not be loaded.";
+        }
+    }
+}
+
+async function openAccountDirectoryAction(action, userId, trigger) {
+    openAccountManagementModal({ currentTarget: trigger });
+    const actionSelect = document.getElementById("accountManagementAction");
+    if (!actionSelect) {
+        return;
+    }
+
+    actionSelect.value = action;
+    if (action === "update") {
+        await renderAccountUpdateForm();
+        const userSelect = document.getElementById("updateAccountUser");
+        if (userSelect) {
+            userSelect.value = userId;
+            userSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+    } else if (action === "reset_password") {
+        await renderAccountResetPasswordForm();
+        const userSelect = document.getElementById("resetPasswordUser");
+        if (userSelect) {
+            userSelect.value = userId;
+        }
+    } else if (action === "delete") {
+        await renderAccountDeleteForm();
+        const userSelect = document.getElementById("deleteAccountUser");
+        if (userSelect) {
+            userSelect.value = userId;
+            userSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+    }
+}
 
 function getAccountManagementModal() {
     return document.getElementById("accountManagementModal");
@@ -119,6 +297,24 @@ function initAccountManagementModal() {
             `;
         }
     });
+
+    document
+        .getElementById("settingsAccountTableBody")
+        ?.addEventListener("click", (event) => {
+            const button = event.target.closest(
+                "[data-account-directory-action]",
+            );
+            if (!button) {
+                return;
+            }
+            openAccountDirectoryAction(
+                button.dataset.accountDirectoryAction,
+                button.dataset.userId,
+                button,
+            );
+        });
+
+    refreshAccountDirectory();
 }
 
 async function renderAccountUpdateForm() {
@@ -128,7 +324,7 @@ async function renderAccountUpdateForm() {
     }
     content.innerHTML = `
         <div class="settings-empty-state">
-            <i class="ph ph-spinner"></i>
+            <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading user accounts...</p>
         </div>
     `;
@@ -214,7 +410,7 @@ async function renderAccountResetPasswordForm() {
     }
     content.innerHTML = `
         <div class="settings-empty-state">
-            <i class="ph ph-spinner"></i>
+            <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading user accounts...</p>
         </div>
     `;
@@ -248,6 +444,11 @@ async function renderAccountResetPasswordForm() {
 
         content.innerHTML = `
             <form id="resetUserPasswordForm">
+                <section class="account-form-section" aria-labelledby="resetAccountSecurityHeading">
+                    <div class="account-form-section-heading">
+                        <span class="account-form-section-label">Security</span>
+                        <h3 id="resetAccountSecurityHeading">Reset account password</h3>
+                    </div>
 
                 <div class="form-grid">
 
@@ -288,7 +489,7 @@ async function renderAccountResetPasswordForm() {
                                 data-account-password-toggle="resetAccountPassword"
                                 aria-label="Show new password"
                             >
-                                <i class="ph ph-eye-slash"></i>
+                                <i class="ph ph-eye-slash" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
@@ -313,16 +514,17 @@ async function renderAccountResetPasswordForm() {
                                 data-account-password-toggle="resetAccountPasswordConfirmation"
                                 aria-label="Show password confirmation"
                             >
-                                <i class="ph ph-eye-slash"></i>
+                                <i class="ph ph-eye-slash" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
 
                 </div>
 
-                <p class="settings-note">
+                <p class="settings-note account-security-note">
                     The selected user's current password will be replaced.
                 </p>
+                </section>
 
                 <div class="modal-footer">
                     <button
@@ -338,7 +540,7 @@ async function renderAccountResetPasswordForm() {
                         class="btn-primary"
                         id="resetUserPasswordBtn"
                     >
-                        <i class="ph ph-key"></i>
+                        <i class="ph ph-key" aria-hidden="true"></i>
                         Reset Password
                     </button>
                 </div>
@@ -376,7 +578,7 @@ async function renderAccountDeleteForm() {
 
     content.innerHTML = `
         <div class="settings-empty-state">
-            <i class="ph ph-spinner"></i>
+            <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading user accounts...</p>
         </div>
     `;
@@ -520,7 +722,7 @@ async function loadUpdateAccountForm(userId) {
     }
     container.innerHTML = `
         <div class="settings-empty-state">
-            <i class="ph ph-spinner"></i>
+            <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading account...</p>
         </div>
     `;
@@ -547,10 +749,16 @@ async function loadUpdateAccountForm(userId) {
                     value="${user.id}"
                 >
 
+                <section class="account-form-section" aria-labelledby="updateAccountInformationHeading">
+                    <div class="account-form-section-heading">
+                        <span class="account-form-section-label">Account information</span>
+                        <h3 id="updateAccountInformationHeading">Identity and contact details</h3>
+                    </div>
+
                 <div class="form-grid">
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountFirstName">
                             First Name *
                         </label>
 
@@ -563,7 +771,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountMiddleName">
                             Middle Name
                         </label>
 
@@ -575,7 +783,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountLastName">
                             Last Name *
                         </label>
 
@@ -588,7 +796,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountEmail">
                             Email *
                         </label>
 
@@ -600,8 +808,19 @@ async function loadUpdateAccountForm(userId) {
                         >
                     </div>
 
+                </div>
+                </section>
+
+                <section class="account-form-section" aria-labelledby="updateAccountAccessHeading">
+                    <div class="account-form-section-heading">
+                        <span class="account-form-section-label">Role / access</span>
+                        <h3 id="updateAccountAccessHeading">Operational assignment</h3>
+                    </div>
+
+                <div class="form-grid">
+
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountRole">
                             Role *
                         </label>
 
@@ -615,7 +834,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountDepartment">
                             Department
                         </label>
 
@@ -627,7 +846,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountJobTitle">
                             Job Title
                         </label>
 
@@ -639,7 +858,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                     <div class="form-group">
-                        <label>
+                        <label for="updateAccountMobile">
                             Mobile Number
                         </label>
 
@@ -652,6 +871,7 @@ async function loadUpdateAccountForm(userId) {
                     </div>
 
                 </div>
+                </section>
 
                 ${
                     isDriver
@@ -677,7 +897,7 @@ async function loadUpdateAccountForm(userId) {
                         class="btn-primary"
                         id="updateUserAccountBtn"
                     >
-                        <i class="ph ph-floppy-disk"></i>
+                        <i class="ph ph-floppy-disk" aria-hidden="true"></i>
                         Save Account
                     </button>
                 </div>
@@ -705,7 +925,7 @@ async function loadDeleteAccountDetails(userId) {
     }
     container.innerHTML = `
         <div class="settings-empty-state">
-            <i class="ph ph-spinner"></i>
+            <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading account...</p>
         </div>
     `;
@@ -730,7 +950,7 @@ async function loadDeleteAccountDetails(userId) {
             .replaceAll("_", " ")
             .replace(/\b\w/g, (letter) => letter.toUpperCase());
         container.innerHTML = `
-            <div class="account-delete-summary">
+            <div class="account-delete-summary account-danger-zone">
 
                 <div>
                     <strong>
@@ -751,7 +971,7 @@ async function loadDeleteAccountDetails(userId) {
                     user.role === "driver"
                         ? `
                             <p class="settings-note">
-                                Deleting this account will not delete
+                                Deactivating this account will not delete
                                 the Driver record. The Driver account
                                 link will be removed instead.
                             </p>
@@ -767,7 +987,7 @@ async function loadDeleteAccountDetails(userId) {
                         >
 
                         <span>
-                            I understand that this user account will be permanently deleted.
+                            I understand that this user account will be deactivated and will no longer be able to sign in.
                         </span>
                     </label>
                 </div>
@@ -788,8 +1008,8 @@ async function loadDeleteAccountDetails(userId) {
                         data-user-id="${user.id}"
                         disabled
                     >
-                        <i class="ph ph-trash"></i>
-                        Delete Account
+                        <i class="ph ph-trash" aria-hidden="true"></i>
+                        Deactivate Account
                     </button>
                 </div>
 
@@ -897,6 +1117,7 @@ function initUpdateUserAccountForm(isDriver) {
                 data?.message || "User account updated successfully.",
                 "success",
             );
+            await refreshAccountDirectory();
             await renderAccountUpdateForm();
         } catch (error) {
             console.error("UPDATE ACCOUNT ERROR:", error);
@@ -909,7 +1130,7 @@ function initUpdateUserAccountForm(isDriver) {
             if (button) {
                 button.disabled = false;
                 button.innerHTML =
-                    '<i class="ph ph-floppy-disk"></i> Save Account';
+                    '<i class="ph ph-floppy-disk" aria-hidden="true"></i> Save Account';
             }
         }
     });
@@ -954,7 +1175,7 @@ function initResetUserPasswordForm() {
         if (button) {
             button.disabled = true;
             button.innerHTML = `
-                    <i class="ph ph-spinner"></i>
+                    <i class="ph ph-spinner" aria-hidden="true"></i>
                     Resetting...
                 `;
         }
@@ -1015,7 +1236,7 @@ function initResetUserPasswordForm() {
             if (button) {
                 button.disabled = false;
                 button.innerHTML = `
-                        <i class="ph ph-key"></i>
+                        <i class="ph ph-key" aria-hidden="true"></i>
                         Reset Password
                     `;
             }
@@ -1044,8 +1265,8 @@ function initDeleteUserAccount() {
         button.dataset.submitting = "true";
         button.disabled = true;
         button.innerHTML = `
-                <i class="ph ph-spinner"></i>
-                Deleting...
+                <i class="ph ph-spinner" aria-hidden="true"></i>
+                Deactivating...
             `;
         try {
             const response = await fetch(`/settings/accounts/${userId}`, {
@@ -1061,26 +1282,29 @@ function initDeleteUserAccount() {
             const data = await response.json();
             if (response.status === 422) {
                 window.showToast?.(
-                    data?.message || "Unable to delete account.",
+                    data?.message || "Unable to deactivate account.",
                     "error",
                 );
 
                 return;
             }
             if (!response.ok) {
-                throw new Error(data?.message || "Failed to delete account.");
+                throw new Error(
+                    data?.message || "Failed to deactivate account.",
+                );
             }
             window.showToast?.(
-                data?.message || "User account deleted successfully.",
+                data?.message || "User account deactivated successfully.",
                 "success",
             );
 
+            await refreshAccountDirectory();
             await renderAccountDeleteForm();
         } catch (error) {
             console.error("DELETE ACCOUNT ERROR:", error);
 
             window.showToast?.(
-                error?.message || "Failed to delete account.",
+                error?.message || "Failed to deactivate account.",
                 "error",
             );
         } finally {
@@ -1095,8 +1319,8 @@ function initDeleteUserAccount() {
                 button.disabled = !checkbox.checked;
 
                 button.innerHTML = `
-            <i class="ph ph-trash"></i>
-            Delete Account
+            <i class="ph ph-trash" aria-hidden="true"></i>
+            Deactivate Account
         `;
             }
         }
@@ -1152,6 +1376,12 @@ function renderAccountCreateForm() {
 
     content.innerHTML = `
         <form id="createUserAccountForm">
+            <section class="account-form-section" aria-labelledby="createAccountInformationHeading">
+                <div class="account-form-section-heading">
+                    <span class="account-form-section-label">Account information</span>
+                    <h3 id="createAccountInformationHeading">Identity and access assignment</h3>
+                </div>
+
             <div class="form-grid">
 
                 <div class="form-group">
@@ -1268,6 +1498,17 @@ function renderAccountCreateForm() {
                     >
                 </div>
 
+            </div>
+            </section>
+
+            <section class="account-form-section" aria-labelledby="createAccountSecurityHeading">
+                <div class="account-form-section-heading">
+                    <span class="account-form-section-label">Security</span>
+                    <h3 id="createAccountSecurityHeading">Initial password</h3>
+                </div>
+
+                <div class="form-grid">
+
                 <div class="form-group">
                     <label for="accountPassword">
                         Password *
@@ -1288,7 +1529,7 @@ function renderAccountCreateForm() {
                             data-account-password-toggle="accountPassword"
                             aria-label="Show password"
                         >
-                            <i class="ph ph-eye-slash"></i>
+                            <i class="ph ph-eye-slash" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -1313,12 +1554,13 @@ function renderAccountCreateForm() {
                             data-account-password-toggle="accountPasswordConfirmation"
                             aria-label="Show password confirmation"
                         >
-                            <i class="ph ph-eye-slash"></i>
+                            <i class="ph ph-eye-slash" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
 
             </div>
+            </section>
 
             <div class="modal-footer">
                 <button
@@ -1334,7 +1576,7 @@ function renderAccountCreateForm() {
                     class="btn-primary"
                     id="createUserAccountBtn"
                 >
-                    <i class="ph ph-user-plus"></i>
+                    <i class="ph ph-user-plus" aria-hidden="true"></i>
                     Create Account
                 </button>
             </div>
@@ -1376,7 +1618,7 @@ function initCreateUserAccountForm() {
             submitButton.disabled = true;
 
             submitButton.innerHTML = `
-                    <i class="ph ph-spinner"></i>
+                    <i class="ph ph-spinner" aria-hidden="true"></i>
                     Creating...
                 `;
         }
@@ -1440,6 +1682,7 @@ function initCreateUserAccountForm() {
                 data?.message || "User account created successfully.",
                 "success",
             );
+            await refreshAccountDirectory();
             form.reset();
         } catch (error) {
             console.error("CREATE ACCOUNT ERROR:", error);
@@ -1452,7 +1695,7 @@ function initCreateUserAccountForm() {
             if (submitButton) {
                 submitButton.disabled = false;
                 submitButton.innerHTML = `
-                        <i class="ph ph-user-plus"></i>
+                    <i class="ph ph-user-plus" aria-hidden="true"></i>
                         Create Account
                     `;
             }

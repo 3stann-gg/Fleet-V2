@@ -27,6 +27,29 @@
   background: var(--color-surface);
 }
 
+.settings-nav-title {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+}
+
+.settings-nav-label {
+  display: block;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--color-text-light);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-nav-title + .settings-nav-label {
+  margin-top: 0;
+}
+
 .settings-section-nav button {
   display: flex;
   align-items: center;
@@ -61,6 +84,10 @@
   color: var(--color-primary);
 }
 
+.settings-section-nav button:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
 .settings-main {
   min-width: 0;
   display: flex;
@@ -71,6 +98,7 @@
 
 .settings-card {
   margin: 0;
+  scroll-margin-top: var(--space-4);
 }
 
 .settings-card .card-header {
@@ -248,6 +276,68 @@
   margin-top: var(--space-5);
 }
 
+.settings-account-directory {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-subsection-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.settings-subsection-header h4 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-semibold);
+}
+
+.settings-subsection-header .card-subtitle {
+  margin-top: var(--space-1);
+}
+
+.settings-account-table td {
+  vertical-align: middle;
+}
+
+.settings-account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+
+.settings-account-identity strong {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+}
+
+.settings-account-identity span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.settings-account-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: max-content;
+}
+
+.settings-account-actions .action-btn--security {
+  color: var(--color-warning-text);
+}
+
+.settings-account-actions .action-btn--danger {
+  color: var(--color-danger-text);
+}
+
 .settings-inline-hint {
   margin: var(--space-2) 0 0;
   font-size: 12px;
@@ -298,12 +388,21 @@
   .settings-section-nav {
     position: static;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
   }
 
   .settings-section-nav button {
     width: auto;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-nav-title,
+  .settings-nav-label {
+    display: none;
   }
 }
 
@@ -330,6 +429,10 @@
 
   .settings-theme-option {
     max-width: none;
+  }
+
+  .settings-account-actions {
+    gap: var(--space-1);
   }
 }
 
@@ -428,6 +531,15 @@
 .maintenance-settings-editor .modal-body {
     padding-top: var(--space-7);
     padding-bottom: var(--space-7);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.maintenance-settings-editor .custom-modal {
+    width: min(calc(100vw - 32px), 680px);
+    max-height: calc(100dvh - 48px);
+    overflow: hidden;
 }
 
 .maintenance-settings-editor .form-group {
@@ -450,4 +562,76 @@
 
 .maintenance-settings-editor .modal-footer {
     margin-top: var(--space-2);
+}
+
+#accountManagementModal .account-action-section {
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+}
+
+#accountManagementModal .account-section-heading {
+    margin-bottom: var(--space-4);
+}
+
+#accountManagementModal .account-section-heading > span,
+#accountManagementModal .account-form-section-label {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-primary);
+    font-size: var(--font-size-meta);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#accountManagementModal .account-section-heading h3,
+#accountManagementModal .account-form-section h3 {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-semibold);
+}
+
+#accountManagementModal .account-section-heading p {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+#accountManagementModal .account-form-section + .account-form-section {
+    margin-top: var(--space-6);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-border);
+}
+
+#accountManagementModal .account-form-section-heading {
+    margin-bottom: var(--space-4);
+}
+
+#accountManagementModal .account-security-note {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning-text);
+}
+
+#accountManagementModal .account-danger-zone {
+    padding: var(--space-4);
+    border: 1px solid var(--color-danger);
+    border-radius: var(--radius-md);
+    background: var(--color-danger-soft);
+}
+
+@media (max-width: 570px) {
+  .maintenance-settings-editor .custom-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .maintenance-settings-editor .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .maintenance-settings-editor .modal-footer button {
+    width: 100%;
+  }
 }

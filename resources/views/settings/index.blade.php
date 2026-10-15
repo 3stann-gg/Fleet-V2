@@ -25,7 +25,9 @@
                 id="settingsSectionNav"
                 aria-label="Settings sections"
               >
-                <button type="button" class="is-active" data-settings-section="settingsGeneral">
+                <p class="settings-nav-title">Settings sections</p>
+                <span class="settings-nav-label">General settings</span>
+                <button type="button" class="is-active" data-settings-section="settingsGeneral" aria-current="true">
                   <i class="ph ph-buildings" aria-hidden="true"></i>
                   General
                 </button>
@@ -33,6 +35,7 @@
                   <i class="ph ph-globe" aria-hidden="true"></i>
                   Regional
                 </button>
+                <span class="settings-nav-label">Fleet system</span>
                 <button type="button" data-settings-section="settingsVehicles">
                   <i class="ph ph-car" aria-hidden="true"></i>
                   Vehicles
@@ -65,6 +68,7 @@
                   <i class="ph ph-currency-circle-dollar" aria-hidden="true"></i>
                   Cost Analysis
                 </button>
+                <span class="settings-nav-label">Account &amp; interface</span>
                 <button type="button" data-settings-section="settingsNotifications">
                   <i class="ph ph-bell" aria-hidden="true"></i>
                   Notifications
@@ -84,6 +88,7 @@
 
                     Accounts
                 </button>
+                <span class="settings-nav-label">Data management</span>
                 <button type="button" data-settings-section="settingsData">
                   <i class="ph ph-database" aria-hidden="true"></i>
                   Data
@@ -771,7 +776,7 @@
                   <p class="settings-note">
                     Theme is stored in <strong>himsFleetTheme</strong> only.
                     Changing the theme here previews immediately; click
-                    <strong>Save Settings</strong> to persist, or
+                    <strong>Save Fleet Settings</strong> to persist, or
                     <strong>Cancel</strong> to restore the previous theme.
                     System theme is not available yet.
                   </p>
@@ -812,6 +817,45 @@
 
                             Manage User Accounts
                         </button>
+                    </div>
+
+                    <div class="settings-account-directory" aria-labelledby="settingsAccountDirectoryHeading">
+                        <div class="settings-subsection-header">
+                            <div>
+                                <h4 id="settingsAccountDirectoryHeading">
+                                    User Accounts
+                                </h4>
+
+                                <p class="card-subtitle">
+                                    Review identity, role, and current account status.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="fleet-table settings-account-table" aria-labelledby="settingsAccountDirectoryHeading">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">User</th>
+                                        <th scope="col">Role</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col">Actions</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="settingsAccountTableBody">
+                                    <tr>
+                                        <td colspan="4" class="settings-empty-state">
+                                            Loading user accounts...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="settings-inline-hint" id="settingsAccountTableStatus" role="status" aria-live="polite">
+                            Loading account directory.
+                        </p>
                     </div>
 
                     <p class="settings-note">
@@ -885,7 +929,7 @@
 
                 <div class="settings-action-bar" id="settingsActionBar">
                   <div class="settings-action-meta">
-                    <span id="settingsDirtyHint">All changes saved</span>
+                    <span id="settingsDirtyHint">Fleet settings are saved</span>
                     <span class="settings-unsaved-badge" id="settingsUnsavedBadge" hidden>
                       Unsaved changes
                     </span>
@@ -896,7 +940,7 @@
                     </button>
                     <button type="submit" class="btn-primary" id="saveFleetSettings" disabled>
                       <i class="ph ph-floppy-disk" aria-hidden="true"></i>
-                      Save Settings
+                      Save Fleet Settings
                     </button>
                   </div>
                 </div>
