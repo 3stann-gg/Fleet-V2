@@ -3,6 +3,75 @@ document.addEventListener("DOMContentLoaded", () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
     const formModal = document.getElementById("trafficViolationFormModal");
     const recordForm = document.getElementById("trafficViolationForm");
+    const filterForm = document.getElementById("trafficViolationFilterForm");
+
+    if (filterForm && filterForm.dataset.autoFilterInitialized !== "true") {
+        filterForm.dataset.autoFilterInitialized = "true";
+
+        const searchInput = document.getElementById("trafficViolationSearch");
+        const refreshButton = document.getElementById("refreshTrafficViolations");
+        const automaticFilterNames = [
+            "violation_type",
+            "responsibility",
+            "status",
+            "payment_status",
+            "date_from",
+            "date_to",
+            "show_archived",
+        ];
+        let searchDebounceTimer;
+        let isFilterSubmitting = false;
+        let lastSubmittedSearch = searchInput?.value ?? "";
+
+        function submitFilters() {
+            window.clearTimeout(searchDebounceTimer);
+
+            if (isFilterSubmitting) return;
+
+            if (typeof filterForm.requestSubmit === "function") {
+                filterForm.requestSubmit();
+                return;
+            }
+
+            isFilterSubmitting = true;
+            filterForm.submit();
+        }
+
+        filterForm.addEventListener("submit", (event) => {
+            window.clearTimeout(searchDebounceTimer);
+
+            if (isFilterSubmitting) {
+                event.preventDefault();
+                return;
+            }
+
+            isFilterSubmitting = true;
+        });
+
+        searchInput?.addEventListener("input", () => {
+            window.clearTimeout(searchDebounceTimer);
+            const currentSearch = searchInput.value;
+
+            if (currentSearch === lastSubmittedSearch) return;
+
+            searchDebounceTimer = window.setTimeout(() => {
+                lastSubmittedSearch = currentSearch;
+                submitFilters();
+            }, 450);
+        });
+
+        automaticFilterNames.forEach((name) => {
+            filterForm.elements.namedItem(name)?.addEventListener("change", submitFilters);
+        });
+
+        refreshButton?.addEventListener("click", () => {
+            if (refreshButton.disabled) return;
+
+            refreshButton.disabled = true;
+            refreshButton.setAttribute("aria-busy", "true");
+            window.location.reload();
+        });
+    }
 
     function openModal(modal) {
         if (!modal) return;
@@ -156,7 +225,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const { action, id } = button.dataset;
             try {
                 if (action === "archive" || action === "restore") {
-                    if (!window.confirm(`${action === "archive" ? "Archive" : "Restore"} this traffic violation record?`)) return;
+                    const isArchive = action === "archive";
+                    const confirmed = await window.showFleetConfirm({
+                        title: `${isArchive ? "Archive" : "Restore"} Traffic Violation?`,
+                        message: `Are you sure you want to ${action} this traffic violation record?`,
+                        confirmLabel: isArchive ? "Archive" : "Restore",
+                        confirmIcon: isArchive ? "ph ph-archive" : "ph ph-arrow-counter-clockwise",
+                        tone: isArchive ? "danger" : "primary",
+                    });
+
+                    if (!confirmed) return;
+
                     const data = await request(`${baseUrl}/${id}/${action}`, { method: "POST", body: "{}" });
                     window.showToast?.(data.message, "success");
                     window.location.reload();

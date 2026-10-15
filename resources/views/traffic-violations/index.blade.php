@@ -49,11 +49,11 @@
                     <p>Filter citations by type, responsibility, workflow status, payment, or date.</p>
                 </div>
             </div>
-        <form method="GET" action="{{ route('traffic-violations.index') }}" class="toolbar traffic-filter-form">
+        <form method="GET" action="{{ route('traffic-violations.index') }}" class="toolbar traffic-filter-form" id="trafficViolationFilterForm">
             <div class="toolbar-left">
                 <div class="search-box">
                     <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-                    <input name="search" value="{{ request('search') }}" placeholder="Search citation, agency, location, driver, or vehicle" aria-label="Search traffic violations">
+                    <input type="search" name="search" id="trafficViolationSearch" value="{{ request('search') }}" placeholder="Search citation, agency, location, driver, or vehicle" aria-label="Search traffic violations">
                 </div>
                 <select name="violation_type" class="filter-select" aria-label="Filter traffic violations by type">
                     <option value="all">All Violation Types</option>
@@ -80,8 +80,9 @@
                 @endif
             </div>
             <div class="toolbar-right">
-                <button type="submit" class="btn-primary"><i class="ph ph-funnel" aria-hidden="true"></i> Apply</button>
-                <a href="{{ route('traffic-violations.index') }}" class="btn-outline">Clear</a>
+                <button type="button" class="btn-outline" id="refreshTrafficViolations" aria-label="Refresh traffic violations">
+                    <i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Refresh
+                </button>
             </div>
         </form>
         </section>
