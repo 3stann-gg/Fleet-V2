@@ -106,7 +106,6 @@
                     <option value="all">All Vehicle Types</option>
                     <option value="Ambulance">Ambulance</option>
                     <option value="Van">Van</option>
-                    <option value="Patient Van">Patient Van</option>
                     <option value="SUV">SUV</option>
                     <option value="Car">Car</option>
                     <option value="Motorcycle">Motorcycle</option>

@@ -14,13 +14,14 @@
 >
     <div class="dispatch-candidate-header">
         <div>
-            <h3 id="{{ $prefix }}CandidateComparisonTitle">Candidate Vehicle Comparison</h3>
+            <h3 id="{{ $prefix }}CandidateComparisonTitle">Candidate Vehicle and Driver Comparison</h3>
             <p id="{{ $prefix }}CandidateComparisonDescription">Current operational advisory. The dispatcher retains final control.</p>
         </div>
         <span id="{{ $prefix }}CandidatePriority" class="status-chip status-chip--info"></span>
     </div>
 
     <input type="hidden" id="{{ $prefix }}SelectedVehicleId" />
+    <input type="hidden" id="{{ $prefix }}SelectedDriverId" />
 
     <div
         id="{{ $prefix }}SelectedVehicleSummary"
@@ -30,10 +31,10 @@
     ></div>
 
     <div class="table-responsive">
-        <table class="fleet-table dispatch-candidate-table" aria-label="Candidate vehicle suitability comparison">
+        <table class="fleet-table dispatch-candidate-table" aria-label="Candidate vehicle and driver suitability comparison">
             <thead>
                 <tr>
-                    <th>Vehicle</th>
+                    <th>Vehicle / Driver</th>
                     <th>Readiness</th>
                     <th>Capabilities</th>
                     <th>Hospital Qualification</th>
@@ -49,10 +50,10 @@
     </div>
 
     <div id="{{ $prefix }}CandidateEmpty" class="dispatch-candidate-empty" role="status" aria-live="polite" hidden>
-        No fleet vehicles are available for comparison.
+        No fleet vehicle and driver pairs are available for comparison.
     </div>
 
     <p id="{{ $prefix }}CandidateComparisonNotice" class="dispatch-candidate-notice">
-        Suitability is calculated from current records and does not automatically assign a vehicle.
+        Suitability is calculated from current records and does not automatically assign a vehicle or driver.
     </p>
 </section>

@@ -255,7 +255,6 @@ function handleReservationChange() {
     void loadDispatchCandidateVehicles(
         "dispatch",
         reservation.id,
-        reservation.driver_id,
     ).catch((error) => {
         console.error("Unable to load candidate vehicles:", error);
         if (typeof showToast === "function") {
@@ -1443,6 +1442,11 @@ function initDispatchAdd() {
             vehicle_id:
                 Number(
                     document.getElementById("dispatchSelectedVehicleId")
+                        ?.value || 0,
+                ) || null,
+            driver_id:
+                Number(
+                    document.getElementById("dispatchSelectedDriverId")
                         ?.value || 0,
                 ) || null,
             arrival_time: null,

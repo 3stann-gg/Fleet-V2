@@ -96,7 +96,6 @@ function getVehicleIcon(type) {
         case "Ambulance":
             return "ph-fill ph-ambulance";
 
-        case "Patient Van":
         case "Van":
             return "ph-fill ph-van";
 

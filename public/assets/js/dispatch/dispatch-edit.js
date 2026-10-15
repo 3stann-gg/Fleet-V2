@@ -97,6 +97,11 @@ function getEditFormValues() {
                 document.getElementById("editDispatchSelectedVehicleId")
                     ?.value || 0,
             ) || null,
+        driver_id:
+            Number(
+                document.getElementById("editDispatchSelectedDriverId")
+                    ?.value || 0,
+            ) || null,
     };
 }
 
@@ -327,7 +332,6 @@ async function populateEditDispatchForm(dispatchId) {
         await loadDispatchCandidateVehicles(
             "editDispatch",
             reservation.id,
-            reservation.driver_id,
         );
         return dispatch;
     } catch (error) {

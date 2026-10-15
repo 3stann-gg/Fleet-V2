@@ -133,13 +133,23 @@ it('loads all non-archived fleet candidates through the authorized endpoint', fu
     $ready = p42Vehicle();
     $unavailable = p42Vehicle(['readiness_status' => 'unavailable']);
     p42Vehicle(['archived_at' => now()]);
+    $readyDriver = p42Driver(['assigned_vehicle_id' => $ready->id]);
+    $unavailableDriver = p42Driver(['assigned_vehicle_id' => $unavailable->id]);
+    p42Qualification($readyDriver, $ready->vehicle_type);
+    p42Qualification($unavailableDriver, $unavailable->vehicle_type);
 
     $this->actingAs($user)
         ->getJson(route('dispatch.candidate-vehicles', $reservation))
         ->assertSuccessful()
-        ->assertJsonCount(2, 'candidates')
-        ->assertJsonPath('candidates.0.vehicle_id', $ready->id)
-        ->assertJsonPath('candidates.1.vehicle_id', $unavailable->id)
+        ->assertJsonCount(4, 'candidates')
+        ->assertJsonFragment([
+            'vehicle_id' => $ready->id,
+            'driver_id' => $unavailableDriver->id,
+        ])
+        ->assertJsonFragment([
+            'vehicle_id' => $unavailable->id,
+            'driver_id' => $readyDriver->id,
+        ])
         ->assertJsonMissingPath('candidates.0.score');
 });
 
@@ -437,22 +447,26 @@ it('does not persist a vehicle merely by loading candidate comparison', function
         ->and($candidate->fresh())->not->toBeNull();
 });
 
-it('persists a manually selected vehicle only with dispatch save', function () {
+it('persists a manually selected vehicle and driver pair only with dispatch save', function () {
     $user = User::factory()->create(['role' => 'dispatcher']);
     $original = p42Vehicle();
     $candidate = p42Vehicle();
-    $driver = p42Driver();
+    $originalDriver = p42Driver(['assigned_vehicle_id' => $original->id]);
+    $driver = p42Driver(['assigned_vehicle_id' => $candidate->id]);
+    p42Qualification($driver, $candidate->vehicle_type);
     $reservation = p42Reservation([
         'vehicle_id' => $original->id,
-        'driver_id' => $driver->id,
+        'driver_id' => $originalDriver->id,
     ]);
 
     $this->actingAs($user)->postJson(route('dispatch.store'), [
         'reservation_id' => $reservation->id,
         'vehicle_id' => $candidate->id,
+        'driver_id' => $driver->id,
     ])->assertCreated();
 
     expect($reservation->fresh()->vehicle_id)->toBe($candidate->id)
+        ->and($reservation->fresh()->driver_id)->toBe($driver->id)
         ->and(Dispatch::query()->where('reservation_id', $reservation->id)->exists())->toBeTrue();
 });
 

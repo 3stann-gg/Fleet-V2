@@ -79,7 +79,6 @@
             >
                 <option value="">Select Vechicle Type</option>
                 <option value="Ambulance">Ambulance</option>
-                <option value="Patient Van">Patient Van</option>
                 <option value="Service Vehicle">Service Vehicle</option>
                 <option value="SUV">SUV</option>
                 <option value="Motorcycle">Motorcycle</option>

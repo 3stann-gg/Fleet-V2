@@ -36,18 +36,21 @@ function dispatchCandidateDetailMessages(candidate) {
 function renderDispatchSelectedCandidate(prefix, candidate) {
     const summary = document.getElementById(`${prefix}SelectedVehicleSummary`);
     const selectedInput = document.getElementById(`${prefix}SelectedVehicleId`);
-    if (!summary || !selectedInput) {
+    const selectedDriverInput = document.getElementById(`${prefix}SelectedDriverId`);
+    if (!summary || !selectedInput || !selectedDriverInput) {
         return;
     }
 
     selectedInput.value = candidate ? String(candidate.vehicle_id) : "";
+    selectedDriverInput.value = candidate ? String(candidate.driver_id) : "";
     summary.replaceChildren();
     summary.hidden = !candidate;
     if (!candidate) {
         return;
     }
 
-    appendDispatchCandidateText(summary, "strong", `Selected Vehicle: ${candidate.vehicle_label}`);
+    appendDispatchCandidateText(summary, "strong", `Vehicle: ${candidate.vehicle_label}`);
+    appendDispatchCandidateText(summary, "strong", `Driver: ${candidate.driver_name}`);
     const result = appendDispatchCandidateText(summary, "span", candidate.label, "status-badge");
     result.classList.add(dispatchCandidateBadgeClass(candidate.status));
     appendDispatchCandidateText(
@@ -60,6 +63,11 @@ function renderDispatchSelectedCandidate(prefix, candidate) {
     const vehicleField = document.getElementById(`${prefix}Vehicle`);
     if (vehicleField) {
         vehicleField.value = candidate.vehicle_label || "";
+    }
+
+    const driverField = document.getElementById(`${prefix}Driver`);
+    if (driverField) {
+        driverField.value = candidate.driver_name || "";
     }
 
     if (prefix === "dispatch") {
@@ -94,6 +102,7 @@ function renderDispatchSelectedCandidate(prefix, candidate) {
 function createDispatchCandidateRow(prefix, candidate, allowSelection) {
     const row = document.createElement("tr");
     row.dataset.vehicleId = String(candidate.vehicle_id);
+    row.dataset.driverId = String(candidate.driver_id);
 
     const vehicleCell = row.insertCell();
     appendDispatchCandidateText(vehicleCell, "strong", candidate.vehicle_label);
@@ -103,6 +112,11 @@ function createDispatchCandidateRow(prefix, candidate, allowSelection) {
         [candidate.plate_number, candidate.vehicle_type, candidate.powertrain_label]
             .filter(Boolean)
             .join(" · "),
+    );
+    appendDispatchCandidateText(
+        vehicleCell,
+        "small",
+        `Driver: ${candidate.driver_name || "Not Available"}`,
     );
 
     [
@@ -137,15 +151,20 @@ function createDispatchCandidateRow(prefix, candidate, allowSelection) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "btn-outline dispatch-select-candidate";
-        button.textContent = candidate.selected ? "Selected" : "Select Vehicle";
-        button.disabled = candidate.selected;
+        button.textContent = candidate.selected ? "Selected" : "Select Pair";
+        button.disabled = candidate.selected || !candidate.pair_selectable;
+        if (!candidate.pair_selectable && !candidate.selected) {
+            button.title = "This vehicle and driver pair is not currently eligible for dispatch.";
+        }
         button.addEventListener("click", () => {
             const state = dispatchCandidateState.get(prefix);
             if (!state) {
                 return;
             }
             state.candidates.forEach((item) => {
-                item.selected = item.vehicle_id === candidate.vehicle_id;
+                item.selected =
+                    item.vehicle_id === candidate.vehicle_id &&
+                    item.driver_id === candidate.driver_id;
             });
             renderDispatchCandidateComparison(prefix, state);
             renderDispatchSelectedCandidate(prefix, candidate);
@@ -185,15 +204,14 @@ function renderDispatchCandidateComparison(prefix, data) {
     );
 }
 
-async function loadDispatchCandidateVehicles(prefix, reservationId, driverId = null) {
+async function loadDispatchCandidateVehicles(prefix, reservationId) {
     clearDispatchCandidateVehicles(prefix);
     if (!reservationId) {
         return null;
     }
 
-    const query = driverId ? `?driver_id=${encodeURIComponent(driverId)}` : "";
     const response = await fetch(
-        `/dispatch/candidate-vehicles/${encodeURIComponent(reservationId)}${query}`,
+        `/dispatch/candidate-vehicles/${encodeURIComponent(reservationId)}`,
         {
             headers: { Accept: "application/json" },
             credentials: "same-origin",
@@ -214,11 +232,15 @@ function clearDispatchCandidateVehicles(prefix) {
     const section = document.getElementById(`${prefix}CandidateComparison`);
     const body = document.getElementById(`${prefix}CandidateTableBody`);
     const selectedInput = document.getElementById(`${prefix}SelectedVehicleId`);
+    const selectedDriverInput = document.getElementById(`${prefix}SelectedDriverId`);
     if (section) {
         section.hidden = true;
     }
     body?.replaceChildren();
     if (selectedInput) {
         selectedInput.value = "";
+    }
+    if (selectedDriverInput) {
+        selectedDriverInput.value = "";
     }
 }

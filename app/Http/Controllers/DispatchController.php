@@ -10,6 +10,7 @@ use App\Models\Reservation;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\AuditLogService;
+use App\Services\DispatchAssignmentService;
 use App\Services\DispatchRecommendationService;
 use App\Services\DispatchSuitabilityService;
 use App\Services\FleetNotificationService;
@@ -767,41 +768,24 @@ class DispatchController extends Controller
     }
 
     public function candidateVehicles(
-        Request $request,
         Reservation $reservation,
         DispatchSuitabilityService $suitabilityService
     ) {
         $this->authorize('viewCandidateComparison', Dispatch::class);
         $this->authorize('view', $reservation);
 
-        $validated = $request->validate([
-            'driver_id' => [
-                'nullable',
-                'integer',
-                'exists:drivers,id',
-            ],
-        ]);
-
-        $driverId = array_key_exists('driver_id', $validated)
-            ? $validated['driver_id']
-            : $reservation->driver_id;
-        $driver = $driverId === null
-            ? null
-            : Driver::query()
-                ->whereNull('archived_at')
-                ->with('qualifications')
-                ->findOrFail($driverId);
-
         return response()->json(
-            $suitabilityService->compare($reservation, $driver)
+            $suitabilityService->comparePairs($reservation)
         );
     }
 
     /**
      * Store a newly created dispatch.
      */
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        DispatchAssignmentService $assignmentService,
+    ) {
         $this->authorize('create', Dispatch::class);
 
         $validator = Validator::make(
@@ -820,8 +804,15 @@ class DispatchController extends Controller
                 ],
                 'vehicle_id' => [
                     'nullable',
+                    'required_with:driver_id',
                     'integer',
                     'exists:vehicles,id',
+                ],
+                'driver_id' => [
+                    'nullable',
+                    'required_with:vehicle_id',
+                    'integer',
+                    'exists:drivers,id',
                 ],
                 'arrival_time' => [
                     'nullable',
@@ -842,7 +833,7 @@ class DispatchController extends Controller
         }
 
         try {
-            $dispatch = DB::transaction(function () use ($validator) {
+            $dispatch = DB::transaction(function () use ($validator, $assignmentService) {
                 $validated = $validator->validated();
 
                 /*
@@ -906,13 +897,30 @@ class DispatchController extends Controller
                     );
                 }
 
-                if (! empty($validated['vehicle_id'])) {
-                    $vehicle = Vehicle::query()
-                        ->whereNull('archived_at')
-                        ->findOrFail($validated['vehicle_id']);
+                $hasSubmittedPair = array_key_exists('vehicle_id', $validated)
+                    && array_key_exists('driver_id', $validated)
+                    && $validated['vehicle_id'] !== null
+                    && $validated['driver_id'] !== null;
 
-                    $reservation->update(['vehicle_id' => $vehicle->id]);
-                    $reservation->setRelation('vehicle', $vehicle);
+                if (
+                    $hasSubmittedPair
+                    && (
+                        (int) $validated['vehicle_id'] !== (int) $reservation->vehicle_id
+                        || (int) $validated['driver_id'] !== (int) $reservation->driver_id
+                    )
+                ) {
+                    $pair = $assignmentService->validateManualPair(
+                        $reservation,
+                        (int) $validated['vehicle_id'],
+                        (int) $validated['driver_id'],
+                    );
+
+                    $reservation->update([
+                        'vehicle_id' => $pair['vehicle']->id,
+                        'driver_id' => $pair['driver']->id,
+                    ]);
+                    $reservation->setRelation('vehicle', $pair['vehicle']);
+                    $reservation->setRelation('driver', $pair['driver']);
                 }
 
                 /*
@@ -1427,7 +1435,8 @@ class DispatchController extends Controller
      */
     public function update(
         Request $request,
-        Dispatch $dispatch
+        Dispatch $dispatch,
+        DispatchAssignmentService $assignmentService,
     ) {
         $this->authorize('update', $dispatch);
 
@@ -1468,8 +1477,15 @@ class DispatchController extends Controller
                 ],
                 'vehicle_id' => [
                     'nullable',
+                    'required_with:driver_id',
                     'integer',
                     'exists:vehicles,id',
+                ],
+                'driver_id' => [
+                    'nullable',
+                    'required_with:vehicle_id',
+                    'integer',
+                    'exists:drivers,id',
                 ],
             ]
         );
@@ -1486,7 +1502,8 @@ class DispatchController extends Controller
             $result = DB::transaction(function () use (
                 $validator,
                 $dispatch,
-                $isDriver
+                $isDriver,
+                $assignmentService,
 
             ) {
                 $validated = $validator->validated();
@@ -1582,8 +1599,14 @@ class DispatchController extends Controller
 
                 if (
                     ! $isDriver &&
-                    ! empty($validated['vehicle_id']) &&
-                    (int) $validated['vehicle_id'] !== (int) $reservation->vehicle_id
+                    array_key_exists('vehicle_id', $validated) &&
+                    array_key_exists('driver_id', $validated) &&
+                    $validated['vehicle_id'] !== null &&
+                    $validated['driver_id'] !== null &&
+                    (
+                        (int) $validated['vehicle_id'] !== (int) $reservation->vehicle_id
+                        || (int) $validated['driver_id'] !== (int) $reservation->driver_id
+                    )
                 ) {
                     if ($currentStatus !== 'Pending') {
                         throw new \Exception(
@@ -1591,12 +1614,18 @@ class DispatchController extends Controller
                         );
                     }
 
-                    $vehicle = Vehicle::query()
-                        ->whereNull('archived_at')
-                        ->findOrFail($validated['vehicle_id']);
+                    $pair = $assignmentService->validateManualPair(
+                        $reservation,
+                        (int) $validated['vehicle_id'],
+                        (int) $validated['driver_id'],
+                    );
 
-                    $reservation->update(['vehicle_id' => $vehicle->id]);
-                    $reservation->setRelation('vehicle', $vehicle);
+                    $reservation->update([
+                        'vehicle_id' => $pair['vehicle']->id,
+                        'driver_id' => $pair['driver']->id,
+                    ]);
+                    $reservation->setRelation('vehicle', $pair['vehicle']);
+                    $reservation->setRelation('driver', $pair['driver']);
                 }
 
                 /*

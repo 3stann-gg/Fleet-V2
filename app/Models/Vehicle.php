@@ -12,7 +12,6 @@ class Vehicle extends Model
 {
     public const TYPE_OPTIONS = [
         'Ambulance',
-        'Patient Van',
         'Service Vehicle',
         'SUV',
         'Motorcycle',
