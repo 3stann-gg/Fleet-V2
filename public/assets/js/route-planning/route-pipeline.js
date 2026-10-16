@@ -67,13 +67,13 @@ function formatRouteDistance(km) {
 
 function priorityRank(priority) {
     const map = {
-        Low: 1,
-        Normal: 2,
-        High: 3,
-        Emergency: 4,
+        scheduled: 1,
+        routine: 2,
+        urgent: 3,
+        emergency: 4,
     };
 
-    return map[priority] || 0;
+    return map[normalizeRoutePriority(priority)] || 0;
 }
 
 function statusBadgeClass(status) {
@@ -313,8 +313,7 @@ function updateRouteStatistics(records) {
     ).length;
 
     const high = list.filter(
-        (record) =>
-            record.priority === "High" || record.priority === "Emergency",
+        (record) => ["urgent", "emergency"].includes(record.priority),
     ).length;
 
     const distanceValues = list
@@ -514,6 +513,7 @@ function routeMatchesFilters(record, filters) {
             record.vehicle,
             record.driver,
             record.priority,
+            record.priorityLabel,
             record.department,
             record.status,
             record.purpose,
@@ -690,7 +690,7 @@ function buildRouteTableRow(record) {
 
     <td>
       <span class="route-priority">
-        ${escapeRouteHtml(record.priority)}
+        ${escapeRouteHtml(record.priorityLabel || getRoutePriorityLabel(record.priority))}
       </span>
     </td>
 
@@ -1816,6 +1816,9 @@ async function requestTomTomRoute(routeCoordinates, record) {
             longitude: point.lng,
         })),
     };
+    if (record?.reservationId) {
+        payload.reservation_id = Number(record.reservationId);
+    }
     /*
     |--------------------------------------------------------------------------
     | Use the RoutePlan scheduled departure time
@@ -1885,6 +1888,7 @@ async function requestTomTomRoute(routeCoordinates, record) {
             data.historic_traffic_travel_time_seconds,
         liveTrafficTravelTimeSeconds: data.live_traffic_travel_time_seconds,
         trafficLengthMeters: data.traffic_length_meters,
+        optimizationProof: data.optimization_proof || null,
         optimizedWaypoints: Array.isArray(data.optimized_waypoints)
             ? data.optimized_waypoints
             : [],

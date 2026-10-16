@@ -81,7 +81,6 @@ async function saveRouteAsTemplateFromForm() {
       origin: data.origin,
       destination: data.destination,
       stops: data.stops || [],
-      priority: data.priority || "Normal",
       department: data.department || "",
       purpose: data.purpose || "",
       recommendedVehicle: data.vehicle || "",
@@ -136,9 +135,6 @@ function applySelectedRouteTemplate() {
         renderRouteStops(
             template.stops && template.stops.length ? template.stops : [""],
         );
-    }
-    if (template.priority) {
-        document.getElementById("routePriority").value = template.priority;
     }
     if (template.department) {
         document.getElementById("routeDepartment").value = template.department;

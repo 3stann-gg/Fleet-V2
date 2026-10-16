@@ -49,6 +49,8 @@ class Reservation extends Model
     protected $appends = [
         'request_type_label',
         'priority_label',
+        'canonical_priority',
+        'is_emergency',
     ];
 
     protected $fillable = [
@@ -89,6 +91,43 @@ class Reservation extends Model
         return array_keys(self::PRIORITY_LABELS + self::LEGACY_PRIORITY_LABELS);
     }
 
+    public static function canonicalPriority(?string $priority): ?string
+    {
+        if ($priority === null || trim($priority) === '') {
+            return null;
+        }
+
+        $normalizedPriority = trim($priority);
+        $legacyPriorities = [
+            'Emergency' => 'emergency',
+            'High' => 'urgent',
+            'Normal' => 'routine',
+            'Low' => 'scheduled',
+        ];
+
+        return $legacyPriorities[$normalizedPriority] ?? $normalizedPriority;
+    }
+
+    /** @return list<string> */
+    public static function equivalentPriorityValues(?string $priority): array
+    {
+        $canonicalPriority = self::canonicalPriority($priority);
+
+        if ($canonicalPriority === null) {
+            return [];
+        }
+
+        $values = [$canonicalPriority];
+
+        foreach (array_keys(self::LEGACY_PRIORITY_LABELS) as $legacyPriority) {
+            if (self::canonicalPriority($legacyPriority) === $canonicalPriority) {
+                $values[] = $legacyPriority;
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
     public function getRequestTypeLabelAttribute(): string
     {
         if (! $this->request_type) {
@@ -109,6 +148,16 @@ class Reservation extends Model
         return self::PRIORITY_LABELS[$this->priority]
             ?? self::LEGACY_PRIORITY_LABELS[$this->priority]
             ?? $this->priority;
+    }
+
+    public function getCanonicalPriorityAttribute(): ?string
+    {
+        return self::canonicalPriority($this->priority);
+    }
+
+    public function getIsEmergencyAttribute(): bool
+    {
+        return self::isEmergencyRequestType($this->request_type);
     }
 
     public function priorityRank(): int

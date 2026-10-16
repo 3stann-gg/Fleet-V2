@@ -255,6 +255,30 @@ function getRouteDriverLabel(driver) {
    NORMALIZATION
 ========================================== */
 
+function normalizeRoutePriority(priority) {
+    const value = String(priority || "").trim();
+    const priorities = {
+        Emergency: "emergency",
+        High: "urgent",
+        Normal: "routine",
+        Low: "scheduled",
+    };
+
+    return priorities[value] || value || "routine";
+}
+
+function getRoutePriorityLabel(priority) {
+    const labels = {
+        emergency: "Emergency",
+        urgent: "Urgent",
+        routine: "Routine",
+        scheduled: "Scheduled",
+    };
+    const normalized = normalizeRoutePriority(priority);
+
+    return labels[normalized] || normalized.replaceAll("_", " ");
+}
+
 /**
  * Convert Laravel RoutePlan JSON
  * to the frontend object shape used by
@@ -266,6 +290,12 @@ function normalizeRouteApiRecord(raw, index = 0) {
     }
 
     const reservation = raw.reservation || null;
+    const priority = normalizeRoutePriority(
+        reservation?.canonical_priority || reservation?.priority || raw.priority,
+    );
+    const priorityLabel = String(
+        reservation?.priority_label || getRoutePriorityLabel(priority),
+    ).trim();
     const vehicle = reservation?.vehicle || null;
     const driver = reservation?.driver || null;
     const pickupHospital =
@@ -400,7 +430,8 @@ function normalizeRouteApiRecord(raw, index = 0) {
     | Planning Information
     |--------------------------------------------------------------------------
     */
-        priority: String(raw.priority || "Normal").trim(),
+        priority,
+        priorityLabel,
         department: String(raw.department || "").trim(),
         status: String(raw.status || "Draft").trim(),
         purpose: String(raw.purpose || "").trim(),
@@ -433,6 +464,7 @@ function normalizeRouteApiRecord(raw, index = 0) {
     */
         patientName: String(reservation?.patient_name || "").trim(),
         requestType: String(reservation?.request_type || "").trim(),
+        isEmergency: reservation?.is_emergency === true,
         /*
     |--------------------------------------------------------------------------
     | Timestamps
@@ -558,7 +590,10 @@ function normalizeRouteRecord(raw, index = 0) {
         driver: String(raw.driver || "").trim(),
         vehicleId: String(raw.vehicleId || "").trim(),
         driverId: String(raw.driverId || "").trim(),
-        priority: String(raw.priority || "Normal").trim(),
+        priority: normalizeRoutePriority(raw.priority),
+        priorityLabel: String(
+            raw.priorityLabel || getRoutePriorityLabel(raw.priority),
+        ).trim(),
         department: String(raw.department || "").trim(),
         purpose: String(raw.purpose || "").trim(),
         estimatedDistance:
@@ -587,6 +622,7 @@ function normalizeRouteRecord(raw, index = 0) {
         notes: String(raw.notes || "").trim(),
         patientName: String(raw.patientName || "").trim(),
         requestType: String(raw.requestType || "").trim(),
+        isEmergency: raw.isEmergency === true,
         createdAt,
         updatedAt,
         statusHistory: Array.isArray(raw.statusHistory)
@@ -1255,7 +1291,7 @@ function simulateRouteOptimization(input) {
         ? input.stops.filter((stop) => String(stop || "").trim())
         : [];
     const stopCount = stops.length;
-    const priority = String(input.priority || "Normal");
+    const priority = normalizeRoutePriority(input.priority);
     const seed =
         String(input.origin || "").length * 7 +
         String(input.destination || "").length * 11 +
@@ -1266,17 +1302,17 @@ function simulateRouteOptimization(input) {
     let strategy = "Balanced";
     let score = 78;
     let speedKmh = 28;
-    if (priority === "Emergency") {
+    if (priority === "emergency") {
         strategy = "Fastest";
         speedKmh = 42;
         score = 94;
         distance = Math.round(distance * 0.92 * 10) / 10;
-    } else if (priority === "High") {
+    } else if (priority === "urgent") {
         strategy = "Shortest";
         speedKmh = 34;
         score = 88;
         distance = Math.round(distance * 0.96 * 10) / 10;
-    } else if (priority === "Low") {
+    } else if (priority === "scheduled") {
         strategy = "Economy";
         speedKmh = 24;
         score = 72;
@@ -1356,7 +1392,6 @@ function readRouteTemplates() {
                 stops: Array.isArray(template.stops)
                     ? template.stops.map(String)
                     : [],
-                priority: String(template.priority || "Normal"),
                 department: String(template.department || ""),
                 purpose: String(template.purpose || ""),
                 recommendedVehicle: String(template.recommendedVehicle || ""),

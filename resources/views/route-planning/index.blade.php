@@ -91,10 +91,10 @@
                 </div>
                 <select class="filter-select" id="routePriorityFilter" aria-label="Filter by priority">
                   <option value="all">All Priorities</option>
-                  <option value="Low">Low</option>
-                  <option value="Normal">Normal</option>
-                  <option value="High">High</option>
-                  <option value="Emergency">Emergency</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="routine">Routine</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="emergency">Emergency</option>
                 </select>
                 <select class="filter-select" id="routeStatusFilter" aria-label="Filter by status">
                   <option value="all">All Statuses</option>
@@ -566,13 +566,8 @@
                     </select>
                 </div>
                 <div class="form-group">
-                  <label for="routePriority">Priority *</label>
-                  <select id="routePriority" readonly>
-                    <option value="Low">Low</option>
-                    <option value="Normal" selected>Normal</option>
-                    <option value="High">High</option>
-                    <option value="Emergency">Emergency</option>
-                  </select>
+                  <label for="routePriority">Reservation Priority</label>
+                  <input type="text" id="routePriority" readonly />
                 </div>
                 <div class="form-section-heading">
                   <h3>Origin, Destination &amp; Stops</h3>

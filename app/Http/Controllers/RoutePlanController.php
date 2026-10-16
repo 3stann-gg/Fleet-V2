@@ -2,20 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Reservation;
-use App\Models\RoutePlan;
 use App\Models\FleetSetting;
 use App\Models\HospitalFacility;
+use App\Models\Reservation;
+use App\Models\RoutePlan;
 use App\Services\AuditLogService;
+use App\Services\DispatchAssignmentService;
 use App\Services\TomTomRoutingService;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class RoutePlanController extends Controller
 {
     use AuthorizesRequests;
+
+    public function __construct(
+        private DispatchAssignmentService $dispatchAssignmentService,
+    ) {}
+
     /**
      * Display route plans.
      */
@@ -32,12 +40,11 @@ class RoutePlanController extends Controller
             $settings['routes'] ?? [];
 
         return [
-            'preferOptimized' =>
-                $routeSettings['preferOptimized']
+            'preferOptimized' => $routeSettings['preferOptimized']
                 ?? true,
         ];
     }
-    
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', RoutePlan::class);
@@ -57,8 +64,7 @@ class RoutePlanController extends Controller
                 $query,
                 $user
             );
-        
-        
+
         /*
         |--------------------------------------------------------------------------
         | Search
@@ -96,7 +102,14 @@ class RoutePlanController extends Controller
         */
 
         if ($request->filled('priority') && $request->priority !== 'all') {
-            $query->where('priority', $request->priority);
+            $priorityValues = Reservation::equivalentPriorityValues(
+                $request->string('priority')->toString()
+            );
+
+            $query->whereHas(
+                'reservation',
+                fn ($reservation) => $reservation->whereIn('priority', $priorityValues)
+            );
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -111,7 +124,7 @@ class RoutePlanController extends Controller
             $query->whereDate('departure_date', $request->date);
         }
 
-        if (!$request->boolean('show_archived')) {
+        if (! $request->boolean('show_archived')) {
             $query->where('status', '!=', 'Archived');
         }
 
@@ -139,7 +152,7 @@ class RoutePlanController extends Controller
             ? 'desc'
             : 'asc';
 
-        if (!in_array($sort, $allowedSorts, true)) {
+        if (! in_array($sort, $allowedSorts, true)) {
             $sort = 'id';
         }
 
@@ -154,22 +167,17 @@ class RoutePlanController extends Controller
         }
 
         $routePermissions = [
-            'role' =>
-                $user->role,
-            'canCreate' =>
-                $user->can(
-                    'create',
-                    RoutePlan::class
-                ),
-            'canUpdate' =>
-                $user->hasPermission('routes.manage'),
-            'canArchive' =>
-                $user->hasPermission('routes.manage'),
-            'canRestore' =>
-                $request->user()->hasPermission('routes.manage'),
-            'canDuplicate' =>
-                $user->hasPermission('routes.manage'),
+            'role' => $user->role,
+            'canCreate' => $user->can(
+                'create',
+                RoutePlan::class
+            ),
+            'canUpdate' => $user->hasPermission('routes.manage'),
+            'canArchive' => $user->hasPermission('routes.manage'),
+            'canRestore' => $request->user()->hasPermission('routes.manage'),
+            'canDuplicate' => $user->hasPermission('routes.manage'),
         ];
+
         return view(
             'route-planning.index',
             compact('routePermissions')
@@ -261,7 +269,7 @@ class RoutePlanController extends Controller
     /**
      * Store a new route plan.
      */
-   public function store(Request $request)
+    public function store(Request $request)
     {
         $this->authorize('create', RoutePlan::class);
 
@@ -433,13 +441,13 @@ class RoutePlanController extends Controller
                 | Vehicle and Driver are required before Route Planning
                 |--------------------------------------------------------------------------
                 */
-                if (!$reservation->vehicle) {
+                if (! $reservation->vehicle) {
                     throw new \Exception(
                         'This reservation does not have an assigned vehicle.'
                     );
                 }
 
-                if (!$reservation->driver) {
+                if (! $reservation->driver) {
                     throw new \Exception(
                         'This reservation does not have an assigned driver.'
                     );
@@ -449,7 +457,7 @@ class RoutePlanController extends Controller
                 | Generate Route Number
                 |--------------------------------------------------------------------------
                 */
-                $routeNumber = !empty($validated['route_number'])
+                $routeNumber = ! empty($validated['route_number'])
                     ? $validated['route_number']
                     : $this->generateRouteNumber();
                 /*
@@ -461,44 +469,25 @@ class RoutePlanController extends Controller
                 |
                 */
                 $routePlan = RoutePlan::create([
-                    'route_number' =>
-                        $routeNumber,
-                    'reservation_id' =>
-                        $reservation->id,
-                    'origin' =>
-                        $originLocation,
-                    'origin_latitude' =>
-                        $validated['origin_latitude'] ?? null,
-                    'origin_longitude' =>
-                        $validated['origin_longitude'] ?? null,
-                    'destination' =>
-                        $destinationLocation,
-                    'destination_latitude' =>
-                        $validated['destination_latitude'] ?? null,
-                    'destination_longitude' =>
-                        $validated['destination_longitude'] ?? null,
-                    'priority' =>
-                        $reservation->priority,
-                    'department' =>
-                        $validated['department'],
-                    'status' =>
-                        'Draft',
-                    'departure_date' =>
-                        $reservation->schedule_date,
-                    'departure_time' =>
-                        $reservation->schedule_time,
-                    'estimated_distance' =>
-                        $validated['estimated_distance'] ?? null,
-                    'estimated_time' =>
-                        $validated['estimated_time'] ?? null,
-                    'optimization_strategy' =>
-                        $validated['optimization_strategy'] ?? null,
-                    'optimization_score' =>
-                        $validated['optimization_score'] ?? null,
-                    'purpose' =>
-                        $validated['purpose'] ?? null,
-                    'notes' =>
-                        $validated['notes'] ?? null,
+                    'route_number' => $routeNumber,
+                    'reservation_id' => $reservation->id,
+                    'origin' => $originLocation,
+                    'origin_latitude' => $validated['origin_latitude'] ?? null,
+                    'origin_longitude' => $validated['origin_longitude'] ?? null,
+                    'destination' => $destinationLocation,
+                    'destination_latitude' => $validated['destination_latitude'] ?? null,
+                    'destination_longitude' => $validated['destination_longitude'] ?? null,
+                    'priority' => Reservation::canonicalPriority($reservation->priority),
+                    'department' => $validated['department'],
+                    'status' => 'Draft',
+                    'departure_date' => $reservation->schedule_date,
+                    'departure_time' => $reservation->schedule_time,
+                    'estimated_distance' => $validated['estimated_distance'] ?? null,
+                    'estimated_time' => $validated['estimated_time'] ?? null,
+                    'optimization_strategy' => $validated['optimization_strategy'] ?? null,
+                    'optimization_score' => $validated['optimization_score'] ?? null,
+                    'purpose' => $validated['purpose'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
                 ]);
                 /*
                 |--------------------------------------------------------------------------
@@ -506,18 +495,13 @@ class RoutePlanController extends Controller
                 |--------------------------------------------------------------------------
                 */
                 foreach (
-                    $validated['stops'] ?? []
-                    as $index => $stop
+                    $validated['stops'] ?? [] as $index => $stop
                 ) {
                     $routePlan->stops()->create([
-                        'stop_order' =>
-                            $index + 1,
-                        'location' =>
-                            $stop['location'],
-                        'latitude' =>
-                            $stop['latitude'] ?? null,
-                        'longitude' =>
-                            $stop['longitude'] ?? null,
+                        'stop_order' => $index + 1,
+                        'location' => $stop['location'],
+                        'latitude' => $stop['latitude'] ?? null,
+                        'longitude' => $stop['longitude'] ?? null,
                     ]);
                 }
 
@@ -530,13 +514,11 @@ class RoutePlanController extends Controller
                 AuditLogService::log(
                     module: 'Route Planning',
                     action: 'Created',
-                    description:
-                        "Created route plan {$routePlan->route_number}.",
+                    description: "Created route plan {$routePlan->route_number}.",
                     record: $routePlan,
-                    newValues:
-                        $this->getRoutePlanAuditValues(
-                            $routePlan
-                        )
+                    newValues: $this->getRoutePlanAuditValues(
+                        $routePlan
+                    )
                 );
 
                 return $routePlan;
@@ -599,10 +581,6 @@ class RoutePlanController extends Controller
                     'string',
                     'max:255',
                 ],
-                'priority' => [
-                    'required',
-                    'in:Low,Normal,High,Emergency',
-                ],
                 'department' => [
                     'required',
                     'string',
@@ -657,6 +635,15 @@ class RoutePlanController extends Controller
                     'min:0',
                     'max:100',
                 ],
+                'optimization_applied' => [
+                    'sometimes',
+                    'boolean',
+                ],
+                'optimization_proof' => [
+                    'nullable',
+                    'string',
+                    'max:10000',
+                ],
                 'purpose' => [
                     'nullable',
                     'string',
@@ -703,15 +690,21 @@ class RoutePlanController extends Controller
                 $validator,
                 $routePlan
             ) {
-                $routePlan = RoutePlan::with([
-                    'reservation.dispatch',
-                    'reservation.pickupHospital',
-                    'reservation.destinationHospital',
+                $routePlan = RoutePlan::query()
+                    ->lockForUpdate()
+                    ->findOrFail($routePlan->id);
+
+                $reservation = Reservation::with([
+                    'dispatch',
+                    'vehicle',
+                    'driver',
+                    'pickupHospital',
+                    'destinationHospital',
                 ])
                     ->lockForUpdate()
-                    ->findOrFail(
-                        $routePlan->id
-                    );
+                    ->findOrFail($routePlan->reservation_id);
+
+                $routePlan->setRelation('reservation', $reservation);
 
                 $validated = $validator->validated();
                 /*
@@ -733,6 +726,35 @@ class RoutePlanController extends Controller
 
                 $newStatus =
                     $validated['status'];
+
+                $isEmergency = Reservation::isEmergencyRequestType(
+                    $routePlan->reservation?->request_type
+                );
+                $optimizationApplied = (bool) ($validated['optimization_applied'] ?? false);
+
+                if (
+                    $isEmergency &&
+                    $currentStatus === 'Planned' &&
+                    $newStatus === 'Ready For Dispatch'
+                ) {
+                    throw new \Exception(
+                        'Emergency routes become Ready For Dispatch automatically after a valid optimization is applied and saved.'
+                    );
+                }
+
+                if (
+                    $isEmergency &&
+                    $currentStatus === 'Planned' &&
+                    $newStatus === 'Planned' &&
+                    $optimizationApplied
+                ) {
+                    $this->assertEmergencyRouteReady(
+                        $routePlan,
+                        $validated
+                    );
+
+                    $newStatus = 'Ready For Dispatch';
+                }
 
                 $oldAuditValues =
                     $this->getRoutePlanAuditValues(
@@ -766,7 +788,7 @@ class RoutePlanController extends Controller
 
                 if (
                     $currentStatus !== $newStatus &&
-                    !in_array(
+                    ! in_array(
                         $newStatus,
                         $allowedTransitions[$currentStatus] ?? [],
                         true
@@ -827,40 +849,25 @@ class RoutePlanController extends Controller
                 */
 
                 $routePlan->update([
-                    'origin' =>
-                        $originLocation,
-                    'origin_latitude' =>
-                        $validated['origin_latitude'] ?? null,
-                    'origin_longitude' =>
-                        $validated['origin_longitude'] ?? null,
-                    'destination' =>
-                        $destinationLocation,
-                    'destination_latitude' =>
-                        $validated['destination_latitude'] ?? null,
-                    'destination_longitude' =>
-                        $validated['destination_longitude'] ?? null,
-                    'priority' =>
-                        $validated['priority'],
-                    'department' =>
-                        $validated['department'],
-                    'status' =>
-                        $newStatus,
-                    'departure_date' =>
-                        $routePlan->reservation->schedule_date,
-                    'departure_time' =>
-                        $routePlan->reservation->schedule_time,
-                    'estimated_distance' =>
-                        $validated['estimated_distance'] ?? null,
-                    'estimated_time' =>
-                        $validated['estimated_time'] ?? null,
-                    'optimization_strategy' =>
-                        $validated['optimization_strategy'] ?? null,
-                    'optimization_score' =>
-                        $validated['optimization_score'] ?? null,
-                    'purpose' =>
-                        $validated['purpose'] ?? null,
-                    'notes' =>
-                        $validated['notes'] ?? null,
+                    'origin' => $originLocation,
+                    'origin_latitude' => $validated['origin_latitude'] ?? null,
+                    'origin_longitude' => $validated['origin_longitude'] ?? null,
+                    'destination' => $destinationLocation,
+                    'destination_latitude' => $validated['destination_latitude'] ?? null,
+                    'destination_longitude' => $validated['destination_longitude'] ?? null,
+                    'priority' => Reservation::canonicalPriority(
+                        $routePlan->reservation->priority
+                    ),
+                    'department' => $validated['department'],
+                    'status' => $newStatus,
+                    'departure_date' => $routePlan->reservation->schedule_date,
+                    'departure_time' => $routePlan->reservation->schedule_time,
+                    'estimated_distance' => $validated['estimated_distance'] ?? null,
+                    'estimated_time' => $validated['estimated_time'] ?? null,
+                    'optimization_strategy' => $validated['optimization_strategy'] ?? null,
+                    'optimization_score' => $validated['optimization_score'] ?? null,
+                    'purpose' => $validated['purpose'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
                 ]);
 
                 /*
@@ -872,18 +879,13 @@ class RoutePlanController extends Controller
                 $routePlan->stops()->delete();
 
                 foreach (
-                    $validated['stops'] ?? []
-                    as $index => $stop
+                    $validated['stops'] ?? [] as $index => $stop
                 ) {
                     $routePlan->stops()->create([
-                        'stop_order' =>
-                            $index + 1,
-                        'location' =>
-                            $stop['location'],
-                        'latitude' =>
-                            $stop['latitude'] ?? null,
-                        'longitude' =>
-                            $stop['longitude'] ?? null,
+                        'stop_order' => $index + 1,
+                        'location' => $stop['location'],
+                        'latitude' => $stop['latitude'] ?? null,
+                        'longitude' => $stop['longitude'] ?? null,
                     ]);
                 }
 
@@ -928,7 +930,7 @@ class RoutePlanController extends Controller
      */
     public function archive(RoutePlan $routePlan)
     {
-       $this->authorize('archive', $routePlan);
+        $this->authorize('archive', $routePlan);
 
         $routePlan->load([
             'reservation.dispatch',
@@ -946,8 +948,7 @@ class RoutePlanController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This route plan cannot be archived because a dispatch already exists for its reservation.',
+                'message' => 'This route plan cannot be archived because a dispatch already exists for its reservation.',
             ], 422);
         }
         /*
@@ -1029,8 +1030,7 @@ class RoutePlanController extends Controller
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This route plan cannot be restored because a dispatch already exists for its reservation.',
+                'message' => 'This route plan cannot be restored because a dispatch already exists for its reservation.',
             ], 422);
         }
 
@@ -1040,13 +1040,12 @@ class RoutePlanController extends Controller
         |--------------------------------------------------------------------------
         */
         if (
-            !$routePlan->reservation ||
+            ! $routePlan->reservation ||
             $routePlan->reservation->status !== 'Approved'
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'This route plan cannot be restored because its reservation is no longer Approved.',
+                'message' => 'This route plan cannot be restored because its reservation is no longer Approved.',
             ], 422);
         }
 
@@ -1074,16 +1073,13 @@ class RoutePlanController extends Controller
         AuditLogService::log(
             module: 'Route Planning',
             action: 'Restored',
-            description:
-                "Restored route {$routePlan->route_number} to Draft.",
+            description: "Restored route {$routePlan->route_number} to Draft.",
             record: $routePlan,
             oldValues: [
-                'status' =>
-                    $oldValues['status'] ?? null,
+                'status' => $oldValues['status'] ?? null,
             ],
             newValues: [
-                'status' =>
-                    $newValues['status'] ?? null,
+                'status' => $newValues['status'] ?? null,
             ]
         );
 
@@ -1103,7 +1099,6 @@ class RoutePlanController extends Controller
     /**
      * Delete route plan.
      */
-    
 
     /**
      * Duplicate a route plan using another approved reservation.
@@ -1130,10 +1125,8 @@ class RoutePlanController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please select a valid reservation for the duplicated route.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please select a valid reservation for the duplicated route.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -1192,12 +1185,12 @@ class RoutePlanController extends Controller
                 | Vehicle And Driver Must Exist
                 |--------------------------------------------------------------------------
                 */
-                if (!$reservation->vehicle) {
+                if (! $reservation->vehicle) {
                     throw new \Exception(
                         'The selected reservation does not have an assigned vehicle.'
                     );
                 }
-                if (!$reservation->driver) {
+                if (! $reservation->driver) {
                     throw new \Exception(
                         'The selected reservation does not have an assigned driver.'
                     );
@@ -1231,44 +1224,25 @@ class RoutePlanController extends Controller
                 | the original route.
                 */
                 $copy = RoutePlan::create([
-                    'route_number' =>
-                        $this->generateRouteNumber(),
-                    'reservation_id' =>
-                        $reservation->id,
-                    'origin' =>
-                        $originLocation,
-                    'origin_latitude' =>
-                        null,
-                    'origin_longitude' =>
-                        null,
-                    'destination' =>
-                        $destinationLocation,
-                    'destination_latitude' =>
-                        null,
-                    'destination_longitude' =>
-                        null,
-                    'priority' =>
-                        $reservation->priority,
-                    'department' =>
-                        $routePlan->department,
-                    'status' =>
-                        'Draft',
-                    'departure_date' =>
-                        $reservation->schedule_date,
-                    'departure_time' =>
-                        $reservation->schedule_time,
-                    'estimated_distance' =>
-                        null,
-                    'estimated_time' =>
-                        null,
-                    'optimization_strategy' =>
-                        $routePlan->optimization_strategy,
-                    'optimization_score' =>
-                        null,
-                    'purpose' =>
-                        $routePlan->purpose,
-                    'notes' =>
-                        $routePlan->notes,
+                    'route_number' => $this->generateRouteNumber(),
+                    'reservation_id' => $reservation->id,
+                    'origin' => $originLocation,
+                    'origin_latitude' => null,
+                    'origin_longitude' => null,
+                    'destination' => $destinationLocation,
+                    'destination_latitude' => null,
+                    'destination_longitude' => null,
+                    'priority' => Reservation::canonicalPriority($reservation->priority),
+                    'department' => $routePlan->department,
+                    'status' => 'Draft',
+                    'departure_date' => $reservation->schedule_date,
+                    'departure_time' => $reservation->schedule_time,
+                    'estimated_distance' => null,
+                    'estimated_time' => null,
+                    'optimization_strategy' => $routePlan->optimization_strategy,
+                    'optimization_score' => null,
+                    'purpose' => $routePlan->purpose,
+                    'notes' => $routePlan->notes,
                 ]);
                 /*
                 |--------------------------------------------------------------------------
@@ -1277,14 +1251,10 @@ class RoutePlanController extends Controller
                 */
                 foreach ($routePlan->stops as $stop) {
                     $copy->stops()->create([
-                        'stop_order' =>
-                            $stop->stop_order,
-                        'location' =>
-                            $stop->location,
-                        'latitude' =>
-                            $stop->latitude,
-                        'longitude' =>
-                            $stop->longitude,
+                        'stop_order' => $stop->stop_order,
+                        'location' => $stop->location,
+                        'latitude' => $stop->latitude,
+                        'longitude' => $stop->longitude,
                     ]);
                 }
                 $copy->load([
@@ -1296,37 +1266,33 @@ class RoutePlanController extends Controller
                 AuditLogService::log(
                     module: 'Route Planning',
                     action: 'Duplicated',
-                    description:
-                        "Duplicated route {$routePlan->route_number} as {$copy->route_number}.",
+                    description: "Duplicated route {$routePlan->route_number} as {$copy->route_number}.",
                     record: $copy,
-                    newValues:
-                        $this->getRoutePlanAuditValues(
-                            $copy
-                        )
+                    newValues: $this->getRoutePlanAuditValues(
+                        $copy
+                    )
                 );
 
                 return $copy;
             });
+
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Route plan duplicated successfully.',
-                'routePlan' =>
-                    $newRoutePlan,
+                'message' => 'Route plan duplicated successfully.',
+                'routePlan' => $newRoutePlan,
             ], 201);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
 
     /**
-    * Calculate a traffic-aware route using TomTom.
-    */
+     * Calculate a traffic-aware route using TomTom.
+     */
     public function trafficRoute(
         Request $request,
         TomTomRoutingService $tomTom
@@ -1355,16 +1321,19 @@ class RoutePlanController extends Controller
                     'nullable',
                     'date',
                 ],
+                'reservation_id' => [
+                    'nullable',
+                    'integer',
+                    'exists:reservations,id',
+                ],
             ]
         );
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please provide valid route coordinates.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please provide valid route coordinates.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -1378,51 +1347,69 @@ class RoutePlanController extends Controller
                     $validated['depart_at'] ?? null
                 );
 
+            $distanceKm = $result['distance_meters'] !== null
+                ? round($result['distance_meters'] / 1000, 2)
+                : null;
+            $travelTimeMinutes = $result['travel_time_seconds'] !== null
+                ? round($result['travel_time_seconds'] / 60, 1)
+                : null;
+            $firstCoordinate = $validated['coordinates'][0];
+            $lastCoordinate = $validated['coordinates'][array_key_last($validated['coordinates'])];
+            $proofCoordinates = $this->optimizedProofCoordinates(
+                $validated['coordinates'],
+                $result['optimized_waypoints'] ?? []
+            );
+            $stopCount = max(count($validated['coordinates']) - 2, 0);
+            $optimizationStrategy = match (true) {
+                $stopCount >= 2 => 'TomTom Traffic-Aware Optimized',
+                $stopCount === 1 => 'TomTom Traffic-Aware Multi-stop',
+                default => 'TomTom Traffic-Aware Fastest',
+            };
+            $optimizationProof = Crypt::encryptString(json_encode([
+                'user_id' => $request->user()->id,
+                'reservation_id' => $validated['reservation_id'] ?? null,
+                'issued_at' => now()->timestamp,
+                'origin_latitude' => (float) $firstCoordinate['latitude'],
+                'origin_longitude' => (float) $firstCoordinate['longitude'],
+                'destination_latitude' => (float) $lastCoordinate['latitude'],
+                'destination_longitude' => (float) $lastCoordinate['longitude'],
+                'coordinates' => array_map(
+                    fn (array $coordinate): array => [
+                        'latitude' => (float) $coordinate['latitude'],
+                        'longitude' => (float) $coordinate['longitude'],
+                    ],
+                    $proofCoordinates
+                ),
+                'estimated_distance' => $distanceKm,
+                'estimated_time' => $travelTimeMinutes === null
+                    ? null
+                    : (int) ceil($travelTimeMinutes),
+                'optimization_strategy' => $optimizationStrategy,
+                'provider' => $result['provider'],
+            ], JSON_THROW_ON_ERROR));
+
             return response()->json([
                 'success' => true,
-                'provider' =>
-                    $result['provider'],
-                'distance_meters' =>
-                    $result['distance_meters'],
-                'distance_km' =>
-                    $result['distance_meters'] !== null
-                        ? round(
-                            $result['distance_meters'] / 1000,
-                            2
-                        )
-                        : null,
-                'travel_time_seconds' =>
-                    $result['travel_time_seconds'],
-                'travel_time_minutes' =>
-                    $result['travel_time_seconds'] !== null
-                        ? round(
-                            $result['travel_time_seconds'] / 60,
-                            1
-                        )
-                        : null,
-                'traffic_delay_seconds' =>
-                    $result['traffic_delay_seconds'],
-                'traffic_delay_minutes' =>
-                    $result['traffic_delay_seconds'] !== null
+                'provider' => $result['provider'],
+                'distance_meters' => $result['distance_meters'],
+                'distance_km' => $distanceKm,
+                'travel_time_seconds' => $result['travel_time_seconds'],
+                'travel_time_minutes' => $travelTimeMinutes,
+                'optimization_proof' => $optimizationProof,
+                'traffic_delay_seconds' => $result['traffic_delay_seconds'],
+                'traffic_delay_minutes' => $result['traffic_delay_seconds'] !== null
                         ? round(
                             $result['traffic_delay_seconds'] / 60,
                             1
                         )
                         : null,
-                'traffic_length_meters' =>
-                    $result['traffic_length_meters'],
-                'no_traffic_travel_time_seconds' =>
-                    $result['no_traffic_travel_time_seconds'],
-                'historic_traffic_travel_time_seconds' =>
-                    $result['historic_traffic_travel_time_seconds'],
-                'live_traffic_travel_time_seconds' =>
-                    $result['live_traffic_travel_time_seconds'],
-                'departure_time' =>
-                    $result['departure_time'],
-                'arrival_time' =>
-                    $result['arrival_time'],
-                'optimized_waypoints' =>
-                    $result['optimized_waypoints'],
+                'traffic_length_meters' => $result['traffic_length_meters'],
+                'no_traffic_travel_time_seconds' => $result['no_traffic_travel_time_seconds'],
+                'historic_traffic_travel_time_seconds' => $result['historic_traffic_travel_time_seconds'],
+                'live_traffic_travel_time_seconds' => $result['live_traffic_travel_time_seconds'],
+                'departure_time' => $result['departure_time'],
+                'arrival_time' => $result['arrival_time'],
+                'optimized_waypoints' => $result['optimized_waypoints'],
                 /*
                 |--------------------------------------------------------------------------
                 | Turn-by-Turn Navigation Instructions
@@ -1433,12 +1420,10 @@ class RoutePlanController extends Controller
                 | route offset, and human-readable instruction.
                 |
                 */
-                'instructions' =>
-                    array_values(
-                        $result['instructions'] ?? []
-                    ),
-                'points' =>
-                    $result['points'],
+                'instructions' => array_values(
+                    $result['instructions'] ?? []
+                ),
+                'points' => $result['points'],
             ]);
 
         } catch (\Throwable $e) {
@@ -1447,15 +1432,14 @@ class RoutePlanController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Traffic-aware route calculation failed.',
-                'error' =>
-                    config('app.debug')
+                'message' => 'Traffic-aware route calculation failed.',
+                'error' => config('app.debug')
                         ? $e->getMessage()
                         : null,
             ], 502);
         }
     }
+
     /**
      * Route Planning statistics.
      */
@@ -1492,13 +1476,11 @@ class RoutePlanController extends Controller
                 ->count();
         $highPriority =
             $activeRoutes
-                ->whereIn(
-                    'priority',
-                    [
-                        'High',
-                        'Emergency',
-                    ]
-                )
+                ->filter(fn (RoutePlan $routePlan): bool => in_array(
+                    Reservation::canonicalPriority($routePlan->reservation?->priority),
+                    ['urgent', 'emergency'],
+                    true
+                ))
                 ->count();
         $distances =
             $activeRoutes
@@ -1506,8 +1488,7 @@ class RoutePlanController extends Controller
                     'estimated_distance'
                 )
                 ->filter(
-                    fn ($value) =>
-                        $value !== null &&
+                    fn ($value) => $value !== null &&
                         (float) $value >= 0
                 );
         $times =
@@ -1516,8 +1497,7 @@ class RoutePlanController extends Controller
                     'estimated_time'
                 )
                 ->filter(
-                    fn ($value) =>
-                        $value !== null &&
+                    fn ($value) => $value !== null &&
                         (int) $value >= 0
                 );
         $averageDistance =
@@ -1536,28 +1516,21 @@ class RoutePlanController extends Controller
         $assignedVehicles =
             $activeRoutes
                 ->map(
-                    fn ($route) =>
-                        $route
-                            ->reservation
-                            ?->vehicle_id
+                    fn ($route) => $route
+                        ->reservation
+                        ?->vehicle_id
                 )
                 ->filter()
                 ->unique()
                 ->count();
 
         return response()->json([
-            'total' =>
-                $activeRoutes->count(),
-            'ready' =>
-                $ready,
-            'high_priority' =>
-                $highPriority,
-            'average_distance' =>
-                $averageDistance,
-            'average_time' =>
-                $averageTime,
-            'assigned_vehicles' =>
-                $assignedVehicles,
+            'total' => $activeRoutes->count(),
+            'ready' => $ready,
+            'high_priority' => $highPriority,
+            'average_distance' => $averageDistance,
+            'average_time' => $averageTime,
+            'assigned_vehicles' => $assignedVehicles,
         ]);
     }
 
@@ -1615,7 +1588,7 @@ class RoutePlanController extends Controller
         | Partial match fallback
         |--------------------------------------------------------------------------
         */
-        if (!$facility) {
+        if (! $facility) {
             $facility = $facilities->first(function ($item) use ($normalized) {
                 $name = mb_strtolower(
                     preg_replace('/\s+/', ' ', trim((string) $item->name))
@@ -1632,7 +1605,7 @@ class RoutePlanController extends Controller
             });
         }
 
-        if (!$facility) {
+        if (! $facility) {
             return null;
         }
 
@@ -1668,7 +1641,7 @@ class RoutePlanController extends Controller
         $lastRoute = RoutePlan::where(
             'route_number',
             'like',
-            $prefix . '%'
+            $prefix.'%'
         )
             ->orderByDesc('route_number')
             ->first();
@@ -1685,7 +1658,7 @@ class RoutePlanController extends Controller
                 $lastNumber + 1;
         }
 
-        return $prefix .
+        return $prefix.
             str_pad(
                 $nextSequence,
                 3,
@@ -1702,8 +1675,7 @@ class RoutePlanController extends Controller
         $this->authorize('create', RoutePlan::class);
 
         return response()->json([
-            'route_number' =>
-                $this->generateRouteNumber(),
+            'route_number' => $this->generateRouteNumber(),
         ]);
     }
 
@@ -1718,11 +1690,10 @@ class RoutePlanController extends Controller
             if ($driverId) {
                 $query->whereHas(
                     'reservation',
-                    fn ($reservation) =>
-                        $reservation->where(
-                            'driver_id',
-                            $driverId
-                        )
+                    fn ($reservation) => $reservation->where(
+                        'driver_id',
+                        $driverId
+                    )
                 );
             } else {
                 $query->whereRaw('1 = 0');
@@ -1732,37 +1703,269 @@ class RoutePlanController extends Controller
         return $query;
     }
 
+    /** @param array<string, mixed> $validated */
+    private function assertEmergencyRouteReady(
+        RoutePlan $routePlan,
+        array $validated
+    ): void {
+        $reservation = $routePlan->reservation;
+
+        if (! $reservation) {
+            throw new \Exception('The linked reservation is no longer available.');
+        }
+
+        if ($reservation->status !== 'Approved') {
+            throw new \Exception(
+                'The emergency reservation must be Approved before its route can become Ready For Dispatch.'
+            );
+        }
+
+        if (! Reservation::isEmergencyRequestType($reservation->request_type)) {
+            throw new \Exception('The linked reservation is not an emergency request.');
+        }
+
+        if (! $reservation->vehicle_id) {
+            throw new \Exception('The emergency reservation does not have an assigned vehicle.');
+        }
+
+        if (! $reservation->driver_id) {
+            throw new \Exception('The emergency reservation does not have an assigned driver.');
+        }
+
+        if (
+            trim((string) ($validated['origin'] ?? '')) === '' ||
+            trim((string) ($validated['destination'] ?? '')) === ''
+        ) {
+            throw new \Exception(
+                'Origin and destination are required before the emergency route can become Ready For Dispatch.'
+            );
+        }
+
+        if (
+            (float) ($validated['estimated_distance'] ?? 0) <= 0 ||
+            (int) ($validated['estimated_time'] ?? 0) <= 0
+        ) {
+            throw new \Exception(
+                'A positive estimated distance and travel time are required before the emergency route can become Ready For Dispatch.'
+            );
+        }
+
+        if (trim((string) ($validated['optimization_strategy'] ?? '')) === '') {
+            throw new \Exception(
+                'An applied route optimization is required before the emergency route can become Ready For Dispatch.'
+            );
+        }
+
+        foreach ([
+            'origin_latitude',
+            'origin_longitude',
+            'destination_latitude',
+            'destination_longitude',
+        ] as $coordinate) {
+            if (! isset($validated[$coordinate]) || ! is_numeric($validated[$coordinate])) {
+                throw new \Exception(
+                    'Complete optimized route coordinates are required before the emergency route can become Ready For Dispatch.'
+                );
+            }
+        }
+
+        if ($reservation->dispatch) {
+            throw new \Exception(
+                'This emergency route is locked because a dispatch has already been created.'
+            );
+        }
+
+        $this->assertOptimizationProof(
+            $routePlan,
+            $validated
+        );
+
+        $routeForEvaluation = clone $routePlan;
+        $routeForEvaluation->estimated_distance = $validated['estimated_distance'];
+        $routeForEvaluation->estimated_time = $validated['estimated_time'];
+        $reservation->setRelation('routePlan', $routeForEvaluation);
+
+        $this->dispatchAssignmentService->validateManualPair(
+            $reservation,
+            (int) $reservation->vehicle_id,
+            (int) $reservation->driver_id
+        );
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function assertOptimizationProof(RoutePlan $routePlan, array $validated): void
+    {
+        $proof = $validated['optimization_proof'] ?? null;
+
+        if (! is_string($proof) || $proof === '') {
+            throw new \Exception(
+                'A verified server routing result is required before the emergency route can become Ready For Dispatch.'
+            );
+        }
+
+        try {
+            $proofData = json_decode(
+                Crypt::decryptString($proof),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+        } catch (DecryptException|\JsonException) {
+            throw new \Exception(
+                'The applied route optimization could not be verified. Run optimization again.'
+            );
+        }
+
+        if (! is_array($proofData)) {
+            throw new \Exception(
+                'The applied route optimization could not be verified. Run optimization again.'
+            );
+        }
+
+        $proofIssuedAt = (int) ($proofData['issued_at'] ?? 0);
+        $proofMatches =
+            (int) ($proofData['user_id'] ?? 0) === (int) request()->user()?->id &&
+            (int) ($proofData['reservation_id'] ?? 0) === (int) $routePlan->reservation_id &&
+            $proofIssuedAt >= now()->subMinutes(30)->timestamp &&
+            $proofIssuedAt <= now()->addMinute()->timestamp &&
+            $this->optimizationValuesMatch(
+                $proofData,
+                $validated
+            );
+
+        if (! $proofMatches) {
+            throw new \Exception(
+                'The applied route optimization does not match the verified server routing result. Run optimization again.'
+            );
+        }
+    }
+
+    /** @param array<string, mixed> $proofData @param array<string, mixed> $validated */
+    private function optimizationValuesMatch(array $proofData, array $validated): bool
+    {
+        $floatValues = [
+            'origin_latitude' => 0.000001,
+            'origin_longitude' => 0.000001,
+            'destination_latitude' => 0.000001,
+            'destination_longitude' => 0.000001,
+            'estimated_distance' => 0.01,
+        ];
+
+        foreach ($floatValues as $field => $tolerance) {
+            if (
+                ! isset($proofData[$field], $validated[$field]) ||
+                abs((float) $proofData[$field] - (float) $validated[$field]) > $tolerance
+            ) {
+                return false;
+            }
+        }
+
+        if (
+            (int) ($proofData['estimated_time'] ?? 0) !==
+            (int) ($validated['estimated_time'] ?? 0) ||
+            (string) ($proofData['optimization_strategy'] ?? '') !==
+            (string) ($validated['optimization_strategy'] ?? '')
+        ) {
+            return false;
+        }
+
+        $proofCoordinates = $proofData['coordinates'] ?? null;
+
+        if (! is_array($proofCoordinates)) {
+            return false;
+        }
+
+        $submittedCoordinates = [[
+            'latitude' => $validated['origin_latitude'],
+            'longitude' => $validated['origin_longitude'],
+        ]];
+
+        foreach ($validated['stops'] ?? [] as $stop) {
+            if (! isset($stop['latitude'], $stop['longitude'])) {
+                return false;
+            }
+
+            $submittedCoordinates[] = [
+                'latitude' => $stop['latitude'],
+                'longitude' => $stop['longitude'],
+            ];
+        }
+
+        $submittedCoordinates[] = [
+            'latitude' => $validated['destination_latitude'],
+            'longitude' => $validated['destination_longitude'],
+        ];
+
+        $normalizeCoordinates = static fn (array $coordinates): array => array_map(
+            fn (array $coordinate): string => sprintf(
+                '%.6F,%.6F',
+                (float) ($coordinate['latitude'] ?? 0),
+                (float) ($coordinate['longitude'] ?? 0)
+            ),
+            $coordinates
+        );
+
+        return $normalizeCoordinates($proofCoordinates) ===
+            $normalizeCoordinates($submittedCoordinates);
+    }
+
+    /**
+     * @param  list<array{latitude: numeric-string|float|int, longitude: numeric-string|float|int}>  $coordinates
+     * @param  list<array<string, mixed>>  $optimizedWaypoints
+     * @return list<array{latitude: numeric-string|float|int, longitude: numeric-string|float|int}>
+     */
+    private function optimizedProofCoordinates(array $coordinates, array $optimizedWaypoints): array
+    {
+        if (count($coordinates) < 4) {
+            return $coordinates;
+        }
+
+        $stops = array_slice($coordinates, 1, -1);
+
+        if (count($optimizedWaypoints) !== count($stops)) {
+            return $coordinates;
+        }
+
+        $orderedWaypoints = collect($optimizedWaypoints)
+            ->map(fn (array $waypoint): array => [
+                'provided_index' => (int) ($waypoint['providedIndex'] ?? -1),
+                'optimized_index' => (int) ($waypoint['optimizedIndex'] ?? -1),
+            ])
+            ->filter(fn (array $waypoint): bool => isset($stops[$waypoint['provided_index']]))
+            ->sortBy('optimized_index')
+            ->values();
+
+        if ($orderedWaypoints->count() !== count($stops)) {
+            return $coordinates;
+        }
+
+        return [
+            $coordinates[0],
+            ...$orderedWaypoints
+                ->map(fn (array $waypoint): array => $stops[$waypoint['provided_index']])
+                ->all(),
+            $coordinates[array_key_last($coordinates)],
+        ];
+    }
+
     private function getRoutePlanAuditValues(
         RoutePlan $routePlan
     ): array {
         return [
-            'route_number' =>
-                $routePlan->route_number,
-            'reservation_id' =>
-                $routePlan->reservation_id,
-            'origin' =>
-                $routePlan->origin,
-            'destination' =>
-                $routePlan->destination,
-            'priority' =>
-                $routePlan->priority,
-            'department' =>
-                $routePlan->department,
-            'status' =>
-                $routePlan->status,
-            'departure_date' =>
-                $routePlan->departure_date
-                    ?->format('Y-m-d'),
-            'departure_time' =>
-                $routePlan->departure_time,
-            'estimated_distance' =>
-                $routePlan->estimated_distance,
-            'estimated_time' =>
-                $routePlan->estimated_time,
-            'optimization_strategy' =>
-                $routePlan->optimization_strategy,
-            'optimization_score' =>
-                $routePlan->optimization_score,
+            'route_number' => $routePlan->route_number,
+            'reservation_id' => $routePlan->reservation_id,
+            'origin' => $routePlan->origin,
+            'destination' => $routePlan->destination,
+            'priority' => $routePlan->priority,
+            'department' => $routePlan->department,
+            'status' => $routePlan->status,
+            'departure_date' => $routePlan->departure_date
+                ?->format('Y-m-d'),
+            'departure_time' => $routePlan->departure_time,
+            'estimated_distance' => $routePlan->estimated_distance,
+            'estimated_time' => $routePlan->estimated_time,
+            'optimization_strategy' => $routePlan->optimization_strategy,
+            'optimization_score' => $routePlan->optimization_score,
         ];
     }
 
@@ -1802,34 +2005,22 @@ class RoutePlanController extends Controller
             $newStatus
         ) {
             $action = match ($newStatus) {
-                'Planned' =>
-                    'Planned',
-                'Ready For Dispatch' =>
-                    'Ready For Dispatch',
-                'Completed' =>
-                    'Completed',
-                'Archived' =>
-                    'Archived',
-                'Draft' =>
-                    'Returned To Draft',
-                default =>
-                    'Updated',
+                'Planned' => 'Planned',
+                'Ready For Dispatch' => 'Ready For Dispatch',
+                'Completed' => 'Completed',
+                'Archived' => 'Archived',
+                'Draft' => 'Returned To Draft',
+                default => 'Updated',
             };
         }
 
         $description = match ($action) {
-            'Planned' =>
-                "Planned route {$routePlan->route_number}.",
-            'Ready For Dispatch' =>
-                "Marked route {$routePlan->route_number} as Ready For Dispatch.",
-            'Completed' =>
-                "Completed route {$routePlan->route_number}.",
-            'Archived' =>
-                "Archived route {$routePlan->route_number}.",
-            'Returned To Draft' =>
-                "Returned route {$routePlan->route_number} to Draft.",
-            default =>
-                "Updated route {$routePlan->route_number}.",
+            'Planned' => "Planned route {$routePlan->route_number}.",
+            'Ready For Dispatch' => "Marked route {$routePlan->route_number} as Ready For Dispatch.",
+            'Completed' => "Completed route {$routePlan->route_number}.",
+            'Archived' => "Archived route {$routePlan->route_number}.",
+            'Returned To Draft' => "Returned route {$routePlan->route_number} to Draft.",
+            default => "Updated route {$routePlan->route_number}.",
         };
 
         AuditLogService::log(

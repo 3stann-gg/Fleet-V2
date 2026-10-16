@@ -137,7 +137,11 @@ const ROUTE_STATUS_TRANSITIONS = {
     Archived: [],
 };
 
-function applyRouteStatusTransitions(selectElement, currentStatus) {
+function applyRouteStatusTransitions(
+    selectElement,
+    currentStatus,
+    isEmergency = false,
+) {
     if (!selectElement) {
         return;
     }
@@ -148,6 +152,11 @@ function applyRouteStatusTransitions(selectElement, currentStatus) {
         // Current status must always remain selectable.
         if (optionStatus === normalizedStatus) {
             option.disabled = false;
+            option.hidden = false;
+            return;
+        }
+        if (isEmergency && optionStatus === "Ready For Dispatch") {
+            option.disabled = true;
             option.hidden = false;
             return;
         }
@@ -455,7 +464,9 @@ function applyReservationToRouteForm(reservation) {
         delete destinationInput.dataset.longitude;
     }
     if (priorityInput) {
-        priorityInput.value = reservation.priority || "Normal";
+        priorityInput.value =
+            reservation.priority_label ||
+            getRoutePriorityLabel(reservation.canonical_priority || reservation.priority);
     }
     if (departmentInput) {
         departmentInput.value = reservation.department || "";
@@ -636,6 +647,8 @@ function collectRouteFormData() {
         optimizationStrategy: get("routeOptStrategy"),
         optimizationScore:
             document.getElementById("routeOptScore")?.dataset.raw || "",
+        optimizationApplied: optimization?.optimizationApplied === true,
+        optimizationProof: optimization?.optimizationProof || null,
         stopCoordinates,
     };
 }
@@ -798,6 +811,7 @@ async function optimizeRouteWithOsrm(data) {
             stopCoordinates: data.stopCoordinates,
             departureDate: data.departureDate,
             departureTime: data.departureTime,
+            reservationId: data.reservationId,
         },
         {
             draw: true,
@@ -937,6 +951,7 @@ async function optimizeRouteWithOsrm(data) {
         optimizedWaypoints: Array.isArray(result.optimizedWaypoints)
             ? result.optimizedWaypoints
             : [],
+        optimizationProof: result.optimizationProof || null,
     };
 }
 
@@ -1167,9 +1182,6 @@ function validateRouteForm() {
     ) {
         fail("routeDestination", "Destination must differ from origin.");
     }
-    if (!data.priority) {
-        fail("routePriority", "Priority is required.");
-    }
     if (!data.department) {
         fail("routeDepartment", "Department is required.");
     }
@@ -1251,9 +1263,10 @@ function buildUpdateRoutePayload(data) {
         destination: data.destination,
         destination_latitude: data.destinationLatitude,
         destination_longitude: data.destinationLongitude,
-        priority: data.priority,
         department: data.department,
         status: data.status,
+        optimization_applied: data.optimizationApplied,
+        optimization_proof: data.optimizationProof,
         estimated_distance:
             data.estimatedDistance === ""
                 ? null
@@ -1341,6 +1354,9 @@ async function openRouteFormModal(mode, record = null) {
             pickup_location: fullRoute.origin,
             destination: fullRoute.destination,
             priority: fullRoute.priority,
+            priority_label: fullRoute.priorityLabel,
+            canonical_priority: fullRoute.priority,
+            is_emergency: fullRoute.isEmergency,
             schedule_date: fullRoute.departureDate,
             schedule_time: fullRoute.departureTime,
             vehicle: fullRoute.vehicleId
@@ -1371,7 +1387,7 @@ async function openRouteFormModal(mode, record = null) {
         renderRouteStops(fullRoute.stops || []);
         applyReservationResourceDisplay(existingReservation);
         document.getElementById("routePriority").value =
-            fullRoute.priority || "Normal";
+            fullRoute.priorityLabel || getRoutePriorityLabel(fullRoute.priority);
         document.getElementById("routeDepartment").value =
             fullRoute.department || "";
         document.getElementById("routePurpose").value = fullRoute.purpose || "";
@@ -1382,7 +1398,11 @@ async function openRouteFormModal(mode, record = null) {
         if (statusSelect) {
             const currentStatus = fullRoute.status || "Draft";
             statusSelect.disabled = false;
-            applyRouteStatusTransitions(statusSelect, currentStatus);
+            applyRouteStatusTransitions(
+                statusSelect,
+                currentStatus,
+                fullRoute.isEmergency,
+            );
         }
         document.getElementById("routeNotes").value = fullRoute.notes || "";
 
@@ -1462,7 +1482,8 @@ async function openRouteFormModal(mode, record = null) {
             optimizedStops: Array.isArray(fullRoute.stops)
                 ? fullRoute.stops.slice()
                 : [],
-            optimizationApplied: true,
+            optimizationApplied: false,
+            optimizationProof: null,
             routeCoordinates: {
                 origin: hasOriginCoordinates
                     ? {
@@ -1519,7 +1540,7 @@ async function openRouteFormModal(mode, record = null) {
         }
         const priority = document.getElementById("routePriority");
         if (priority) {
-            priority.value = "Normal";
+            priority.value = "";
         }
 
         /*
@@ -1602,7 +1623,7 @@ function openViewRouteModal(record) {
     set("viewRouteNumber", record.routeNumber);
     set("viewRouteReservationNumber", record.reservationNumber);
     set("viewRouteStatus", record.status);
-    set("viewRoutePriority", record.priority);
+    set("viewRoutePriority", record.priorityLabel || getRoutePriorityLabel(record.priority));
     set("viewRouteOrigin", record.origin);
     set("viewRouteDestination", record.destination);
     set(
