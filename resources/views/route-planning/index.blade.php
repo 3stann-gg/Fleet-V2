@@ -71,6 +71,64 @@
               </div>
             </div>
 
+            <nav class="route-section-nav" aria-label="Route Planning sections">
+              <button type="button" class="route-section-link is-active" data-route-section="routePlanningSection" aria-current="location">
+                <i class="ph ph-list-checks" aria-hidden="true"></i>
+                <span>Planning</span>
+              </button>
+              <button type="button" class="route-section-link" data-route-section="routeMapSection">
+                <i class="ph ph-map-trifold" aria-hidden="true"></i>
+                <span>Map</span>
+              </button>
+              <button type="button" class="route-section-link" data-route-section="routeOptimizationSection">
+                <i class="ph ph-path" aria-hidden="true"></i>
+                <span>Optimization</span>
+              </button>
+              <button type="button" class="route-section-link" data-route-section="routeHistorySection">
+                <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
+                <span>Route History</span>
+              </button>
+            </nav>
+
+            <section id="routePlanningSection" class="card route-workflow-card" aria-labelledby="routeWorkflowHeading" tabindex="-1">
+              <div class="route-workflow-header">
+                <div>
+                  <p class="route-workflow-eyebrow">Current workflow</p>
+                  <h2 id="routeWorkflowHeading">Plan a route for dispatch</h2>
+                  <p id="routeWorkflowIdentity">Select a route from history or request a new route.</p>
+                </div>
+                <span id="routeEmergencyIndicator" class="route-emergency-indicator" hidden>
+                  <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
+                  Emergency
+                </span>
+              </div>
+
+              <div class="route-state-summary" aria-label="Selected route state">
+                <div><span>Priority</span><strong id="routeWorkflowPriority">Not selected</strong></div>
+                <div><span>Status</span><strong id="routeWorkflowStatus">Planning</strong></div>
+                <div><span>Optimization</span><strong id="routeWorkflowOptimization">Not generated</strong></div>
+              </div>
+
+              <ol class="route-workflow-steps" id="routeWorkflowSteps" aria-label="Route workflow progress">
+                <li class="route-workflow-step is-active" data-workflow-step="0" aria-current="step">
+                  <span class="route-workflow-step-number">1</span>
+                  <span><strong>Plan</strong><small>Route details</small></span>
+                </li>
+                <li class="route-workflow-step" data-workflow-step="1">
+                  <span class="route-workflow-step-number">2</span>
+                  <span><strong>Optimize</strong><small>Generate route</small></span>
+                </li>
+                <li class="route-workflow-step" data-workflow-step="2">
+                  <span class="route-workflow-step-number">3</span>
+                  <span><strong>Review</strong><small>Apply and save</small></span>
+                </li>
+                <li class="route-workflow-step" data-workflow-step="3">
+                  <span class="route-workflow-step-number">4</span>
+                  <span><strong>Ready for Dispatch</strong><small>Server confirmed</small></span>
+                </li>
+              </ol>
+            </section>
+
             <section class="route-control-panel" aria-labelledby="routeFiltersHeading">
               <div class="route-control-heading">
                 <div>
@@ -183,7 +241,7 @@
             @endif
 
             <div class="route-planning-layout">
-              <div class="card route-map-card">
+              <div id="routeMapSection" class="card route-map-card" tabindex="-1">
                   <div class="card-header route-map-header">
                     <div>
                         <h3>Route Map Preview</h3>
@@ -213,6 +271,12 @@
                       role="region"
                       aria-label="Route planning map preview"
                   ></div>
+                  <div class="route-map-legend" aria-label="Map marker guide">
+                    <span><i class="route-map-legend-dot is-origin" aria-hidden="true"></i>Origin</span>
+                    <span><i class="route-map-legend-dot is-stop" aria-hidden="true"></i>Stop</span>
+                    <span><i class="route-map-legend-dot is-destination" aria-hidden="true"></i>Destination</span>
+                    <span><i class="route-map-legend-line" aria-hidden="true"></i>Optimized route</span>
+                  </div>
                   <div class="route-map-meta">
                       <div>
                           Distance
@@ -237,14 +301,21 @@
                   </p>
               </div>
 
-              <div class="card route-opt-card">
+              <div id="routeOptimizationSection" class="card route-opt-card" tabindex="-1">
                 <div class="card-header">
                   <div>
                     <h3>Optimization Summary</h3>
                     <p class="card-subtitle">
-                        Route optimization and travel estimates
+                        Generated results must be reviewed, applied, and saved.
                     </p>
                   </div>
+                  <span class="route-optimization-state" id="routeOptimizationStateLabel">Not generated</span>
+                </div>
+                <div class="route-optimization-flow" aria-label="Optimization progression">
+                  <span>Generate</span><i class="ph ph-arrow-right" aria-hidden="true"></i>
+                  <span>Review</span><i class="ph ph-arrow-right" aria-hidden="true"></i>
+                  <span>Apply</span><i class="ph ph-arrow-right" aria-hidden="true"></i>
+                  <span>Save</span>
                 </div>
                 <ul class="route-opt-list">
                   <li><span>Estimated Distance</span><strong id="optSummaryDistance">—</strong></li>
@@ -439,7 +510,7 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div id="routeHistorySection" class="card route-history-card" tabindex="-1">
               <div class="card-header">
                 <div>
                   <h3>Route History</h3>
@@ -495,7 +566,7 @@
                 <table class="fleet-table" id="routeTable" aria-label="Planned route history">
                   <thead>
                     <tr>
-                      <th class="sortable" data-sort="routeNumber">Route No.</th>
+                      <th class="sortable" data-sort="routeNumber">Route / Reservation</th>
                       <th>Origin</th>
                       <th>Destination</th>
                       <th class="sortable" data-sort="vehicle">Vehicle</th>
@@ -550,6 +621,21 @@
           </div>
           <form id="routeForm" class="operational-modal-form">
             <div class="modal-body">
+              <div class="route-modal-workflow" aria-label="Route form workflow">
+                <div class="route-modal-workflow-header">
+                  <span id="routeFormWorkflowMessage">Complete the route plan, then optimize it.</span>
+                  <span id="routeFormEmergencyIndicator" class="route-emergency-indicator" hidden>
+                    <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
+                    Emergency
+                  </span>
+                </div>
+                <ol class="route-workflow-steps route-workflow-steps--compact" id="routeFormWorkflowSteps">
+                  <li class="route-workflow-step is-active" data-workflow-step="0" aria-current="step"><span class="route-workflow-step-number">1</span><strong>Plan</strong></li>
+                  <li class="route-workflow-step" data-workflow-step="1"><span class="route-workflow-step-number">2</span><strong>Optimize</strong></li>
+                  <li class="route-workflow-step" data-workflow-step="2"><span class="route-workflow-step-number">3</span><strong>Review</strong></li>
+                  <li class="route-workflow-step" data-workflow-step="3"><span class="route-workflow-step-number">4</span><strong>Ready</strong></li>
+                </ol>
+              </div>
               <div class="form-grid">
                 <div class="form-section-heading">
                   <h3>Route Information</h3>
@@ -567,7 +653,11 @@
                 </div>
                 <div class="form-group">
                   <label for="routePriority">Reservation Priority</label>
-                  <input type="text" id="routePriority" readonly />
+                  <div class="route-priority-readout">
+                    <i class="ph-fill ph-flag" aria-hidden="true"></i>
+                    <input type="text" id="routePriority" readonly aria-describedby="routePriorityHelp" />
+                  </div>
+                  <small id="routePriorityHelp" class="route-field-help">Inherited from the approved reservation and cannot be edited here.</small>
                 </div>
                 <div class="form-section-heading">
                   <h3>Origin, Destination &amp; Stops</h3>
@@ -622,6 +712,7 @@
                     <option value="Completed">Completed</option>
                     <option value="Archived">Archived</option>
                   </select>
+                  <small class="route-field-help">Only valid lifecycle transitions are available.</small>
                 </div>
                 <div class="form-group">
                   <label for="routeDepartureDate">Departure Date *</label>
@@ -666,28 +757,21 @@
               <div id="routeOptimizeSummary" class="route-optimize-summary" hidden></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn-outline" id="cancelRouteForm">Cancel</button>
-                <button type="button" class="btn-outline" id="saveRouteTemplateFromForm">
-                  Save as Template
-                </button>
-                <button
-                    type="button"
-                    class="btn-outline"
-                    id="optimizeRouteBtn"
-                >
-                    <i class="ph ph-path" aria-hidden="true"></i>
-                    Optimize Route
-                </button>
-                <button
-                    type="button"
-                    class="btn-outline"
-                    id="applyRouteOptimizationBtn"
-                    disabled
-                >
-                    <i class="ph ph-check" aria-hidden="true"></i>
-                    Apply Optimization
-                </button>
-                <button type="submit" class="btn-primary" id="saveRouteBtn">Save Route</button>
+                <div class="route-modal-secondary-actions">
+                  <button type="button" class="btn-outline" id="cancelRouteForm">Cancel</button>
+                  <button type="button" class="btn-outline" id="saveRouteTemplateFromForm">Save as Template</button>
+                </div>
+                <div class="route-modal-workflow-actions" aria-label="Route workflow actions">
+                  <button type="button" class="btn-outline" id="optimizeRouteBtn">
+                      <i class="ph ph-path" aria-hidden="true"></i>
+                      Run Optimize
+                  </button>
+                  <button type="button" class="btn-outline" id="applyRouteOptimizationBtn" disabled>
+                      <i class="ph ph-check" aria-hidden="true"></i>
+                      Apply Optimization
+                  </button>
+                  <button type="submit" class="btn-primary" id="saveRouteBtn">Save Route</button>
+                </div>
             </div>
           </form>
         </div>

@@ -169,6 +169,220 @@ function applyRouteStatusTransitions(
     selectElement.value = normalizedStatus;
 }
 
+function setRouteWorkflowSteps(containerId, activeStep, isComplete = false) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+    container.querySelectorAll("[data-workflow-step]").forEach((step) => {
+        const stepIndex = Number(step.dataset.workflowStep);
+        const completed = isComplete || stepIndex < activeStep;
+        const active = !isComplete && stepIndex === activeStep;
+        step.classList.toggle("is-complete", completed);
+        step.classList.toggle("is-active", active);
+        step.classList.toggle("is-locked", isComplete);
+        if (active) {
+            step.setAttribute("aria-current", "step");
+        } else {
+            step.removeAttribute("aria-current");
+        }
+    });
+}
+
+function getRouteWorkflowState(record) {
+    const status = String(record?.status || "Draft").trim();
+    const hasOptimization =
+        record?.estimatedDistance !== null &&
+        record?.estimatedDistance !== undefined &&
+        String(record?.optimizationStrategy || "").trim() !== "";
+
+    if (status === "Completed") {
+        return { step: 3, complete: true, optimization: "Applied" };
+    }
+    if (status === "Ready For Dispatch") {
+        return { step: 3, complete: false, optimization: "Applied" };
+    }
+    if (status === "Archived") {
+        return {
+            step: hasOptimization ? 2 : 1,
+            complete: false,
+            optimization: hasOptimization ? "Applied" : "Not generated",
+        };
+    }
+    if (hasOptimization) {
+        return { step: 2, complete: false, optimization: "Applied" };
+    }
+    if (status === "Planned") {
+        return { step: 1, complete: false, optimization: "Not generated" };
+    }
+
+    return { step: 0, complete: false, optimization: "Not generated" };
+}
+
+function updateRouteWorkflowPresentation(record = null) {
+    const heading = document.getElementById("routeWorkflowHeading");
+    const identity = document.getElementById("routeWorkflowIdentity");
+    const priority = document.getElementById("routeWorkflowPriority");
+    const status = document.getElementById("routeWorkflowStatus");
+    const optimization = document.getElementById(
+        "routeWorkflowOptimization",
+    );
+    const optimizationState = document.getElementById(
+        "routeOptimizationStateLabel",
+    );
+    const emergency = document.getElementById("routeEmergencyIndicator");
+    const workflow = getRouteWorkflowState(record);
+
+    if (heading) {
+        heading.textContent = record
+            ? record.routeNumber || "Selected route"
+            : "Plan a route for dispatch";
+    }
+    if (identity) {
+        identity.textContent = record
+            ? `${record.reservationNumber || "No reservation reference"} · ${record.origin || "Origin"} → ${record.destination || "Destination"}`
+            : "Select a route from history or request a new route.";
+    }
+    if (priority) {
+        priority.textContent = record
+            ? record.priorityLabel || getRoutePriorityLabel(record.priority)
+            : "Not selected";
+    }
+    if (status) {
+        status.textContent = record?.status || "Planning";
+    }
+    if (optimization) {
+        optimization.textContent = workflow.optimization;
+    }
+    if (optimizationState) {
+        optimizationState.textContent = workflow.optimization;
+        optimizationState.classList.toggle(
+            "is-applied",
+            workflow.optimization === "Applied",
+        );
+    }
+    if (emergency) {
+        emergency.hidden = record?.isEmergency !== true;
+    }
+    setRouteWorkflowSteps(
+        "routeWorkflowSteps",
+        workflow.step,
+        workflow.complete,
+    );
+}
+
+function setRouteWorkflowPrimaryAction(primaryButton) {
+    ["optimizeRouteBtn", "applyRouteOptimizationBtn", "saveRouteBtn"].forEach(
+        (id) => {
+            const button = document.getElementById(id);
+            if (!button) {
+                return;
+            }
+            const isPrimary = id === primaryButton;
+            button.classList.toggle("btn-primary", isPrimary);
+            button.classList.toggle("btn-outline", !isPrimary);
+        },
+    );
+}
+
+function updateRouteFormWorkflowUi(reservation = null) {
+    const form = document.getElementById("routeForm");
+    const status = String(document.getElementById("routeStatus")?.value || "Draft");
+    const priority = String(document.getElementById("routePriority")?.value || "");
+    const selectedReservation = reservation || getSelectedRouteReservation();
+    const isEmergency =
+        selectedReservation?.is_emergency === true ||
+        priority.toLowerCase() === "emergency";
+    const hasPlan = Boolean(
+        document.getElementById("routeReservation")?.value &&
+            document.getElementById("routeOrigin")?.value.trim() &&
+            document.getElementById("routeDestination")?.value.trim(),
+    );
+    const persistedOptimization =
+        form?.dataset.persistedOptimization === "true";
+    const hasAppliedOptimization =
+        routeLastOptimization?.optimizationApplied === true ||
+        persistedOptimization;
+    const hasGeneratedOptimization = routePendingOptimization !== null;
+    const isCompleted = status === "Completed";
+    let activeStep = 0;
+    let message = "Complete the route plan, then optimize it.";
+    let primaryAction = "saveRouteBtn";
+
+    if (status === "Ready For Dispatch" || status === "Completed") {
+        activeStep = 3;
+        message =
+            status === "Completed"
+                ? "This route is complete and shown for reference."
+                : "Ready for Dispatch was confirmed by the server.";
+    } else if (hasGeneratedOptimization) {
+        activeStep = 2;
+        message = "Optimization generated. Review it before applying.";
+        primaryAction = "applyRouteOptimizationBtn";
+    } else if (hasAppliedOptimization) {
+        activeStep = 2;
+        message =
+            routeLastOptimization?.optimizationApplied === true
+                ? "Optimization applied. Save the route to persist the result."
+                : "Optimization is applied and already persisted.";
+    } else if (hasPlan) {
+        activeStep = 1;
+        message = "Route details are ready. Run optimization to continue.";
+        primaryAction = "optimizeRouteBtn";
+    }
+
+    const messageElement = document.getElementById(
+        "routeFormWorkflowMessage",
+    );
+    if (messageElement) {
+        messageElement.textContent = message;
+    }
+    const emergencyIndicator = document.getElementById(
+        "routeFormEmergencyIndicator",
+    );
+    if (emergencyIndicator) {
+        emergencyIndicator.hidden = !isEmergency;
+    }
+    document
+        .querySelector(".route-priority-readout")
+        ?.classList.toggle("is-emergency", isEmergency);
+    setRouteWorkflowSteps(
+        "routeFormWorkflowSteps",
+        activeStep,
+        isCompleted,
+    );
+    setRouteWorkflowPrimaryAction(primaryAction);
+}
+
+function initRouteSectionNavigation() {
+    const links = Array.from(
+        document.querySelectorAll(".route-section-link[data-route-section]"),
+    );
+    links.forEach((link) => {
+        link.addEventListener("click", (event) => {
+            const target = document.getElementById(link.dataset.routeSection);
+            if (!target) {
+                return;
+            }
+            links.forEach((candidate) => {
+                const isActive = candidate === link;
+                candidate.classList.toggle("is-active", isActive);
+                if (isActive) {
+                    candidate.setAttribute("aria-current", "location");
+                } else {
+                    candidate.removeAttribute("aria-current");
+                }
+            });
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (event.detail === 0) {
+                target.focus({ preventScroll: true });
+            }
+        });
+    });
+}
+
+window.updateRouteWorkflowPresentation = updateRouteWorkflowPresentation;
+
 /* ==========================================
    SELECT HELPERS 
 ========================================== */
@@ -417,6 +631,11 @@ function resetRouteOptimization() {
     if (applyButton) {
         applyButton.disabled = true;
     }
+    const form = document.getElementById("routeForm");
+    if (form) {
+        form.dataset.persistedOptimization = "false";
+    }
+    updateRouteFormWorkflowUi();
 }
 
 function applyReservationToRouteForm(reservation) {
@@ -483,6 +702,7 @@ function applyReservationToRouteForm(reservation) {
     }
     applyReservationResourceDisplay(reservation);
     resetRouteOptimization();
+    updateRouteFormWorkflowUi(reservation);
 }
 
 async function populateRouteReservations(selectedReservation = null) {
@@ -1033,6 +1253,15 @@ function applyOptimizationToForm(result) {
                 · Driver:
                 ${escapeRouteHtml(result.recommendedDriver || "—")}
             </p>
+            <p>
+                Stop order:
+                ${escapeRouteHtml(
+                    Array.isArray(result.optimizedStops) &&
+                        result.optimizedStops.length > 0
+                        ? result.optimizedStops.join(" → ")
+                        : "Direct route",
+                )}
+            </p>
         `;
     }
 }
@@ -1127,8 +1356,18 @@ function applyPendingRouteOptimization({
                 The optimized stop order is now
                 applied to this route.
             </p>
+            <p>
+                Stop order:
+                ${escapeRouteHtml(
+                    Array.isArray(result.optimizedStops) &&
+                        result.optimizedStops.length > 0
+                        ? result.optimizedStops.join(" → ")
+                        : "Direct route",
+                )}
+            </p>
         `;
     }
+    updateRouteFormWorkflowUi();
     if (shouldShowToast && typeof window.showToast === "function") {
         window.showToast("Route optimization applied.", "success");
     }
@@ -1306,6 +1545,7 @@ async function openRouteFormModal(mode, record = null) {
     routeEditingId = mode === "edit" && record ? record.id : null;
     routeLastOptimization = null;
     routePendingOptimization = null;
+    form.dataset.persistedOptimization = "false";
     const applyOptimizationButton = document.getElementById(
         "applyRouteOptimizationBtn",
     );
@@ -1502,6 +1742,11 @@ async function openRouteFormModal(mode, record = null) {
                     : null,
             },
         };
+        form.dataset.persistedOptimization = String(
+            fullRoute.estimatedDistance !== null &&
+                fullRoute.estimatedDistance !== undefined &&
+                String(fullRoute.optimizationStrategy || "").trim() !== "",
+        );
     } else {
 
     /*
@@ -1568,6 +1813,10 @@ async function openRouteFormModal(mode, record = null) {
         }
     }
 
+    updateRouteFormWorkflowUi(
+        mode === "edit" && record ? getSelectedRouteReservation() : null,
+    );
+
     modal.classList.add("show");
     document.body.style.overflow = "hidden";
     requestAnimationFrame(() => {
@@ -1591,6 +1840,9 @@ function closeRouteFormModal() {
     routeFormMode = "add";
     routeLastOptimization = null;
     routePendingOptimization = null;
+    modal.querySelector("form")?.removeAttribute(
+        "data-persisted-optimization",
+    );
     const applyOptimizationButton = document.getElementById(
         "applyRouteOptimizationBtn",
     );
@@ -2059,6 +2311,7 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
     if (applyButton) {
         applyButton.disabled = false;
     }
+    updateRouteFormWorkflowUi();
     /*
     |--------------------------------------------------------------------------
     | Update map labels only.
@@ -2118,6 +2371,8 @@ function initRoutePlanningModals() {
     }
     routeModalsInitialized = true;
     populateRouteFormOptions();
+    initRouteSectionNavigation();
+    updateRouteWorkflowPresentation(null);
 
     /*
   |--------------------------------------------------------------------------
@@ -2141,6 +2396,8 @@ function initRoutePlanningModals() {
 
             if (!reservation) {
                 resetRouteResourceDisplay();
+                resetRouteOptimization();
+                updateRouteFormWorkflowUi();
                 return;
             }
             applyReservationToRouteForm(reservation);
@@ -2549,6 +2806,7 @@ function initRoutePlanningModals() {
                     );
                 }
             }
+            updateRouteFormWorkflowUi();
         });
 }
 
