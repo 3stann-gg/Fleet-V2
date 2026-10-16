@@ -12,6 +12,230 @@
   white-space: nowrap;
 }
 
+.route-section-nav {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+  scrollbar-width: thin;
+}
+
+.route-section-link {
+  min-width: max-content;
+  min-height: 44px;
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.route-section-link:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.route-section-link.is-active {
+  color: var(--color-primary);
+  border-color: var(--color-primary-light);
+  background: var(--color-primary-soft);
+}
+
+.route-section-link:focus-visible,
+.route-workflow-card:focus-visible,
+.route-map-card:focus-visible,
+.route-opt-card:focus-visible,
+.route-history-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.route-workflow-card {
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.route-workflow-card,
+.route-map-card,
+.route-opt-card,
+.route-history-card {
+  scroll-margin-top: calc(var(--navbar-height) + var(--space-4));
+}
+
+.route-workflow-header,
+.route-modal-workflow-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.route-workflow-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+}
+
+.route-workflow-header > div > p:last-child {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.route-workflow-eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--color-primary);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-emergency-indicator {
+  min-height: 30px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+}
+
+.route-state-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.route-state-summary > div {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.route-state-summary span,
+.route-state-summary strong {
+  display: block;
+}
+
+.route-state-summary span {
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.route-state-summary strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-workflow-step {
+  position: relative;
+  min-width: 0;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.route-workflow-step-number {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+}
+
+.route-workflow-step strong,
+.route-workflow-step small {
+  display: block;
+  line-height: var(--line-height-tight);
+}
+
+.route-workflow-step strong {
+  color: inherit;
+  font-size: var(--font-size-sm);
+}
+
+.route-workflow-step small {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-meta);
+}
+
+.route-workflow-step.is-complete {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.route-workflow-step.is-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.route-workflow-step.is-complete .route-workflow-step-number,
+.route-workflow-step.is-active .route-workflow-step-number {
+  border-color: currentColor;
+  color: inherit;
+}
+
+.route-workflow-step.is-locked {
+  opacity: 0.72;
+}
+
 .route-control-panel {
   margin-bottom: var(--space-4);
   padding: var(--space-4);
@@ -189,6 +413,45 @@
   color: var(--color-text-muted);
 }
 
+.route-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.route-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.route-map-legend-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.route-map-legend-dot.is-stop {
+  background: var(--color-warning);
+}
+
+.route-map-legend-dot.is-destination {
+  background: var(--color-info);
+}
+
+.route-map-legend-line {
+  width: 24px;
+  height: 3px;
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
 .route-map-meta > div {
   min-width: 0;
   padding: var(--space-3);
@@ -216,6 +479,41 @@
   padding: 0;
   display: grid;
   gap: 12px;
+}
+
+.route-optimization-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+
+.route-optimization-state.is-applied {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.route-optimization-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
 }
 
 .route-opt-list li {
@@ -265,6 +563,115 @@
 .route-optimize-summary p {
   margin: 4px 0 0;
   color: var(--color-text-muted);
+}
+
+.route-modal-workflow {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.route-modal-workflow-header {
+  align-items: center;
+  margin-bottom: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.route-workflow-steps--compact .route-workflow-step {
+  min-height: 44px;
+  padding: var(--space-2);
+}
+
+.route-workflow-steps--compact .route-workflow-step-number {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+
+.route-priority-readout {
+  position: relative;
+}
+
+.route-priority-readout > i {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--color-primary);
+}
+
+.route-priority-readout #routePriority {
+  padding-left: calc(var(--space-3) + 24px);
+  color: var(--color-text);
+  font-weight: var(--font-semibold);
+}
+
+.route-priority-readout.is-emergency > i,
+.route-priority-readout.is-emergency #routePriority {
+  color: var(--color-danger-text);
+}
+
+.route-priority-readout.is-emergency #routePriority {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.route-field-help {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-body);
+}
+
+#routeFormModal .modal-footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.route-modal-secondary-actions,
+.route-modal-workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.route-history-reference {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.route-history-reference small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.route-priority {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+}
+
+.route-priority--urgent,
+.route-priority--emergency {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.route-priority--scheduled {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
 }
 
 /* Empty state uses shared .route-empty-state / .fleet-empty-state styles */
@@ -338,6 +745,32 @@
 }
 
 @media (max-width: 767px) {
+  .route-section-nav {
+    margin-inline: calc(var(--space-1) * -1);
+  }
+
+  .route-section-link {
+    flex: 0 0 auto;
+  }
+
+  .route-workflow-header,
+  .route-modal-workflow-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .route-emergency-indicator {
+    align-self: flex-start;
+  }
+
+  .route-state-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .route-workflow-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .route-control-panel {
     padding: var(--space-3);
   }
@@ -370,6 +803,43 @@
   .route-templates-bar .filter-select,
   .route-templates-bar .btn-outline {
     width: 100%;
+  }
+
+  #routeFormModal .modal-footer,
+  .route-modal-secondary-actions,
+  .route-modal-workflow-actions {
+    width: 100%;
+  }
+
+  .route-modal-secondary-actions,
+  .route-modal-workflow-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .route-modal-workflow-actions #saveRouteBtn {
+    grid-column: 1 / -1;
+  }
+
+  .route-modal-secondary-actions button,
+  .route-modal-workflow-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 479px) {
+  .route-workflow-steps,
+  .route-workflow-steps--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .route-modal-secondary-actions,
+  .route-modal-workflow-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .route-modal-workflow-actions #saveRouteBtn {
+    grid-column: auto;
   }
 }
 

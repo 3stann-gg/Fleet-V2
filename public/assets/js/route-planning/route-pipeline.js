@@ -180,7 +180,7 @@ function startRoutePlanningLiveUpdates() {
     }, 10000);
 }
 /**
- * Rebuild Vehicle and Driver filters
+ * Rebuild assignment filters
  * from actual Reservation relationships
  * currently loaded from Laravel.
  */
@@ -188,8 +188,12 @@ function rebuildRouteResourceFilters(records) {
     const list = Array.isArray(records) ? records : [];
     const vehicleSelect = document.getElementById("routeVehicleFilter");
     const driverSelect = document.getElementById("routeDriverFilter");
+    const departmentSelect = document.getElementById(
+        "routeDepartmentFilter",
+    );
     const currentVehicle = vehicleSelect?.value || "all";
     const currentDriver = driverSelect?.value || "all";
+    const currentDepartment = departmentSelect?.value || "all";
     const vehicles = [
         ...new Set(
             list
@@ -212,6 +216,13 @@ function rebuildRouteResourceFilters(records) {
             numeric: true,
         }),
     );
+    const departments = [
+        ...new Set(
+            list
+                .map((record) => String(record.department || "").trim())
+                .filter(Boolean),
+        ),
+    ].sort((a, b) => a.localeCompare(b));
 
     if (vehicleSelect) {
         vehicleSelect.innerHTML = '<option value="all">All Vehicles</option>';
@@ -248,6 +259,26 @@ function rebuildRouteResourceFilters(records) {
             driverSelect.value = currentDriver;
         } else {
             driverSelect.value = "all";
+        }
+    }
+
+    if (departmentSelect) {
+        departmentSelect.innerHTML =
+            '<option value="all">All Departments</option>';
+        departments.forEach((department) => {
+            const option = document.createElement("option");
+            option.value = department;
+            option.textContent = department;
+            departmentSelect.appendChild(option);
+        });
+        if (
+            [...departmentSelect.options].some(
+                (option) => option.value === currentDepartment,
+            )
+        ) {
+            departmentSelect.value = currentDepartment;
+        } else {
+            departmentSelect.value = "all";
         }
     }
 }
@@ -659,8 +690,11 @@ function buildRouteTableRow(record) {
 
     tr.innerHTML = `
     <td>
-      <span class="route-number">
+      <span class="route-history-reference">
+        <span class="route-number">
         ${escapeRouteHtml(record.routeNumber)}
+        </span>
+        <small>${escapeRouteHtml(record.reservationNumber || "No reservation reference")}</small>
       </span>
     </td>
 
@@ -689,7 +723,7 @@ function buildRouteTableRow(record) {
     </td>
 
     <td>
-      <span class="route-priority">
+      <span class="route-priority route-priority--${escapeRouteHtml(record.priority || "routine")}">
         ${escapeRouteHtml(record.priorityLabel || getRoutePriorityLabel(record.priority))}
       </span>
     </td>
@@ -2326,6 +2360,7 @@ async function updateRouteMapPanel(record) {
     const viewToken = ++routeMapViewToken;
     currentRoutePlanningMapRecord = record || null;
     currentRoutePlanningMapRoute = null;
+    window.updateRouteWorkflowPresentation?.(record || null);
 
     const stateElement = document.getElementById("routeMapState");
 
@@ -2604,6 +2639,7 @@ function refreshRoutePlanningTable(options = {}) {
         if (!panelRecord) {
             panelRecord = getSelectedRoutePlanningRecord();
         }
+        window.updateRouteWorkflowPresentation?.(panelRecord || null);
         if (options.refreshMap !== false) {
             void updateRouteMapPanel(panelRecord);
         }
