@@ -39,7 +39,7 @@ function getRouteOutputModel() {
 
   const ready = allActive.filter((r) => r.status === "Ready For Dispatch").length;
   const high = allActive.filter(
-    (r) => r.priority === "High" || r.priority === "Emergency",
+    (r) => ["urgent", "emergency"].includes(r.priority),
   ).length;
   const avgDist =
     allActive.length === 0
@@ -136,7 +136,7 @@ function buildRoutePrintHtml(model) {
         <td>${escapeRouteExportHtml((r.stops || []).join("; "))}</td>
         <td>${escapeRouteExportHtml(formatRouteExportVehicle(r.vehicle))}</td>
         <td>${escapeRouteExportHtml(r.driver)}</td>
-        <td>${escapeRouteExportHtml(r.priority)}</td>
+        <td>${escapeRouteExportHtml(r.priorityLabel || getRoutePriorityLabel(r.priority))}</td>
         <td>${escapeRouteExportHtml(formatRouteExportDistance(r.estimatedDistance))}</td>
         <td>${escapeRouteExportHtml(r.estimatedTravelTime)}</td>
         <td>${escapeRouteExportHtml(r.optimizationStrategy)}</td>
@@ -339,7 +339,7 @@ function exportRoutesToPdf() {
         r.destination,
         formatRouteExportVehicle(r.vehicle),
         r.driver,
-        r.priority,
+        r.priorityLabel || getRoutePriorityLabel(r.priority),
         formatRouteExportDistance(r.estimatedDistance),
         r.estimatedTravelTime,
         r.optimizationStrategy,
@@ -436,7 +436,7 @@ function exportRoutesToExcel() {
             (r.stops || []).join("; "),
             formatRouteExportVehicle(r.vehicle),
             r.driver,
-            r.priority,
+            r.priorityLabel || getRoutePriorityLabel(r.priority),
             r.department,
             r.purpose,
             Number(r.estimatedDistance) || 0,
