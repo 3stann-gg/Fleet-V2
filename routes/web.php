@@ -21,6 +21,7 @@ use App\Http\Controllers\FleetSearchController;
 use App\Http\Controllers\CostAnalysisController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserAccountController;
+use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\VehicleTrackingController;
 use App\Http\Controllers\HospitalFacilityController;
@@ -859,6 +860,17 @@ Route::middleware([
         )->name('audit-logs.show');
 
     });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | USER MANAGEMENT
+    |--------------------------------------------------------------------------
+    */
+    Route::get(
+        '/user-management',
+        [UserManagementController::class, 'index']
+    )->name('user-management.index');
 
 
     /*

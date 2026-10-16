@@ -1,0 +1,179 @@
+.user-management-page .page-header {
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.user-management-directory {
+  overflow: hidden;
+}
+
+.user-management-directory .card-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+}
+
+.user-management-table td {
+  vertical-align: middle;
+}
+
+.user-management-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+
+.user-management-identity strong {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-semibold);
+}
+
+.user-management-identity span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.user-management-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: max-content;
+}
+
+.user-management-actions .action-btn--security {
+  color: var(--color-warning-text);
+}
+
+.user-management-actions .action-btn--danger {
+  color: var(--color-danger-text);
+}
+
+#accountManagementModal .account-password-wrapper {
+  position: relative !important;
+  width: 100% !important;
+}
+
+#accountManagementModal .account-password-wrapper > input {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding-right: 48px !important;
+}
+
+#accountManagementModal .account-password-toggle {
+  position: absolute !important;
+  top: 50% !important;
+  right: 10px !important;
+  transform: translateY(-50%) !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-text-muted) !important;
+  cursor: pointer;
+  z-index: 5;
+}
+
+#accountManagementModal .account-password-toggle:hover {
+  color: var(--color-text) !important;
+}
+
+#accountManagementModal .account-password-toggle:focus {
+  box-shadow: none !important;
+}
+
+#accountManagementModal .account-password-toggle:focus-visible {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px;
+}
+
+#accountManagementModal .account-password-toggle i {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  pointer-events: none;
+}
+
+#accountManagementModal .account-action-section {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+#accountManagementModal .account-section-heading {
+  margin-bottom: var(--space-4);
+}
+
+#accountManagementModal .account-section-heading > span,
+#accountManagementModal .account-form-section-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-primary);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#accountManagementModal .account-section-heading h3,
+#accountManagementModal .account-form-section h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-semibold);
+}
+
+#accountManagementModal .account-section-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+#accountManagementModal .account-form-section + .account-form-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+#accountManagementModal .account-form-section-heading {
+  margin-bottom: var(--space-4);
+}
+
+#accountManagementModal .account-security-note {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+#accountManagementModal .account-danger-zone {
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+}
+
+@media (max-width: 767px) {
+  .user-management-page .page-header {
+    align-items: stretch;
+  }
+
+  .user-management-page .page-header .btn-primary {
+    width: 100%;
+  }
+
+  .user-management-actions {
+    gap: var(--space-1);
+  }
+}

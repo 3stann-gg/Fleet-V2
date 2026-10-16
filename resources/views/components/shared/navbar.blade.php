@@ -74,6 +74,9 @@
       auditLogs:
           @json(auth()->user()?->hasPermission('audit_logs.view') ?? false),
 
+      userManagement:
+          @json(auth()->user()?->hasPermission('users.view') ?? false),
+
       settings:
           @json(auth()->user()?->canViewModule('settings') ?? false),
 
