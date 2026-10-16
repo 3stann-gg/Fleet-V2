@@ -76,6 +76,10 @@ function fleetNavModuleFromUrl(url) {
         return "auditLogs";
     }
 
+    if (pathname.startsWith("/user-management")) {
+        return "userManagement";
+    }
+
     if (pathname.startsWith("/settings")) {
         return "settings";
     }
@@ -138,6 +142,7 @@ const FLEET_NAV_ROUTES = {
     cost: "/cost-analysis",
     reports: "/reports",
     auditLogs: "/audit-logs",
+    userManagement: "/user-management",
     settings: "/settings",
     dashboard: "/dashboard",
 };

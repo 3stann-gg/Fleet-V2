@@ -25,8 +25,8 @@ function getAccountRoleLabel(role) {
 }
 
 function renderAccountDirectory(users) {
-    const tableBody = document.getElementById("settingsAccountTableBody");
-    const status = document.getElementById("settingsAccountTableStatus");
+    const tableBody = document.getElementById("userManagementTableBody");
+    const status = document.getElementById("userManagementTableStatus");
     if (!tableBody) {
         return;
     }
@@ -55,7 +55,7 @@ function renderAccountDirectory(users) {
             return `
                 <tr>
                     <td>
-                        <div class="settings-account-identity">
+                        <div class="user-management-identity">
                             <strong>${escapeAccountHtml(displayName)}</strong>
                             <span>${escapeAccountHtml(user.email || "No email")}</span>
                         </div>
@@ -71,7 +71,7 @@ function renderAccountDirectory(users) {
                         </span>
                     </td>
                     <td>
-                        <div class="settings-account-actions">
+                        <div class="user-management-actions">
                             <button
                                 type="button"
                                 class="action-btn"
@@ -115,8 +115,8 @@ function renderAccountDirectory(users) {
 }
 
 async function refreshAccountDirectory() {
-    const tableBody = document.getElementById("settingsAccountTableBody");
-    const status = document.getElementById("settingsAccountTableStatus");
+    const tableBody = document.getElementById("userManagementTableBody");
+    const status = document.getElementById("userManagementTableStatus");
     if (!tableBody) {
         return;
     }
@@ -299,7 +299,7 @@ function initAccountManagementModal() {
     });
 
     document
-        .getElementById("settingsAccountTableBody")
+        .getElementById("userManagementTableBody")
         ?.addEventListener("click", (event) => {
             const button = event.target.closest(
                 "[data-account-directory-action]",

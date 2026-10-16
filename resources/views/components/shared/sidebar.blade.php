@@ -51,6 +51,9 @@
     $canAuditLogs =
         $sidebarUser?->hasPermission('audit_logs.view') ?? false;
 
+    $canUserManagement =
+        $sidebarUser?->hasPermission('users.view') ?? false;
+
     /*
     |--------------------------------------------------------------------------
     | Section Visibility
@@ -77,6 +80,7 @@
 
     $showSystem =
         $canAuditLogs ||
+        $canUserManagement ||
         $canSettings;
 
     $fleetManagementActive =
@@ -100,7 +104,7 @@
         request()->routeIs('cost-analysis', 'cost-analysis.*', 'reports', 'reports.*');
 
     $systemActive =
-        request()->routeIs('audit-logs.*', 'settings', 'settings.*');
+        request()->routeIs('audit-logs.*', 'user-management.*', 'settings', 'settings.*');
 
     /*
     |--------------------------------------------------------------------------
@@ -619,6 +623,25 @@
 
                                     <span class="nav-label">
                                         Audit Logs
+                                    </span>
+                                </a>
+                            </li>
+                        @endif
+
+
+                        @if($canUserManagement)
+                            <li>
+                                <a
+                                    href="{{ route('user-management.index') }}"
+                                    class="nav-link {{ request()->routeIs('user-management.*') ? 'active' : '' }}"
+                                    data-page="user-management"
+                                    data-tooltip="User Management"
+                                    @if(request()->routeIs('user-management.*')) aria-current="page" @endif
+                                >
+                                    <i class="ph-fill ph-users-three" aria-hidden="true"></i>
+
+                                    <span class="nav-label">
+                                        User Management
                                     </span>
                                 </a>
                             </li>
