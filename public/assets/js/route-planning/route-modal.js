@@ -130,10 +130,10 @@ let routeLastOptimization = null;
 let routePendingOptimization = null;
 
 const ROUTE_STATUS_TRANSITIONS = {
-    Draft: ["Planned", "Archived"],
-    Planned: ["Draft", "Ready For Dispatch", "Archived"],
-    "Ready For Dispatch": ["Archived"],
-    Completed: ["Archived"],
+    Draft: ["Planned"],
+    Planned: ["Draft", "Ready For Dispatch"],
+    "Ready For Dispatch": [],
+    Completed: [],
     Archived: [],
 };
 
@@ -2130,7 +2130,13 @@ async function saveRouteFromForm() {
  
         if (routeFormMode === "edit" && routeEditingId) {
             const payload = buildUpdateRoutePayload(data);
-            const result = await updateRoutePlanApi(routeEditingId, payload);
+            const currentRecord = getRouteRecordById(routeEditingId);
+            const isLifecycleAction =
+                String(currentRecord?.status || "Draft") !== data.status ||
+                data.optimizationApplied === true;
+            const result = isLifecycleAction
+                ? await transitionRoutePlanApi(routeEditingId, payload)
+                : await updateRoutePlanApi(routeEditingId, payload);
             const updated = result.routePlan;
             closeRouteFormModal();
             await reloadRoutePlanningData({

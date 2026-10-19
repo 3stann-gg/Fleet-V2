@@ -765,6 +765,11 @@ Route::middleware([
         )->name('route-planning.update');
 
         Route::post(
+            '/route-planning/{routePlan}/transition',
+            [RoutePlanController::class, 'transition']
+        )->name('route-planning.transition');
+
+        Route::post(
             '/route-planning/{routePlan}/archive',
             [RoutePlanController::class, 'archive']
         )->name('route-planning.archive');

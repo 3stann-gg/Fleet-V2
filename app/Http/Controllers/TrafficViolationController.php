@@ -148,17 +148,22 @@ class TrafficViolationController extends Controller
 
     public function review(ReviewTrafficViolationRequest $request, TrafficViolation $trafficViolation): JsonResponse
     {
-        abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be reviewed.');
         $validated = $request->validated();
 
-        if (! $trafficViolation->canTransitionTo($validated['status'])) {
-            throw ValidationException::withMessages([
-                'status' => 'That status transition is not allowed from the current status.',
-            ]);
-        }
+        DB::transaction(function () use ($request, $trafficViolation, $validated): void {
+            $trafficViolation = TrafficViolation::query()
+                ->lockForUpdate()
+                ->findOrFail($trafficViolation->id);
 
-        $oldValues = $this->auditValues($trafficViolation);
-        DB::transaction(function () use ($request, $trafficViolation, $validated, $oldValues): void {
+            abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be reviewed.');
+
+            if (! $trafficViolation->canTransitionTo($validated['status'])) {
+                throw ValidationException::withMessages([
+                    'status' => 'That status transition is not allowed from the current status.',
+                ]);
+            }
+
+            $oldValues = $this->auditValues($trafficViolation);
             $trafficViolation->fill($validated);
             $trafficViolation->reviewed_by = $request->user()->id;
             $trafficViolation->reviewed_at = now();

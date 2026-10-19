@@ -2267,7 +2267,8 @@ class DispatchController extends Controller
 
     public function approveReassignment(
         Request $request,
-        DispatchReassignment $reassignment
+        DispatchReassignment $reassignment,
+        DispatchAssignmentService $assignmentService,
     ) {
         $request->validate([
             'new_vehicle_id' => [
@@ -2285,7 +2286,8 @@ class DispatchController extends Controller
 
         $result = DB::transaction(function () use (
             $request,
-            $reassignment
+            $reassignment,
+            $assignmentService,
         ) {
             /*
             |--------------------------------------------------------------------------
@@ -2495,6 +2497,16 @@ class DispatchController extends Controller
                     422,
                     'The selected driver is not assigned to the selected vehicle.'
                 );
+            }
+
+            try {
+                $assignmentService->validateManualPair(
+                    $reservation,
+                    $newVehicle->id,
+                    $newDriver->id,
+                );
+            } catch (\RuntimeException $exception) {
+                abort(422, $exception->getMessage());
             }
 
             /*

@@ -205,7 +205,7 @@ it('re-synchronizes priority from the reservation on edit and exposes its canoni
     ]);
 
     $this->actingAs(p53User())
-        ->putJson(route('route-planning.update', $routePlan), p53UpdatePayload([
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
             'status' => 'Planned',
             'priority' => 'Emergency',
             'optimization_applied' => false,
@@ -253,7 +253,7 @@ it('automatically makes a planned emergency route ready only after a valid optim
         ->assertSuccessful();
 
     $this->actingAs($user)
-        ->putJson(route('route-planning.update', $routePlan), p53UpdatePayload([
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
             'optimization_proof' => $optimization->json('optimization_proof'),
         ]))
         ->assertSuccessful()
@@ -304,7 +304,7 @@ it('rejects incomplete or unsafe emergency readiness without partially mutating 
     };
 
     $this->actingAs($user)
-        ->putJson(route('route-planning.update', $routePlan), $payload)
+        ->postJson(route('route-planning.transition', $routePlan), $payload)
         ->assertUnprocessable();
 
     expect($routePlan->fresh()->status)->toBe('Planned')
@@ -317,7 +317,7 @@ it('rejects a forged applied marker and fabricated route metrics', function () {
     $routePlan = p53Route($reservation, ['priority' => 'Normal']);
 
     $this->actingAs(p53User())
-        ->putJson(route('route-planning.update', $routePlan), p53UpdatePayload())
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload())
         ->assertUnprocessable()
         ->assertJsonPath('success', false);
 
@@ -349,7 +349,7 @@ it('rejects a valid server proof when submitted stops use a different order', fu
         ->assertSuccessful();
 
     $this->actingAs($user)
-        ->putJson(route('route-planning.update', $routePlan), p53UpdatePayload([
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
             'optimization_proof' => $optimization->json('optimization_proof'),
             'optimization_strategy' => 'TomTom Traffic-Aware Optimized',
             'stops' => [
@@ -428,7 +428,7 @@ it('preserves draft planning and non-emergency route lifecycle behavior', functi
     $normalRoute = p53Route($normalReservation);
 
     $this->actingAs(p53User())
-        ->putJson(route('route-planning.update', $draftEmergency), p53UpdatePayload())
+        ->postJson(route('route-planning.transition', $draftEmergency), p53UpdatePayload())
         ->assertSuccessful()
         ->assertJsonPath('routePlan.status', 'Planned');
 

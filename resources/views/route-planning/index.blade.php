@@ -709,10 +709,8 @@
                     <option value="Draft">Draft</option>
                     <option value="Planned">Planned</option>
                     <option value="Ready For Dispatch">Ready For Dispatch</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Archived">Archived</option>
                   </select>
-                  <small class="route-field-help">Only valid lifecycle transitions are available.</small>
+                  <small class="route-field-help">Planning workflow transitions are available here. Archive remains a separate action.</small>
                 </div>
                 <div class="form-group">
                   <label for="routeDepartureDate">Departure Date *</label>

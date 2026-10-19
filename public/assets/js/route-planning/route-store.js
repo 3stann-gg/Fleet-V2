@@ -927,6 +927,33 @@ async function updateRoutePlanApi(id, payload) {
 }
 
 /**
+ * Save a Route Plan through its dedicated lifecycle workflow.
+ */
+async function transitionRoutePlanApi(id, payload) {
+    const data = await routeApiRequest(
+        `${ROUTE_API_BASE}/${encodeURIComponent(id)}/transition`,
+        {
+            method: "POST",
+
+            body: JSON.stringify(payload),
+        },
+    );
+
+    const routePlan = data.routePlan
+        ? normalizeRouteApiRecord(data.routePlan, 0)
+        : null;
+
+    if (routePlan) {
+        upsertRouteRecord(routePlan);
+    }
+
+    return {
+        ...data,
+        routePlan,
+    };
+}
+
+/**
  * Archive Route Plan.
  */
 async function archiveRoutePlanApi(id) {

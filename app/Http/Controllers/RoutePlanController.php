@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class RoutePlanController extends Controller
 {
@@ -561,9 +562,17 @@ class RoutePlanController extends Controller
     /**
      * Update route plan.
      */
+    public function transition(
+        Request $request,
+        RoutePlan $routePlan,
+    ) {
+        return $this->update($request, $routePlan, true);
+    }
+
     public function update(
         Request $request,
-        RoutePlan $routePlan
+        RoutePlan $routePlan,
+        bool $isLifecycleTransition = false,
     ) {
 
         $this->authorize('update', $routePlan);
@@ -610,10 +619,9 @@ class RoutePlanController extends Controller
                     'numeric',
                     'between:-180,180',
                 ],
-                'status' => [
-                    'required',
-                    'in:Draft,Planned,Ready For Dispatch,Completed,Archived',
-                ],
+                'status' => $isLifecycleTransition
+                    ? ['required', Rule::in(['Draft', 'Planned', 'Ready For Dispatch'])]
+                    : ['sometimes', Rule::in([$routePlan->status])],
                 'estimated_distance' => [
                     'nullable',
                     'numeric',
@@ -688,7 +696,8 @@ class RoutePlanController extends Controller
         try {
             $result = DB::transaction(function () use (
                 $validator,
-                $routePlan
+                $routePlan,
+                $isLifecycleTransition,
             ) {
                 $routePlan = RoutePlan::query()
                     ->lockForUpdate()
@@ -707,6 +716,12 @@ class RoutePlanController extends Controller
                 $routePlan->setRelation('reservation', $reservation);
 
                 $validated = $validator->validated();
+
+                if (in_array($routePlan->status, ['Completed', 'Archived'], true)) {
+                    throw new \Exception(
+                        "{$routePlan->status} route plans are historical records and cannot be edited."
+                    );
+                }
                 /*
                 |--------------------------------------------------------------------------
                 | Lock Route Plan once Dispatch exists
@@ -725,7 +740,9 @@ class RoutePlanController extends Controller
                     $routePlan->status;
 
                 $newStatus =
-                    $validated['status'];
+                    $isLifecycleTransition
+                        ? $validated['status']
+                        : $currentStatus;
 
                 $isEmergency = Reservation::isEmergencyRequestType(
                     $routePlan->reservation?->request_type
@@ -733,6 +750,7 @@ class RoutePlanController extends Controller
                 $optimizationApplied = (bool) ($validated['optimization_applied'] ?? false);
 
                 if (
+                    $isLifecycleTransition &&
                     $isEmergency &&
                     $currentStatus === 'Planned' &&
                     $newStatus === 'Ready For Dispatch'
@@ -743,6 +761,7 @@ class RoutePlanController extends Controller
                 }
 
                 if (
+                    $isLifecycleTransition &&
                     $isEmergency &&
                     $currentStatus === 'Planned' &&
                     $newStatus === 'Planned' &&
@@ -767,30 +786,12 @@ class RoutePlanController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                $allowedTransitions = [
-                    'Draft' => [
-                        'Planned',
-                        'Archived',
-                    ],
-                    'Planned' => [
-                        'Draft',
-                        'Ready For Dispatch',
-                        'Archived',
-                    ],
-                    'Ready For Dispatch' => [
-                        'Archived',
-                    ],
-                    'Completed' => [
-                        'Archived',
-                    ],
-                    'Archived' => [],
-                ];
-
                 if (
+                    $isLifecycleTransition &&
                     $currentStatus !== $newStatus &&
                     ! in_array(
                         $newStatus,
-                        $allowedTransitions[$currentStatus] ?? [],
+                        RoutePlan::WORKFLOW_TRANSITIONS[$currentStatus] ?? [],
                         true
                     )
                 ) {

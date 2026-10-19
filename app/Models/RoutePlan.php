@@ -8,6 +8,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RoutePlan extends Model
 {
+    public const STATUSES = [
+        'Draft',
+        'Planned',
+        'Ready For Dispatch',
+        'Completed',
+        'Archived',
+    ];
+
+    public const WORKFLOW_TRANSITIONS = [
+        'Draft' => ['Planned'],
+        'Planned' => ['Draft', 'Ready For Dispatch'],
+        'Ready For Dispatch' => [],
+        'Completed' => [],
+        'Archived' => [],
+    ];
+
     protected $fillable = [
         'route_number',
         'reservation_id',
