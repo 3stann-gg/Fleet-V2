@@ -178,6 +178,141 @@ class ReservationController extends Controller
         }
     }
 
+    private function updateReservationUnderLock(
+        Reservation $reservation,
+        array $validated,
+        bool $isEmergencyRequest,
+        bool $validateAssignment,
+        bool $requirePending,
+        bool $syncCapabilities,
+    ): array {
+        return DB::transaction(function () use (
+            $reservation,
+            $validated,
+            $isEmergencyRequest,
+            $validateAssignment,
+            $requirePending,
+            $syncCapabilities,
+        ): array {
+            $reservation = Reservation::query()
+                ->with(['routePlan', 'dispatch'])
+                ->lockForUpdate()
+                ->findOrFail($reservation->id);
+
+            if ($reservation->archived_at) {
+                throw new \Exception('Archived reservations cannot be edited.');
+            }
+
+            if ($reservation->dispatch) {
+                throw new \Exception(
+                    'This reservation can no longer be modified because a dispatch has already been created.'
+                );
+            }
+
+            if ($reservation->routePlan) {
+                throw new \Exception(
+                    'This reservation can no longer be modified because a route plan has already been created.'
+                );
+            }
+
+            if ($requirePending && $reservation->status !== 'Pending') {
+                throw new \Exception('Only Pending reservations can be edited by a department head.');
+            }
+
+            unset($validated['status']);
+
+            if (
+                $isEmergencyRequest &&
+                in_array($reservation->status, ['Pending', 'Approved'], true)
+            ) {
+                $validated['status'] = 'Approved';
+            }
+
+            if ($validateAssignment) {
+                $this->validateVehicleAndDriverAvailability(
+                    $validated['vehicle_id'] ?? null,
+                    $validated['driver_id'] ?? null
+                );
+            }
+
+            $oldAuditValues = $this->getReservationAuditValues($reservation);
+            $hadCompleteAssignment = $reservation->vehicle_id !== null &&
+                $reservation->driver_id !== null;
+
+            $reservation->update($validated);
+
+            if ($syncCapabilities) {
+                $this->syncRequiredCapabilities(
+                    $reservation,
+                    $validated['required_capabilities'] ?? []
+                );
+            }
+
+            $reservation->refresh();
+
+            return [
+                'reservation' => $reservation,
+                'oldAuditValues' => $oldAuditValues,
+                'newAuditValues' => $this->getReservationAuditValues($reservation),
+                'hadCompleteAssignment' => $hadCompleteAssignment,
+                'hasCompleteAssignment' => $reservation->vehicle_id !== null &&
+                    $reservation->driver_id !== null,
+            ];
+        });
+    }
+
+    private function decideReservationUnderLock(
+        Reservation $reservation,
+        string $status,
+        bool $requireNoDispatch,
+    ): array {
+        return DB::transaction(function () use (
+            $reservation,
+            $status,
+            $requireNoDispatch,
+        ): array {
+            $reservation = Reservation::query()
+                ->with(['routePlan', 'dispatch', 'requester'])
+                ->lockForUpdate()
+                ->findOrFail($reservation->id);
+
+            if ($reservation->archived_at) {
+                throw new \Exception(
+                    "Archived reservations cannot be {$status}."
+                );
+            }
+
+            if ($reservation->status !== 'Pending') {
+                throw new \Exception(
+                    "Only Pending reservations can be {$status}."
+                );
+            }
+
+            if (! $reservation->vehicle_id || ! $reservation->driver_id) {
+                throw new \Exception(
+                    "A vehicle and driver must both be assigned before the reservation can be {$status}."
+                );
+            }
+
+            if ($requireNoDispatch && $reservation->dispatch) {
+                throw new \Exception('This reservation already has a dispatch.');
+            }
+
+            $this->validateVehicleAndDriverAvailability(
+                $reservation->vehicle_id,
+                $reservation->driver_id
+            );
+
+            $oldValues = $this->getReservationAuditValues($reservation);
+            $reservation->update(['status' => ucfirst($status)]);
+
+            return [
+                'reservation' => $reservation,
+                'oldValues' => $oldValues,
+            ];
+        });
+    }
+
     /**
      * Display a listing of reservations.
      */
@@ -1048,10 +1183,6 @@ class ReservationController extends Controller
                     ...$validator->validated(),
                     ...$emergencyValues,
                 ];
-                $validated['status'] = $isEmergencyRequest
-                    && in_array($reservation->status, ['Pending', 'Approved'], true)
-                        ? 'Approved'
-                        : $reservation->status;
                 /*
                 |--------------------------------------------------------------------------
                 | Hospital Facility Resolution
@@ -1088,55 +1219,17 @@ class ReservationController extends Controller
                             $destinationHospital->name;
                     }
                 }
-                /*
-                |--------------------------------------------------------------------------
-                | Preserve Existing Status
-                |--------------------------------------------------------------------------
-                | Dispatcher form currently has no Status field.
-                | If status is not submitted, keep the current reservation status.
-                */
-                if (! $request->has('status')) {
-                    unset($validated['status']);
-                }
-
-                $this->validateVehicleAndDriverAvailability(
-                    $validated['vehicle_id'] ?? null,
-                    $validated['driver_id'] ?? null
+                $result = $this->updateReservationUnderLock(
+                    reservation: $reservation,
+                    validated: $validated,
+                    isEmergencyRequest: $isEmergencyRequest,
+                    validateAssignment: true,
+                    requirePending: false,
+                    syncCapabilities: $request->has('required_capabilities'),
                 );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Capture Previous Audit State
-                |--------------------------------------------------------------------------
-                */
-                $oldAuditValues =
-                    $this->getReservationAuditValues(
-                        $reservation
-                    );
-
-                /*
-                |--------------------------------------------------------------------------
-                | RBAC-Protected Ownership
-                |--------------------------------------------------------------------------
-                | requested_by and department are not accepted from the request.
-                */
-                $reservation->update(
-                    $validated
-                );
-
-                if ($request->has('required_capabilities')) {
-                    $this->syncRequiredCapabilities(
-                        $reservation,
-                        $validated['required_capabilities'] ?? []
-                    );
-                }
-
-                $reservation->refresh();
-
-                $newAuditValues =
-                    $this->getReservationAuditValues(
-                        $reservation
-                    );
+                $reservation = $result['reservation'];
+                $oldAuditValues = $result['oldAuditValues'];
+                $newAuditValues = $result['newAuditValues'];
 
                 $this->logReservationUpdate(
                     $reservation,
@@ -1347,31 +1440,27 @@ class ReservationController extends Controller
                 }
             }
 
-            $oldAuditValues =
-                $this->getReservationAuditValues(
-                    $reservation
+            try {
+                $result = $this->updateReservationUnderLock(
+                    reservation: $reservation,
+                    validated: $validated,
+                    isEmergencyRequest: $isEmergencyRequest,
+                    validateAssignment: false,
+                    requirePending: true,
+                    syncCapabilities: $request->has('required_capabilities'),
                 );
-
-            $hadCompleteAssignment =
-                $reservation->vehicle_id !== null &&
-                $reservation->driver_id !== null;
-
-            $reservation->update(
-                $validated
-            );
-
-            if ($request->has('required_capabilities')) {
-                $this->syncRequiredCapabilities(
-                    $reservation,
-                    $validated['required_capabilities'] ?? []
-                );
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
             }
 
-            $reservation->refresh();
-
-            $hasCompleteAssignment =
-                $reservation->vehicle_id !== null &&
-                $reservation->driver_id !== null;
+            $reservation = $result['reservation'];
+            $oldAuditValues = $result['oldAuditValues'];
+            $newAuditValues = $result['newAuditValues'];
+            $hadCompleteAssignment = $result['hadCompleteAssignment'];
+            $hasCompleteAssignment = $result['hasCompleteAssignment'];
             /*
             |--------------------------------------------------------------------------
             | Notify when Vehicle + Driver assignment is completed
@@ -1402,11 +1491,6 @@ class ReservationController extends Controller
                     excludeUserId: $request->user()->id
                 );
             }
-
-            $newAuditValues =
-                $this->getReservationAuditValues(
-                    $reservation
-                );
 
             $this->logReservationUpdate(
                 $reservation,
@@ -1444,37 +1528,11 @@ class ReservationController extends Controller
     ) {
         $this->authorize('approve', $reservation);
 
-        $reservation->load([
-            'routePlan',
-            'dispatch',
-            'requester',
-        ]);
-
-        if ($reservation->archived_at) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Archived reservations cannot be approved.',
-            ], 422);
-        }
-
-        if ($reservation->status !== 'Pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only Pending reservations can be approved.',
-            ], 422);
-        }
-
-        if (! $reservation->vehicle_id || ! $reservation->driver_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A vehicle and driver must both be assigned before the reservation can be approved.',
-            ], 422);
-        }
-
         try {
-            $this->validateVehicleAndDriverAvailability(
-                $reservation->vehicle_id,
-                $reservation->driver_id
+            $result = $this->decideReservationUnderLock(
+                $reservation,
+                'approved',
+                true,
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -1483,25 +1541,8 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        if ($reservation->dispatch) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This reservation already has a dispatch.',
-            ], 422);
-        }
-
-        $oldValues = $this->getReservationAuditValues(
-            $reservation
-        );
-
-        DB::transaction(function () use (
-            $reservation
-        ) {
-            $reservation->update([
-                'status' => 'Approved',
-            ]);
-        });
-
+        $reservation = $result['reservation'];
+        $oldValues = $result['oldValues'];
         $reservation->refresh();
 
         $newValues = $this->getReservationAuditValues(
@@ -1549,35 +1590,11 @@ class ReservationController extends Controller
     ) {
         $this->authorize('reject', $reservation);
 
-        $reservation->load([
-            'requester',
-        ]);
-
-        if ($reservation->archived_at) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Archived reservations cannot be rejected.',
-            ], 422);
-        }
-
-        if ($reservation->status !== 'Pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only Pending reservations can be rejected.',
-            ], 422);
-        }
-
-        if (! $reservation->vehicle_id || ! $reservation->driver_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A vehicle and driver must both be assigned before the reservation can be rejected.',
-            ], 422);
-        }
-
         try {
-            $this->validateVehicleAndDriverAvailability(
-                $reservation->vehicle_id,
-                $reservation->driver_id
+            $result = $this->decideReservationUnderLock(
+                $reservation,
+                'rejected',
+                false,
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -1586,18 +1603,8 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        $oldValues = $this->getReservationAuditValues(
-            $reservation
-        );
-
-        DB::transaction(function () use (
-            $reservation
-        ) {
-            $reservation->update([
-                'status' => 'Rejected',
-            ]);
-        });
-
+        $reservation = $result['reservation'];
+        $oldValues = $result['oldValues'];
         $reservation->refresh();
 
         $newValues = $this->getReservationAuditValues(

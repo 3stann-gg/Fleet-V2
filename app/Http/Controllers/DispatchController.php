@@ -1548,6 +1548,12 @@ class DispatchController extends Controller
                         $dispatch->id
                     );
 
+                if ($dispatch->archived_at) {
+                    throw new \Exception(
+                        'Archived dispatches cannot be modified.'
+                    );
+                }
+
                 $reservation = $dispatch->reservation;
 
                 if (! $reservation) {
@@ -1577,8 +1583,9 @@ class DispatchController extends Controller
                 $currentStatus =
                     $dispatch->trip_status;
 
-                $newStatus =
-                    $validated['trip_status'] ?? $currentStatus;
+                $newStatus = $isLifecycleTransition
+                    ? $validated['trip_status']
+                    : $currentStatus;
 
                 if ($isLifecycleTransition && $isDriver) {
                     $driverTransitions = [
@@ -1671,17 +1678,20 @@ class DispatchController extends Controller
                 | Update Dispatch
                 |--------------------------------------------------------------------------
                 */
-                $dispatch->update([
+                $dispatchUpdates = [
                     'dispatch_number' => $isDriver
                         ? $dispatch->dispatch_number
                         : ($validated['dispatch_number'] ?? $dispatch->dispatch_number),
-
-                    'trip_status' => $newStatus,
-
                     'remarks' => $isDriver
                         ? $dispatch->remarks
                         : ($validated['remarks'] ?? $dispatch->remarks),
-                ]);
+                ];
+
+                if ($isLifecycleTransition) {
+                    $dispatchUpdates['trip_status'] = $newStatus;
+                }
+
+                $dispatch->update($dispatchUpdates);
 
                 /*
                 |--------------------------------------------------------------------------

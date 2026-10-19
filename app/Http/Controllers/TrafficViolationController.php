@@ -119,11 +119,15 @@ class TrafficViolationController extends Controller
 
     public function update(UpdateTrafficViolationRequest $request, TrafficViolation $trafficViolation): JsonResponse
     {
-        abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be edited.');
-        $oldValues = $this->auditValues($trafficViolation);
         $validated = $request->validated();
 
-        DB::transaction(function () use ($trafficViolation, $validated, $oldValues): void {
+        DB::transaction(function () use ($trafficViolation, $validated): void {
+            $trafficViolation = TrafficViolation::query()
+                ->lockForUpdate()
+                ->findOrFail($trafficViolation->id);
+
+            abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be edited.');
+            $oldValues = $this->auditValues($trafficViolation);
             $trafficViolation->update($validated);
 
             AuditLogService::log(
@@ -195,11 +199,16 @@ class TrafficViolationController extends Controller
 
     public function settlement(SettleTrafficViolationRequest $request, TrafficViolation $trafficViolation): JsonResponse
     {
-        abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be settled.');
-        $oldValues = $this->auditValues($trafficViolation);
+        $validated = $request->validated();
 
-        DB::transaction(function () use ($trafficViolation, $request, $oldValues): void {
-            $trafficViolation->update($request->validated());
+        DB::transaction(function () use ($trafficViolation, $validated): void {
+            $trafficViolation = TrafficViolation::query()
+                ->lockForUpdate()
+                ->findOrFail($trafficViolation->id);
+
+            abort_if($trafficViolation->archived_at !== null, 422, 'Archived traffic violations cannot be settled.');
+            $oldValues = $this->auditValues($trafficViolation);
+            $trafficViolation->update($validated);
             AuditLogService::log(
                 module: 'Traffic Violation Management', action: 'Settlement Recorded',
                 description: "Settlement information for traffic violation #{$trafficViolation->id} was updated.",
@@ -219,15 +228,21 @@ class TrafficViolationController extends Controller
     public function archive(Request $request, TrafficViolation $trafficViolation): JsonResponse
     {
         $this->authorize('archive', $trafficViolation);
-        abort_if($trafficViolation->archived_at !== null, 422, 'Traffic violation is already archived.');
 
-        $oldValues = $this->auditValues($trafficViolation);
-        $trafficViolation->update(['archived_at' => now(), 'archived_by' => $request->user()->id]);
-        AuditLogService::log(
-            module: 'Traffic Violation Management', action: 'Violation Archived',
-            description: "Traffic violation #{$trafficViolation->id} was archived.", record: $trafficViolation,
-            oldValues: $oldValues, newValues: $this->auditValues($trafficViolation)
-        );
+        DB::transaction(function () use ($request, $trafficViolation): void {
+            $trafficViolation = TrafficViolation::query()
+                ->lockForUpdate()
+                ->findOrFail($trafficViolation->id);
+
+            abort_if($trafficViolation->archived_at !== null, 422, 'Traffic violation is already archived.');
+            $oldValues = $this->auditValues($trafficViolation);
+            $trafficViolation->update(['archived_at' => now(), 'archived_by' => $request->user()->id]);
+            AuditLogService::log(
+                module: 'Traffic Violation Management', action: 'Violation Archived',
+                description: "Traffic violation #{$trafficViolation->id} was archived.", record: $trafficViolation,
+                oldValues: $oldValues, newValues: $this->auditValues($trafficViolation)
+            );
+        });
 
         return response()->json(['message' => 'Traffic violation archived successfully.']);
     }
@@ -235,15 +250,21 @@ class TrafficViolationController extends Controller
     public function restore(Request $request, TrafficViolation $trafficViolation): JsonResponse
     {
         $this->authorize('restore', $trafficViolation);
-        abort_if($trafficViolation->archived_at === null, 422, 'Traffic violation is not archived.');
 
-        $oldValues = $this->auditValues($trafficViolation);
-        $trafficViolation->update(['archived_at' => null, 'archived_by' => null]);
-        AuditLogService::log(
-            module: 'Traffic Violation Management', action: 'Violation Restored',
-            description: "Traffic violation #{$trafficViolation->id} was restored.", record: $trafficViolation,
-            oldValues: $oldValues, newValues: $this->auditValues($trafficViolation)
-        );
+        DB::transaction(function () use ($trafficViolation): void {
+            $trafficViolation = TrafficViolation::query()
+                ->lockForUpdate()
+                ->findOrFail($trafficViolation->id);
+
+            abort_if($trafficViolation->archived_at === null, 422, 'Traffic violation is not archived.');
+            $oldValues = $this->auditValues($trafficViolation);
+            $trafficViolation->update(['archived_at' => null, 'archived_by' => null]);
+            AuditLogService::log(
+                module: 'Traffic Violation Management', action: 'Violation Restored',
+                description: "Traffic violation #{$trafficViolation->id} was restored.", record: $trafficViolation,
+                oldValues: $oldValues, newValues: $this->auditValues($trafficViolation)
+            );
+        });
 
         return response()->json(['message' => 'Traffic violation restored successfully.']);
     }

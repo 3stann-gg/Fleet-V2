@@ -975,6 +975,12 @@ class MaintenanceController extends Controller
                 $maintenance = Maintenance::lockForUpdate()
                     ->findOrFail($maintenance->id);
 
+                if ($maintenance->archived_at) {
+                    throw new \Exception(
+                        'Archived maintenance records cannot be modified.'
+                    );
+                }
+
                 $oldAuditValues =
                     $this->getMaintenanceAuditValues(
                         $maintenance
@@ -1031,9 +1037,15 @@ class MaintenanceController extends Controller
                 $currentVehicleId = (int) $maintenance->vehicle_id;
 
                 $currentStatus = $maintenance->status;
-                $validated['status'] ??= $currentStatus;
+                $newStatus = $isLifecycleTransition
+                    ? $validated['status']
+                    : $currentStatus;
+
+                if (! $isLifecycleTransition) {
+                    unset($validated['status']);
+                }
+
                 $maintenance->fill($validated);
-                $newStatus = $validated['status'];
 
                 if (
                     $maintenanceSettings['requireCost'] &&
