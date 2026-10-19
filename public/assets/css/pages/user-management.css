@@ -112,6 +112,40 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+#accountManagementModal .account-selected-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
+#accountManagementModal .account-selected-user > i {
+  color: var(--color-primary);
+  font-size: 30px;
+}
+
+#accountManagementModal .account-selected-user > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#accountManagementModal .account-selected-user span,
+#accountManagementModal .account-selected-user small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+}
+
+#accountManagementModal .account-selected-user strong {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
 #accountManagementModal .account-section-heading {
   margin-bottom: var(--space-4);
 }

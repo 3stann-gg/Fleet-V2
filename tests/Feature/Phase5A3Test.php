@@ -265,6 +265,49 @@ it('automatically makes a planned emergency route ready only after a valid optim
         ->and(Dispatch::query()->where('reservation_id', $reservation->id)->exists())->toBeFalse();
 });
 
+it('promotes a draft emergency route through its valid planned transition when trusted optimization is applied', function () {
+    $reservation = p53Reservation();
+    $routePlan = p53Route($reservation, ['status' => 'Draft']);
+    $user = p53User();
+    $tomTom = Mockery::mock(TomTomRoutingService::class);
+    $tomTom->shouldReceive('calculateRoute')->once()->andReturn(p53TomTomResult());
+    $this->app->instance(TomTomRoutingService::class, $tomTom);
+
+    $optimization = $this->actingAs($user)
+        ->postJson(route('route-planning.traffic-route'), [
+            'reservation_id' => $reservation->id,
+            'coordinates' => [
+                ['latitude' => 14.5995, 'longitude' => 120.9842],
+                ['latitude' => 14.6091, 'longitude' => 121.0223],
+            ],
+        ])
+        ->assertSuccessful();
+
+    $this->actingAs($user)
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
+            'optimization_proof' => $optimization->json('optimization_proof'),
+        ]))
+        ->assertSuccessful()
+        ->assertJsonPath('routePlan.status', 'Ready For Dispatch');
+
+    expect($routePlan->fresh()->status)->toBe('Ready For Dispatch');
+});
+
+it('does not let an OSRM fallback authorize draft emergency promotion', function () {
+    $reservation = p53Reservation();
+    $routePlan = p53Route($reservation, ['status' => 'Draft']);
+
+    $this->actingAs(p53User())
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
+            'optimization_strategy' => 'OSRM Fastest Route (Fallback)',
+            'optimization_proof' => null,
+        ]))
+        ->assertUnprocessable();
+
+    expect($routePlan->fresh()->status)->toBe('Draft')
+        ->and($routePlan->fresh()->estimated_distance)->toBeNull();
+});
+
 it('does not mark an emergency route ready when optimization is calculated but not persisted', function () {
     $reservation = p53Reservation();
     $routePlan = p53Route($reservation);
@@ -428,7 +471,9 @@ it('preserves draft planning and non-emergency route lifecycle behavior', functi
     $normalRoute = p53Route($normalReservation);
 
     $this->actingAs(p53User())
-        ->postJson(route('route-planning.transition', $draftEmergency), p53UpdatePayload())
+        ->postJson(route('route-planning.transition', $draftEmergency), p53UpdatePayload([
+            'optimization_applied' => false,
+        ]))
         ->assertSuccessful()
         ->assertJsonPath('routePlan.status', 'Planned');
 

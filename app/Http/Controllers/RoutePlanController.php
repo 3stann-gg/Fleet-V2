@@ -739,10 +739,26 @@ class RoutePlanController extends Controller
                 $currentStatus =
                     $routePlan->status;
 
-                $newStatus =
+                $requestedStatus =
                     $isLifecycleTransition
                         ? $validated['status']
                         : $currentStatus;
+
+                if (
+                    $isLifecycleTransition &&
+                    $currentStatus !== $requestedStatus &&
+                    ! in_array(
+                        $requestedStatus,
+                        RoutePlan::WORKFLOW_TRANSITIONS[$currentStatus] ?? [],
+                        true
+                    )
+                ) {
+                    throw new \Exception(
+                        "Cannot change route status from {$currentStatus} to {$requestedStatus}."
+                    );
+                }
+
+                $newStatus = $requestedStatus;
 
                 $isEmergency = Reservation::isEmergencyRequestType(
                     $routePlan->reservation?->request_type
@@ -753,7 +769,7 @@ class RoutePlanController extends Controller
                     $isLifecycleTransition &&
                     $isEmergency &&
                     $currentStatus === 'Planned' &&
-                    $newStatus === 'Ready For Dispatch'
+                    $requestedStatus === 'Ready For Dispatch'
                 ) {
                     throw new \Exception(
                         'Emergency routes become Ready For Dispatch automatically after a valid optimization is applied and saved.'
@@ -763,8 +779,8 @@ class RoutePlanController extends Controller
                 if (
                     $isLifecycleTransition &&
                     $isEmergency &&
-                    $currentStatus === 'Planned' &&
-                    $newStatus === 'Planned' &&
+                    in_array($currentStatus, ['Draft', 'Planned'], true) &&
+                    $requestedStatus === 'Planned' &&
                     $optimizationApplied
                 ) {
                     $this->assertEmergencyRouteReady(
@@ -779,26 +795,6 @@ class RoutePlanController extends Controller
                     $this->getRoutePlanAuditValues(
                         $routePlan
                     );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Route Status Lifecycle
-                |--------------------------------------------------------------------------
-                */
-
-                if (
-                    $isLifecycleTransition &&
-                    $currentStatus !== $newStatus &&
-                    ! in_array(
-                        $newStatus,
-                        RoutePlan::WORKFLOW_TRANSITIONS[$currentStatus] ?? [],
-                        true
-                    )
-                ) {
-                    throw new \Exception(
-                        "Cannot change route status from {$currentStatus} to {$newStatus}."
-                    );
-                }
 
                 /*
                 |--------------------------------------------------------------------------

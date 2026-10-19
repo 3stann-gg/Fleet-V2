@@ -340,3 +340,15 @@ it('does not introduce a super admin role and rejects that assignment', function
 
     expect($target->fresh()->role)->toBe('finance');
 });
+
+it('keeps row account actions bound to their selected user without a replacement selector', function () {
+    $script = file_get_contents(public_path('assets/js/user-management/account-management.js'));
+
+    expect($script)
+        ->toContain('accountManagementSelectedUserId = String(userId)')
+        ->toContain('renderAccountUpdateForm(accountManagementSelectedUserId)')
+        ->toContain('renderAccountResetPasswordForm(accountManagementSelectedUserId)')
+        ->toContain('renderAccountDeleteForm(accountManagementSelectedUserId)')
+        ->toContain('buildSelectedAccountIdentity(selectedUser)')
+        ->toContain('form.dataset.userId');
+});

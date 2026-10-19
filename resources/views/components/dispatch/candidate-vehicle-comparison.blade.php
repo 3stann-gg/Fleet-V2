@@ -30,7 +30,7 @@
         hidden
     ></div>
 
-    <div class="table-responsive">
+    <div class="table-responsive dispatch-candidate-table-scroll">
         <table class="fleet-table dispatch-candidate-table" aria-label="Candidate vehicle and driver suitability comparison">
             <thead>
                 <tr>

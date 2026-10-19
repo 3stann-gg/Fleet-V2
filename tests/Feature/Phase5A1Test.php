@@ -403,3 +403,16 @@ it('preserves reassignment pair persistence', function () {
         ->vehicle_id->toBe($replacementVehicle->id)
         ->driver_id->toBe($replacementDriver->id);
 });
+
+it('contains candidate comparison rows inside a responsive scroll region', function () {
+    $component = file_get_contents(resource_path('views/components/dispatch/candidate-vehicle-comparison.blade.php'));
+    $stylesheet = file_get_contents(public_path('assets/css/pages/dispatch.css'));
+
+    expect($component)
+        ->toContain('table-responsive dispatch-candidate-table-scroll')
+        ->and($stylesheet)
+        ->toContain('.dispatch-candidate-table-scroll')
+        ->toContain('max-height: min(55vh, 36rem)')
+        ->toContain('overflow: auto')
+        ->toContain('position: sticky');
+});
