@@ -259,6 +259,11 @@ Route::middleware([
             [SanitationLogController::class, 'update']
         )->name('sanitation.update');
 
+        Route::post(
+            '/sanitation/{sanitationLog}/transition',
+            [SanitationLogController::class, 'transition']
+        )->name('sanitation.transition');
+
     });
 
 
@@ -398,6 +403,11 @@ Route::middleware([
             '/dispatch/{dispatch}/accept',
             [DispatchController::class, 'accept']
         )->name('dispatch.accept');
+
+        Route::post(
+            '/dispatch/{dispatch}/transition',
+            [DispatchController::class, 'transition']
+        )->name('dispatch.transition');
 
         Route::post(
             '/dispatch/{dispatch}/request-reassignment',
@@ -615,6 +625,11 @@ Route::middleware([
         )->name('maintenance.update');
 
         Route::post(
+            '/maintenance/{maintenance}/transition',
+            [MaintenanceController::class, 'transition']
+        )->name('maintenance.transition');
+
+        Route::post(
             '/maintenance/bulk-archive',
             [MaintenanceController::class, 'bulkArchive']
         )->name('maintenance.bulkArchive');
@@ -748,6 +763,11 @@ Route::middleware([
             '/route-planning/{routePlan}',
             [RoutePlanController::class, 'update']
         )->name('route-planning.update');
+
+        Route::post(
+            '/route-planning/{routePlan}/transition',
+            [RoutePlanController::class, 'transition']
+        )->name('route-planning.transition');
 
         Route::post(
             '/route-planning/{routePlan}/archive',

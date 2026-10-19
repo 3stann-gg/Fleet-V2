@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetSetting;
+use App\Models\Vehicle;
 use App\Services\AuditLogService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SettingsController extends Controller
@@ -35,10 +37,15 @@ class SettingsController extends Controller
     {
         Gate::authorize('settings.update');
 
-        $validated = $request->validate([
+        $request->validate([
             'settings' => [
                 'required',
                 'array',
+            ],
+            'settings.vehicles' => ['sometimes', 'array'],
+            'settings.vehicles.defaultStatus' => [
+                'sometimes',
+                Rule::in(Vehicle::MANUAL_STATUSES),
             ],
         ]);
 
@@ -50,7 +57,7 @@ class SettingsController extends Controller
             $record?->settings ?? [];
 
         $newSettings =
-            $validated['settings'];
+            $request->input('settings');
 
         $record = DB::transaction(
             function () use (
@@ -59,9 +66,9 @@ class SettingsController extends Controller
                 $request,
                 $oldSettings
             ) {
-                if (!$record) {
+                if (! $record) {
                     $record =
-                        new FleetSetting();
+                        new FleetSetting;
                 }
 
                 $record->settings =
@@ -76,16 +83,13 @@ class SettingsController extends Controller
                     AuditLogService::log(
                         module: 'Settings',
                         action: 'Updated',
-                        description:
-                            'Updated fleet system settings.',
+                        description: 'Updated fleet system settings.',
                         record: $record,
                         oldValues: [
-                            'settings' =>
-                                $oldSettings,
+                            'settings' => $oldSettings,
                         ],
                         newValues: [
-                            'settings' =>
-                                $newSettings,
+                            'settings' => $newSettings,
                         ]
                     );
                 }
@@ -95,14 +99,11 @@ class SettingsController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Fleet settings saved successfully.',
+            'message' => 'Fleet settings saved successfully.',
 
-            'settings' =>
-                $record->settings,
+            'settings' => $record->settings,
 
-            'updated_at' =>
-                $record->updated_at,
+            'updated_at' => $record->updated_at,
         ]);
     }
 
@@ -123,12 +124,10 @@ class SettingsController extends Controller
                     AuditLogService::log(
                         module: 'Settings',
                         action: 'Reset',
-                        description:
-                            'Reset fleet system settings to defaults.',
+                        description: 'Reset fleet system settings to defaults.',
                         record: $record,
                         oldValues: [
-                            'settings' =>
-                                $oldSettings,
+                            'settings' => $oldSettings,
                         ],
                         newValues: [
                             'settings' => [],
@@ -141,8 +140,7 @@ class SettingsController extends Controller
         }
 
         return response()->json([
-            'message' =>
-                'Fleet settings reset successfully.',
+            'message' => 'Fleet settings reset successfully.',
         ]);
     }
 }

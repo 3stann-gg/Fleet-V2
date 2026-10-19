@@ -414,39 +414,6 @@ async function loadEditMaintenanceVehicles(
     }
 }
 
-function updateEditMaintenanceStatusOptions(currentStatus) {
-    const select = document.getElementById("editMaintenanceStatus");
-
-    if (!select) {
-        return;
-    }
-    const allowedTransitions = {
-        Scheduled: ["In Progress", "Cancelled"],
-        "In Progress": ["Completed", "Cancelled"],
-        Completed: [],
-        Cancelled: [],
-    };
-
-    const allowed = allowedTransitions[currentStatus] || [];
-
-    Array.from(select.options).forEach((option) => {
-        const value = option.value;
-
-        if (!value) {
-            option.disabled = true;
-            return;
-        }
-
-        if (value === currentStatus) {
-            option.disabled = false;
-            return;
-        }
-        option.disabled = !allowed.includes(value);
-    });
-    select.value = currentStatus;
-    select.disabled = ["Completed", "Cancelled"].includes(currentStatus);
-}
-
 async function populateEditMaintenanceForm(row, maintenanceData = null) {
     if (!row) {
         return null;
@@ -595,12 +562,6 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
                 prioritySelect.value = savedPriority;
             }
         }
-        /*
-        |--------------------------------------------------------------------------
-        | Keep existing status lifecycle
-        |--------------------------------------------------------------------------
-        */
-        updateEditMaintenanceStatusOptions(maintenance.status);
         document
             .getElementById("editMaintenanceStatus")
             ?.dispatchEvent(new Event("change"));
@@ -701,7 +662,6 @@ async function updateMaintenanceRecord(form, maintenanceId) {
         completion_date: getValue("editMaintenanceCompletionDate") || null,
         cost: getValue("editMaintenanceCost") || null,
         priority: getValue("editMaintenancePriority"),
-        status: getValue("editMaintenanceStatus"),
         odometer: getValue("editMaintenanceOdometer") || null,
         description: getValue("editMaintenanceDescription").trim(),
         parts_used: getValue("editMaintenancePartsUsed").trim() || null,
@@ -794,7 +754,60 @@ async function initMaintenanceEdit() {
             applyEditMaintenanceSettings(editMaintenanceSettings);
         });
 
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
+        const transitionButton = event.target.closest(
+            ".maintenance-transition",
+        );
+        if (transitionButton) {
+            const maintenanceId = transitionButton.dataset.id;
+            const targetStatus = transitionButton.dataset.status;
+            const confirmed = await window.showFleetConfirm({
+                title: `${targetStatus} Maintenance?`,
+                message: `Confirm transition to ${targetStatus}.`,
+                confirmLabel: targetStatus,
+                confirmIcon:
+                    targetStatus === "Cancelled"
+                        ? "ph ph-x-circle"
+                        : "ph ph-check-circle",
+                tone: targetStatus === "Cancelled" ? "danger" : "default",
+            });
+            if (!confirmed) {
+                return;
+            }
+
+            transitionButton.disabled = true;
+            try {
+                const response = await fetch(
+                    `/maintenance/${maintenanceId}/transition`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                            "X-CSRF-TOKEN": document
+                                .querySelector('meta[name="csrf-token"]')
+                                ?.getAttribute("content"),
+                        },
+                        credentials: "same-origin",
+                        body: JSON.stringify({ status: targetStatus }),
+                    },
+                );
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(
+                        data.message || "Unable to update maintenance status.",
+                    );
+                }
+                window.showToast?.(data.message, "success");
+                await window.loadMaintenances?.();
+                await window.loadAvailableMaintenanceVehicles?.();
+            } catch (error) {
+                window.showToast?.(error.message, "error");
+                transitionButton.disabled = false;
+            }
+            return;
+        }
+
         const editBtn = event.target.closest(".action-btn.edit-maintenance");
 
         if (!editBtn) {

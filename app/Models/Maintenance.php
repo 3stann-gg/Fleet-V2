@@ -10,6 +10,20 @@ class Maintenance extends Model
 {
     use HasFactory;
 
+    public const STATUSES = [
+        'Scheduled',
+        'In Progress',
+        'Completed',
+        'Cancelled',
+    ];
+
+    public const TRANSITIONS = [
+        'Scheduled' => ['In Progress', 'Cancelled'],
+        'In Progress' => ['Completed', 'Cancelled'],
+        'Completed' => [],
+        'Cancelled' => [],
+    ];
+
     protected $fillable = [
         'maintenance_number',
         'vehicle_id',
@@ -43,7 +57,7 @@ class Maintenance extends Model
     {
         return $this->belongsTo(Vehicle::class);
     }
-    
+
     public function archivedBy()
     {
         return $this->belongsTo(

@@ -145,8 +145,8 @@ class TrafficViolation extends Model
             'under_review' => ['reported', 'contested', 'for_settlement', 'dismissed', 'closed'],
             'contested' => ['under_review', 'for_settlement', 'dismissed', 'closed'],
             'for_settlement' => ['under_review', 'contested', 'settled', 'dismissed', 'closed'],
-            'settled' => ['for_settlement', 'closed'], 'dismissed' => ['under_review', 'closed'],
-            'closed' => ['under_review'], default => [],
+            'settled' => ['closed'], 'dismissed' => ['closed'],
+            'closed' => [], default => [],
         }, true);
     }
 }

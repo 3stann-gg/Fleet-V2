@@ -209,8 +209,6 @@ function normalizeFleetSettings(raw) {
           requireDepartment: v.requireDepartment !== false,
           defaultStatus: [
               "Available",
-              "On Trip",
-              "Maintenance",
               "Out of Service",
           ].includes(v.defaultStatus)
               ? v.defaultStatus

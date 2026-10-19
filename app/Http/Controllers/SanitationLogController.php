@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Dispatch;
 use App\Models\SanitationLog;
 use App\Models\Vehicle;
 use App\Services\AuditLogService;
@@ -79,7 +80,7 @@ class SanitationLogController extends Controller
             'dispatch_id' => ['nullable', 'integer', 'exists:dispatch,id'],
             'reason' => ['required', Rule::in(array_keys(SanitationLog::REASON_LABELS))],
             'cleaning_type' => ['required', Rule::in(array_keys(SanitationLog::CLEANING_TYPE_LABELS))],
-            'status' => ['required', Rule::in(array_keys(SanitationLog::STATUS_LABELS))],
+            'status' => ['prohibited'],
             'remarks' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -102,8 +103,8 @@ class SanitationLogController extends Controller
             );
         }
 
-        if (!empty($validated['dispatch_id'])) {
-            $dispatchMatchesVehicle = \App\Models\Dispatch::query()
+        if (! empty($validated['dispatch_id'])) {
+            $dispatchMatchesVehicle = Dispatch::query()
                 ->whereKey($validated['dispatch_id'])
                 ->whereHas(
                     'reservation',
@@ -124,9 +125,7 @@ class SanitationLogController extends Controller
             abort_unless($dispatchMatchesVehicle, 403);
         }
 
-        if (!$request->user()->hasPermission('sanitation.update')) {
-            $validated['status'] = 'pending';
-        }
+        $validated['status'] = 'pending';
 
         $sanitationLog = DB::transaction(function () use ($request, $validated, $vehicle): SanitationLog {
             $lockedVehicle = Vehicle::query()->lockForUpdate()->findOrFail($vehicle->id);
@@ -179,7 +178,7 @@ class SanitationLogController extends Controller
         Gate::authorize('sanitation.update');
 
         $validator = Validator::make($request->all(), [
-            'status' => ['required', Rule::in(array_keys(SanitationLog::STATUS_LABELS))],
+            'status' => ['prohibited'],
             'cleaning_type' => ['sometimes', Rule::in(array_keys(SanitationLog::CLEANING_TYPE_LABELS))],
             'remarks' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
@@ -195,7 +194,7 @@ class SanitationLogController extends Controller
         $this->authorize('view', $sanitationLog->vehicle);
         $validated = $validator->validated();
 
-        DB::transaction(function () use ($request, $sanitationLog, $validated): void {
+        DB::transaction(function () use ($sanitationLog, $validated): void {
             $sanitationLog = SanitationLog::query()
                 ->lockForUpdate()
                 ->findOrFail($sanitationLog->id);
@@ -208,26 +207,12 @@ class SanitationLogController extends Controller
                 'remarks',
             ]);
 
-            $status = $validated['status'];
             $sanitationLog->fill([
-                'status' => $status,
                 'cleaning_type' => $validated['cleaning_type'] ?? $sanitationLog->cleaning_type,
                 'remarks' => array_key_exists('remarks', $validated)
                     ? $validated['remarks']
                     : $sanitationLog->remarks,
             ]);
-
-            if ($status === 'in_progress') {
-                $sanitationLog->started_at ??= now();
-                $sanitationLog->completed_at = null;
-                $sanitationLog->performed_by = $request->user()->id;
-            } elseif ($status === 'completed') {
-                $sanitationLog->started_at ??= now();
-                $sanitationLog->completed_at = now();
-                $sanitationLog->performed_by = $request->user()->id;
-            } else {
-                $sanitationLog->completed_at = null;
-            }
 
             $sanitationLog->save();
             $vehicle = Vehicle::query()->lockForUpdate()->findOrFail($sanitationLog->vehicle_id);
@@ -246,6 +231,79 @@ class SanitationLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Sanitation record updated successfully.',
+            'sanitation' => $sanitationLog->fresh()->load(['vehicle', 'dispatch', 'performedBy']),
+        ]);
+    }
+
+    public function transition(Request $request, SanitationLog $sanitationLog): JsonResponse
+    {
+        Gate::authorize('sanitation.update');
+        $this->authorize('view', $sanitationLog->vehicle);
+
+        if (array_diff(array_keys($request->all()), ['status']) !== []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sanitation transition requests may only contain status.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_keys(SanitationLog::STATUS_LABELS))],
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $sanitationLog, $validated): void {
+                $sanitationLog = SanitationLog::query()
+                    ->lockForUpdate()
+                    ->findOrFail($sanitationLog->id);
+                $currentStatus = $sanitationLog->status;
+                $newStatus = $validated['status'];
+
+                if (! in_array($newStatus, SanitationLog::TRANSITIONS[$currentStatus] ?? [], true)) {
+                    throw new \Exception(
+                        "Cannot change sanitation status from {$currentStatus} to {$newStatus}."
+                    );
+                }
+
+                $oldValues = $sanitationLog->only([
+                    'status',
+                    'started_at',
+                    'completed_at',
+                    'performed_by',
+                ]);
+
+                $sanitationLog->status = $newStatus;
+                $sanitationLog->started_at ??= now();
+                $sanitationLog->performed_by = $request->user()->id;
+                $sanitationLog->completed_at = $newStatus === 'completed'
+                    ? now()
+                    : null;
+                $sanitationLog->save();
+
+                $vehicle = Vehicle::query()
+                    ->lockForUpdate()
+                    ->findOrFail($sanitationLog->vehicle_id);
+                $this->synchronizeVehicleReadiness($vehicle, $sanitationLog);
+
+                AuditLogService::log(
+                    module: 'Vehicle Management',
+                    action: 'Sanitation Status Updated',
+                    description: "Sanitation record #{$sanitationLog->id} updated to {$sanitationLog->status_label}.",
+                    record: $sanitationLog,
+                    oldValues: $oldValues,
+                    newValues: $sanitationLog->only(array_keys($oldValues))
+                );
+            });
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sanitation status updated successfully.',
             'sanitation' => $sanitationLog->fresh()->load(['vehicle', 'dispatch', 'performedBy']),
         ]);
     }

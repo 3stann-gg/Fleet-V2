@@ -209,10 +209,9 @@
                     <div class="form-group">
                       <label for="settingsVehicleDefaultStatus">Default status</label>
                       <select id="settingsVehicleDefaultStatus">
-                        <option value="Available">Available</option>
-                        <option value="On Trip">On Trip</option>
-                        <option value="Maintenance">Maintenance</option>
-                        <option value="Out of Service">Out of Service</option>
+                        @foreach(\App\Models\Vehicle::MANUAL_STATUSES as $status)
+                          <option value="{{ $status }}">{{ $status }}</option>
+                        @endforeach
                       </select>
                     </div>
                     <div class="form-group">

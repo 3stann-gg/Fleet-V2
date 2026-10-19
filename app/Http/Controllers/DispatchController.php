@@ -19,6 +19,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class DispatchController extends Controller
 {
@@ -1430,6 +1431,19 @@ class DispatchController extends Controller
         }
     }
 
+    public function transition(
+        Request $request,
+        Dispatch $dispatch,
+        DispatchAssignmentService $assignmentService,
+    ) {
+        return $this->update(
+            $request,
+            $dispatch,
+            $assignmentService,
+            true,
+        );
+    }
+
     /**
      * Update the specified dispatch.
      */
@@ -1437,6 +1451,7 @@ class DispatchController extends Controller
         Request $request,
         Dispatch $dispatch,
         DispatchAssignmentService $assignmentService,
+        bool $isLifecycleTransition = false,
     ) {
         $this->authorize('update', $dispatch);
 
@@ -1449,10 +1464,22 @@ class DispatchController extends Controller
             ], 422);
         }
 
+        if (
+            $isLifecycleTransition &&
+            array_diff(array_keys($request->all()), ['trip_status']) !== []
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dispatch transition requests may only contain trip_status.',
+            ], 422);
+        }
+
         $validator = Validator::make(
             $request->all(),
             [
-                'dispatch_number' => $isDriver
+                'dispatch_number' => $isLifecycleTransition
+                ? ['prohibited']
+                : ($isDriver
                 ? [
                     'nullable',
                     'string',
@@ -1464,24 +1491,21 @@ class DispatchController extends Controller
                     'max:50',
                     'unique:dispatch,dispatch_number,'.
                         $dispatch->id,
-                ],
-                'trip_status' => [
-                    'required',
-                    'string',
-                    'max:50',
-                    'in:Pending,Assigned,En Route,Arrived,Completed,Cancelled',
-                ],
-                'remarks' => [
+                ]),
+                'trip_status' => $isLifecycleTransition
+                    ? ['required', Rule::in(Dispatch::STATUSES)]
+                    : ['sometimes', Rule::in([$dispatch->trip_status])],
+                'remarks' => $isLifecycleTransition ? ['prohibited'] : [
                     'nullable',
                     'string',
                 ],
-                'vehicle_id' => [
+                'vehicle_id' => $isLifecycleTransition ? ['prohibited'] : [
                     'nullable',
                     'required_with:driver_id',
                     'integer',
                     'exists:vehicles,id',
                 ],
-                'driver_id' => [
+                'driver_id' => $isLifecycleTransition ? ['prohibited'] : [
                     'nullable',
                     'required_with:vehicle_id',
                     'integer',
@@ -1504,6 +1528,7 @@ class DispatchController extends Controller
                 $dispatch,
                 $isDriver,
                 $assignmentService,
+                $isLifecycleTransition,
 
             ) {
                 $validated = $validator->validated();
@@ -1522,6 +1547,12 @@ class DispatchController extends Controller
                     ->findOrFail(
                         $dispatch->id
                     );
+
+                if ($dispatch->archived_at) {
+                    throw new \Exception(
+                        'Archived dispatches cannot be modified.'
+                    );
+                }
 
                 $reservation = $dispatch->reservation;
 
@@ -1549,33 +1580,14 @@ class DispatchController extends Controller
                 | Pending / Assigned / En Route can be cancelled.
                 |
                 */
-                $allowedTransitions = [
-                    'Pending' => [
-                        'Assigned',
-                        'Cancelled',
-                    ],
-                    'Assigned' => [
-                        'En Route',
-                        'Cancelled',
-                    ],
-                    'En Route' => [
-                        'Arrived',
-                        'Cancelled',
-                    ],
-                    'Arrived' => [
-                        'Completed',
-                    ],
-                    'Completed' => [],
-                    'Cancelled' => [],
-                ];
-
                 $currentStatus =
                     $dispatch->trip_status;
 
-                $newStatus =
-                    $validated['trip_status'];
+                $newStatus = $isLifecycleTransition
+                    ? $validated['trip_status']
+                    : $currentStatus;
 
-                if ($isDriver) {
+                if ($isLifecycleTransition && $isDriver) {
                     $driverTransitions = [
                         'Assigned' => 'En Route',
                         'En Route' => 'Arrived',
@@ -1598,6 +1610,7 @@ class DispatchController extends Controller
                     );
 
                 if (
+                    ! $isLifecycleTransition &&
                     ! $isDriver &&
                     array_key_exists('vehicle_id', $validated) &&
                     array_key_exists('driver_id', $validated) &&
@@ -1634,10 +1647,10 @@ class DispatchController extends Controller
                 |--------------------------------------------------------------------------
                 */
                 if (
-                    $currentStatus !== $newStatus &&
+                    $isLifecycleTransition &&
                     ! in_array(
                         $newStatus,
-                        $allowedTransitions[$currentStatus] ?? [],
+                        Dispatch::TRANSITIONS[$currentStatus] ?? [],
                         true
                     )
                 ) {
@@ -1665,17 +1678,20 @@ class DispatchController extends Controller
                 | Update Dispatch
                 |--------------------------------------------------------------------------
                 */
-                $dispatch->update([
+                $dispatchUpdates = [
                     'dispatch_number' => $isDriver
                         ? $dispatch->dispatch_number
-                        : $validated['dispatch_number'],
-
-                    'trip_status' => $newStatus,
-
+                        : ($validated['dispatch_number'] ?? $dispatch->dispatch_number),
                     'remarks' => $isDriver
                         ? $dispatch->remarks
-                        : ($validated['remarks'] ?? null),
-                ]);
+                        : ($validated['remarks'] ?? $dispatch->remarks),
+                ];
+
+                if ($isLifecycleTransition) {
+                    $dispatchUpdates['trip_status'] = $newStatus;
+                }
+
+                $dispatch->update($dispatchUpdates);
 
                 /*
                 |--------------------------------------------------------------------------
@@ -2261,7 +2277,8 @@ class DispatchController extends Controller
 
     public function approveReassignment(
         Request $request,
-        DispatchReassignment $reassignment
+        DispatchReassignment $reassignment,
+        DispatchAssignmentService $assignmentService,
     ) {
         $request->validate([
             'new_vehicle_id' => [
@@ -2279,7 +2296,8 @@ class DispatchController extends Controller
 
         $result = DB::transaction(function () use (
             $request,
-            $reassignment
+            $reassignment,
+            $assignmentService,
         ) {
             /*
             |--------------------------------------------------------------------------
@@ -2489,6 +2507,16 @@ class DispatchController extends Controller
                     422,
                     'The selected driver is not assigned to the selected vehicle.'
                 );
+            }
+
+            try {
+                $assignmentService->validateManualPair(
+                    $reservation,
+                    $newVehicle->id,
+                    $newDriver->id,
+                );
+            } catch (\RuntimeException $exception) {
+                abort(422, $exception->getMessage());
             }
 
             /*

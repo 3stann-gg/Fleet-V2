@@ -53,16 +53,6 @@ function initVehicleForm() {
     `;
   }
 
-  if (vehicleStatus) {
-    vehicleStatus.innerHTML = `
-      <option value="">Select Status</option>
-      <option>Available</option>
-      <option>On Trip</option>
-      <option>Maintenance</option>
-      <option>Out of Service</option>
-    `;
-  }
-
   if (form) {
     form.dataset.vehicleFormInitialized = "true";
   }

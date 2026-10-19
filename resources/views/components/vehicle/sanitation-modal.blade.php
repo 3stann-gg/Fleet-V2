@@ -31,14 +31,6 @@
             <option value="deep_cleaning">Deep Cleaning</option>
           </select>
         </div>
-        <div class="form-group">
-          <label for="sanitationStatus">Status *</label>
-          <select id="sanitationStatus" required>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
         <div class="form-group full-width">
           <label for="sanitationRemarks">Remarks</label>
           <textarea id="sanitationRemarks" rows="3"></textarea>

@@ -10,6 +10,29 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Vehicle extends Model
 {
+    public const MANUAL_STATUSES = [
+        'Available',
+        'Out of Service',
+    ];
+
+    public const WORKFLOW_STATUSES = [
+        'On Trip',
+        'Maintenance',
+    ];
+
+    public const MANUAL_READINESS_STATUSES = [
+        'ready',
+        'refueling',
+        'charging',
+    ];
+
+    public const WORKFLOW_READINESS_STATUSES = [
+        'in_use',
+        'maintenance',
+        'cleaning',
+        'unavailable',
+    ];
+
     public const TYPE_OPTIONS = [
         'Ambulance',
         'Service Vehicle',

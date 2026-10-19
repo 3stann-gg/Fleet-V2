@@ -552,7 +552,7 @@ function renderDispatchTable(dispatches) {
                                       : ""
                             }
                             ${
-                                canEdit
+                                canEdit && role !== "driver"
                                     ? `
                                         <button
                                             type="button"
@@ -596,6 +596,47 @@ function renderDispatchTable(dispatches) {
                                             <i class="ph ph-arrows-left-right" aria-hidden="true"></i>
                                         </button>
                                     `
+                                    : ""
+                            }
+                            ${
+                                role === "driver" && status === "Assigned"
+                                    ? `
+                                        <button type="button" class="action-btn dispatch-start-trip"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Start trip for ${safeDispatchNumber}" title="Start Trip">
+                                            <i class="ph ph-play" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+                            ${
+                                role === "driver" && status === "En Route"
+                                    ? `
+                                        <button type="button" class="action-btn dispatch-arrived"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Mark ${safeDispatchNumber} arrived" title="Mark Arrived">
+                                            <i class="ph ph-map-pin" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+                            ${
+                                role === "driver" && status === "Arrived"
+                                    ? `
+                                        <button type="button" class="action-btn dispatch-complete"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Complete ${safeDispatchNumber}" title="Complete Dispatch">
+                                            <i class="ph ph-check-circle" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+                            ${
+                                role === "dispatcher" &&
+                                ["Pending", "Assigned", "En Route"].includes(status)
+                                    ? `
+                                        <button type="button" class="action-btn dispatch-cancel"
+                                            data-id="${escapeDispatchHtml(dispatch.id)}"
+                                            aria-label="Cancel ${safeDispatchNumber}" title="Cancel Dispatch">
+                                            <i class="ph ph-x-circle" aria-hidden="true"></i>
+                                        </button>`
                                     : ""
                             }
                             ${

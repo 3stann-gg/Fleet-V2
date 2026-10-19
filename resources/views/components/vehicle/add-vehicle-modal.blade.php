@@ -270,23 +270,20 @@
                 required
             >   
                 <option value="">Select Status Type</option>
-                <option value="Available">Available</option>
-                <option value="On Trip">On Trip</option>
-                <option value="Maintenance">Maintenance</option>
-                <option value="Out of Service">Out of Service</option>
+                @foreach(\App\Models\Vehicle::MANUAL_STATUSES as $status)
+                  <option value="{{ $status }}">{{ $status }}</option>
+                @endforeach
             </select>
           </div>
 
           <div class="form-group">
             <label for="vehicleReadiness">Operational Readiness <span class="required" aria-hidden="true">*</span></label>
             <select id="vehicleReadiness" name="readiness_status" required>
-              <option value="ready" selected>Ready for Dispatch</option>
-              <option value="in_use">In Use</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="refueling">Refueling</option>
-              <option value="charging">Charging</option>
-              <option value="cleaning">Cleaning / Sanitation</option>
-              <option value="unavailable">Unavailable</option>
+              @foreach(\App\Models\Vehicle::MANUAL_READINESS_STATUSES as $readiness)
+                <option value="{{ $readiness }}" @selected($readiness === 'ready')>
+                  {{ \App\Models\Vehicle::READINESS_LABELS[$readiness] }}
+                </option>
+              @endforeach
             </select>
           </div>
 

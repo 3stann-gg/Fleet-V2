@@ -455,18 +455,12 @@
                             Status *
                         </label>
 
-                        <select
+                        <input
+                            type="text"
                             id="reservationStatus"
-                            disabled
-                        >
-                            <option value="Pending">
-                                Pending
-                            </option>
-
-                            <option value="Approved">
-                                Approved
-                            </option>
-                        </select>
+                            value="Pending"
+                            readonly
+                        />
 
                         <small
                             class="form-hint"
