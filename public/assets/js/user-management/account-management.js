@@ -1,5 +1,6 @@
 let accountManagementTrigger = null;
 let accountDirectoryUsers = [];
+let accountManagementSelectedUserId = null;
 
 function getAccountDisplayName(user) {
     return (
@@ -22,6 +23,27 @@ function getAccountRoleLabel(role) {
     };
 
     return roleLabels[role] || "Unassigned";
+}
+
+function buildSelectedAccountIdentity(user) {
+    if (!user) {
+        return "";
+    }
+
+    return `
+        <div class="account-selected-user" aria-label="Selected user account">
+            <i class="ph ph-user-circle" aria-hidden="true"></i>
+            <div>
+                <span>Selected user</span>
+                <strong>${escapeAccountHtml(getAccountDisplayName(user))}</strong>
+                <small>
+                    ${escapeAccountHtml(user.email || "No email")}
+                    &middot;
+                    ${escapeAccountHtml(getAccountRoleLabel(user.role))}
+                </small>
+            </div>
+        </div>
+    `;
 }
 
 function renderAccountDirectory(users) {
@@ -148,6 +170,7 @@ async function refreshAccountDirectory() {
 }
 
 async function openAccountDirectoryAction(action, userId, trigger) {
+    accountManagementSelectedUserId = String(userId);
     openAccountManagementModal({ currentTarget: trigger });
     const actionSelect = document.getElementById("accountManagementAction");
     if (!actionSelect) {
@@ -156,25 +179,11 @@ async function openAccountDirectoryAction(action, userId, trigger) {
 
     actionSelect.value = action;
     if (action === "update") {
-        await renderAccountUpdateForm();
-        const userSelect = document.getElementById("updateAccountUser");
-        if (userSelect) {
-            userSelect.value = userId;
-            userSelect.dispatchEvent(new Event("change", { bubbles: true }));
-        }
+        await renderAccountUpdateForm(accountManagementSelectedUserId);
     } else if (action === "reset_password") {
-        await renderAccountResetPasswordForm();
-        const userSelect = document.getElementById("resetPasswordUser");
-        if (userSelect) {
-            userSelect.value = userId;
-        }
+        await renderAccountResetPasswordForm(accountManagementSelectedUserId);
     } else if (action === "delete") {
-        await renderAccountDeleteForm();
-        const userSelect = document.getElementById("deleteAccountUser");
-        if (userSelect) {
-            userSelect.value = userId;
-            userSelect.dispatchEvent(new Event("change", { bubbles: true }));
-        }
+        await renderAccountDeleteForm(accountManagementSelectedUserId);
     }
 }
 
@@ -186,6 +195,9 @@ function openAccountManagementModal(event = null) {
     const modal = getAccountManagementModal();
     if (!modal) {
         return;
+    }
+    if (!event?.currentTarget?.matches?.("[data-account-directory-action]")) {
+        accountManagementSelectedUserId = null;
     }
     accountManagementTrigger =
         event?.currentTarget ||
@@ -237,6 +249,7 @@ function closeAccountManagementModal() {
             accountManagementTrigger.focus();
         }
         accountManagementTrigger = null;
+        accountManagementSelectedUserId = null;
     });
 }
 
@@ -270,15 +283,15 @@ function initAccountManagementModal() {
             return;
         }
         if (action === "update") {
-            renderAccountUpdateForm();
+            renderAccountUpdateForm(accountManagementSelectedUserId);
             return;
         }
         if (action === "reset_password") {
-            renderAccountResetPasswordForm();
+            renderAccountResetPasswordForm(accountManagementSelectedUserId);
             return;
         }
         if (action === "delete") {
-            renderAccountDeleteForm();
+            renderAccountDeleteForm(accountManagementSelectedUserId);
             return;
         }
         const content = document.getElementById("accountManagementContent");
@@ -317,7 +330,7 @@ function initAccountManagementModal() {
     refreshAccountDirectory();
 }
 
-async function renderAccountUpdateForm() {
+async function renderAccountUpdateForm(selectedUserId = null) {
     const content = document.getElementById("accountManagementContent");
     if (!content) {
         return;
@@ -328,6 +341,12 @@ async function renderAccountUpdateForm() {
             <p>Loading user accounts...</p>
         </div>
     `;
+
+    if (selectedUserId) {
+        await loadUpdateAccountForm(selectedUserId);
+        return;
+    }
+
     try {
         const response = await fetch("/settings/accounts", {
             headers: {
@@ -403,7 +422,7 @@ async function renderAccountUpdateForm() {
     }
 }
 
-async function renderAccountResetPasswordForm() {
+async function renderAccountResetPasswordForm(selectedUserId = null) {
     const content = document.getElementById("accountManagementContent");
     if (!content) {
         return;
@@ -426,6 +445,12 @@ async function renderAccountResetPasswordForm() {
             throw new Error(data?.message || "Unable to load accounts.");
         }
         const users = Array.isArray(data?.users) ? data.users : [];
+        const selectedUser = selectedUserId
+            ? users.find((user) => String(user.id) === String(selectedUserId))
+            : null;
+        if (selectedUserId && !selectedUser) {
+            throw new Error("The selected user account is no longer available.");
+        }
         const options = users
             .map((user) => {
                 const name =
@@ -443,7 +468,11 @@ async function renderAccountResetPasswordForm() {
             .join("");
 
         content.innerHTML = `
-            <form id="resetUserPasswordForm">
+            <form
+                id="resetUserPasswordForm"
+                ${selectedUser ? `data-user-id="${selectedUser.id}"` : ""}
+            >
+                ${buildSelectedAccountIdentity(selectedUser)}
                 <section class="account-form-section" aria-labelledby="resetAccountSecurityHeading">
                     <div class="account-form-section-heading">
                         <span class="account-form-section-label">Security</span>
@@ -452,22 +481,25 @@ async function renderAccountResetPasswordForm() {
 
                 <div class="form-grid">
 
-                    <div class="form-group full-width">
-                        <label for="resetPasswordUser">
-                            User Account *
-                        </label>
+                    ${
+                        selectedUser
+                            ? ""
+                            : `
+                                <div class="form-group full-width">
+                                    <label for="resetPasswordUser">
+                                        User Account *
+                                    </label>
 
-                        <select
-                            id="resetPasswordUser"
-                            required
-                        >
-                            <option value="">
-                                Select user account
-                            </option>
+                                    <select id="resetPasswordUser" required>
+                                        <option value="">
+                                            Select user account
+                                        </option>
 
-                            ${options}
-                        </select>
-                    </div>
+                                        ${options}
+                                    </select>
+                                </div>
+                            `
+                    }
 
                     <div class="form-group">
                         <label for="resetAccountPassword">
@@ -569,7 +601,7 @@ async function renderAccountResetPasswordForm() {
     }
 }
 
-async function renderAccountDeleteForm() {
+async function renderAccountDeleteForm(selectedUserId = null) {
     const content = document.getElementById("accountManagementContent");
 
     if (!content) {
@@ -582,6 +614,11 @@ async function renderAccountDeleteForm() {
             <p>Loading user accounts...</p>
         </div>
     `;
+
+    if (selectedUserId) {
+        await loadDeleteAccountDetails(selectedUserId);
+        return;
+    }
 
     try {
         const response = await fetch("/settings/accounts", {
@@ -741,6 +778,7 @@ async function loadUpdateAccountForm(userId) {
         const user = data.user;
         const isDriver = user.role === "driver";
         container.innerHTML = `
+            ${buildSelectedAccountIdentity(user)}
             <form id="updateUserAccountForm">
 
                 <input
@@ -1118,7 +1156,9 @@ function initUpdateUserAccountForm(isDriver) {
                 "success",
             );
             await refreshAccountDirectory();
-            await renderAccountUpdateForm();
+            await renderAccountUpdateForm(
+                accountManagementSelectedUserId || userId,
+            );
         } catch (error) {
             console.error("UPDATE ACCOUNT ERROR:", error);
             window.showToast?.(
@@ -1152,7 +1192,9 @@ function initResetUserPasswordForm() {
             return;
         }
         const userId =
-            document.getElementById("resetPasswordUser")?.value || "";
+            form.dataset.userId ||
+            document.getElementById("resetPasswordUser")?.value ||
+            "";
         const password =
             document.getElementById("resetAccountPassword")?.value || "";
         const passwordConfirmation =
@@ -1299,7 +1341,11 @@ function initDeleteUserAccount() {
             );
 
             await refreshAccountDirectory();
-            await renderAccountDeleteForm();
+            if (accountManagementSelectedUserId) {
+                closeAccountManagementModal();
+            } else {
+                await renderAccountDeleteForm();
+            }
         } catch (error) {
             console.error("DELETE ACCOUNT ERROR:", error);
 

@@ -1475,6 +1475,19 @@
     min-width: 1050px;
 }
 
+.dispatch-candidate-comparison .dispatch-candidate-table-scroll {
+    max-height: min(55vh, 36rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.dispatch-candidate-table-scroll .dispatch-candidate-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface-muted);
+}
+
 .dispatch-candidate-table th,
 .dispatch-candidate-table td {
     padding: 10px 12px;
