@@ -53,11 +53,21 @@
                 <td>{{ $record->completed_at?->format('Y-m-d H:i') ?? 'Not completed' }}</td>
                 <td>{{ $record->remarks ?? 'None' }}</td>
                 <td>
-                  <select class="filter-select sanitation-status-update" aria-label="Update sanitation status">
-                    <option value="pending" @selected($record->status === 'pending')>Pending</option>
-                    <option value="in_progress" @selected($record->status === 'in_progress')>In Progress</option>
-                    <option value="completed" @selected($record->status === 'completed')>Completed</option>
-                  </select>
+                  @if(auth()->user()->hasPermission('sanitation.update'))
+                    @if($record->status === 'pending')
+                      <button type="button" class="btn-outline sanitation-transition" data-status="in_progress">
+                        Start Cleaning
+                      </button>
+                    @elseif($record->status === 'in_progress')
+                      <button type="button" class="btn-primary sanitation-transition" data-status="completed">
+                        Complete Cleaning
+                      </button>
+                    @else
+                      <span aria-label="No lifecycle actions available">—</span>
+                    @endif
+                  @else
+                    <span aria-label="No lifecycle actions available">—</span>
+                  @endif
                 </td>
               </tr>
             @empty

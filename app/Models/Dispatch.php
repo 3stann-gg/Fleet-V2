@@ -9,6 +9,24 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Dispatch extends Model
 {
+    public const STATUSES = [
+        'Pending',
+        'Assigned',
+        'En Route',
+        'Arrived',
+        'Completed',
+        'Cancelled',
+    ];
+
+    public const TRANSITIONS = [
+        'Pending' => ['Cancelled'],
+        'Assigned' => ['En Route', 'Cancelled'],
+        'En Route' => ['Arrived', 'Cancelled'],
+        'Arrived' => ['Completed'],
+        'Completed' => [],
+        'Cancelled' => [],
+    ];
+
     protected $table = 'dispatch';
 
     protected $fillable = [

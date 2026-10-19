@@ -212,12 +212,18 @@ it('sets cleaning for pending and in-progress sanitation records', function (str
     $user = priority3User('fleet_manager');
     $vehicle = priority3Vehicle();
 
-    $this->actingAs($user)->postJson(route('sanitation.store'), [
+    $response = $this->actingAs($user)->postJson(route('sanitation.store'), [
         'vehicle_id' => $vehicle->id,
         'reason' => 'routine_end_of_trip',
         'cleaning_type' => 'routine_cleaning',
-        'status' => $status,
     ])->assertCreated();
+
+    if ($status === 'in_progress') {
+        $this->postJson(
+            route('sanitation.transition', $response->json('sanitation.id')),
+            ['status' => 'in_progress']
+        )->assertOk();
+    }
 
     expect($vehicle->fresh()->readiness_status)->toBe('cleaning');
 })->with(['pending', 'in_progress']);
@@ -238,7 +244,10 @@ it('completes sanitation only when no active or higher restriction remains', fun
         'status' => 'pending',
     ]);
 
-    $this->actingAs($user)->putJson(route('sanitation.update', $first), ['status' => 'completed'])->assertOk();
+    $this->actingAs($user)->postJson(
+        route('sanitation.transition', $first),
+        ['status' => 'completed']
+    )->assertOk();
     expect($vehicle->fresh()->readiness_status)->toBe('cleaning');
 
     $vehicle->sanitationLogs()->where('status', 'pending')->update(['status' => 'completed']);
@@ -256,7 +265,7 @@ it('returns a cleaned available vehicle to ready after its final sanitation reco
         'status' => 'in_progress',
     ]);
 
-    $this->actingAs($user)->putJson(route('sanitation.update', $sanitation), [
+    $this->actingAs($user)->postJson(route('sanitation.transition', $sanitation), [
         'status' => 'completed',
     ])->assertOk();
 

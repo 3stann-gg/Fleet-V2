@@ -45,7 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 cleaning_type: document.getElementById(
                     "sanitationCleaningType",
                 ).value,
-                status: document.getElementById("sanitationStatus").value,
                 remarks:
                     document.getElementById("sanitationRemarks").value || null,
             }),

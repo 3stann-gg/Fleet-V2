@@ -55,7 +55,7 @@ async function acceptDispatch(dispatchId) {
 }
 
 async function updateDriverDispatchStatus(dispatchId, nextStatus) {
-    return sendDispatchLifecycleRequest(`/dispatch/${dispatchId}`, "PUT", {
+    return sendDispatchLifecycleRequest(`/dispatch/${dispatchId}/transition`, "POST", {
         trip_status: nextStatus,
     });
 }
@@ -202,6 +202,28 @@ function initDispatchLifecycle() {
             );
 
             return;
+        }
+
+        const cancelButton = event.target.closest(".dispatch-cancel");
+
+        if (cancelButton) {
+            const confirmed = await window.showFleetConfirm({
+                title: "Cancel Dispatch?",
+                message: "Are you sure you want to cancel this dispatch?",
+                confirmLabel: "Cancel Dispatch",
+                confirmIcon: "ph ph-x-circle",
+                tone: "danger",
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            await handleDispatchLifecycleAction(
+                cancelButton,
+                "status",
+                "Cancelled",
+            );
         }
     });
 }

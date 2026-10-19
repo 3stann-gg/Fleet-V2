@@ -2983,9 +2983,9 @@
              * ------------------------------------------
              */
             const updateResponse = await fetch(
-                `/dispatch/${encodeURIComponent(dispatchId)}`,
+                `/dispatch/${encodeURIComponent(dispatchId)}/transition`,
                 {
-                    method: "PUT",
+                    method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         Accept: "application/json",
@@ -2994,9 +2994,7 @@
                     },
                     credentials: "same-origin",
                     body: JSON.stringify({
-                        dispatch_number: dispatch.dispatch_number || "",
                         trip_status: nextStatus,
-                        remarks: dispatch.remarks || "",
                     }),
                 },
             );

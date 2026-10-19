@@ -364,6 +364,39 @@ function renderMaintenanceTable(maintenances) {
                             }
 
                             ${
+                                canUpdate && !isArchived && status === "Scheduled"
+                                    ? `
+                                        <button type="button" class="action-btn maintenance-transition"
+                                            data-id="${maintenance.id ?? ""}" data-status="In Progress"
+                                            aria-label="Start ${maintenance.maintenance_number ?? "maintenance"}" title="Start Maintenance">
+                                            <i class="ph ph-play" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+
+                            ${
+                                canUpdate && !isArchived && status === "In Progress"
+                                    ? `
+                                        <button type="button" class="action-btn maintenance-transition"
+                                            data-id="${maintenance.id ?? ""}" data-status="Completed"
+                                            aria-label="Complete ${maintenance.maintenance_number ?? "maintenance"}" title="Complete Maintenance">
+                                            <i class="ph ph-check-circle" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+
+                            ${
+                                canUpdate && !isArchived && ["Scheduled", "In Progress"].includes(status)
+                                    ? `
+                                        <button type="button" class="action-btn maintenance-transition"
+                                            data-id="${maintenance.id ?? ""}" data-status="Cancelled"
+                                            aria-label="Cancel ${maintenance.maintenance_number ?? "maintenance"}" title="Cancel Maintenance">
+                                            <i class="ph ph-x-circle" aria-hidden="true"></i>
+                                        </button>`
+                                    : ""
+                            }
+
+                            ${
                                 canArchive && !isArchived
                                     ? `
                                         <!-- Archive -->

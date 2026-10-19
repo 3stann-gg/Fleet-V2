@@ -211,26 +211,12 @@
               Status *
             </label>
 
-            <select
+            <input
+              type="text"
               id="editMaintenanceStatus"
+              readonly
               required
-            >
-              <option value="">
-                Select Status
-              </option>
-              <option value="Scheduled">
-                Scheduled
-              </option>
-              <option value="In Progress">
-                In Progress
-              </option>
-              <option value="Completed">
-                Completed
-              </option>
-              <option value="Cancelled">
-                Cancelled
-              </option>
-            </select>
+            />
           </div>
 
           <div class="form-section-heading">

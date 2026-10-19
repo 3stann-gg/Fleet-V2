@@ -89,7 +89,6 @@ function getEditFormValues() {
     return {
         dispatch_number:
             document.getElementById("editDispatchNumber")?.value.trim() || "",
-        trip_status: document.getElementById("editDispatchStatus")?.value || "",
         remarks:
             document.getElementById("editDispatchNotes")?.value.trim() || null,
         vehicle_id:
@@ -109,7 +108,6 @@ function validateEditDispatchForm(form) {
     let isValid = true;
     const invalidFields = [];
     const dispatchNumber = document.getElementById("editDispatchNumber");
-    const status = document.getElementById("editDispatchStatus");
 
     if (dispatchNumber) {
         const value = dispatchNumber.value.trim();
@@ -122,54 +120,10 @@ function validateEditDispatchForm(form) {
         }
     }
 
-    if (status) {
-        const value = status.value.trim();
-        if (!value) {
-            status.classList.add("is-invalid");
-            isValid = false;
-            invalidFields.push(status);
-        } else {
-            status.classList.remove("is-invalid");
-        }
-    }
-
     if (invalidFields.length > 0) {
         invalidFields[0].focus();
     }
     return isValid;
-}
-
-function updateEditDispatchStatusOptions(currentStatus) {
-    const statusElement = document.getElementById("editDispatchStatus");
-    if (!statusElement) {
-        return;
-    }
-    const allowedTransitions = {
-        Pending: ["Assigned", "Cancelled"],
-        Assigned: ["En Route", "Cancelled"],
-        "En Route": ["Arrived", "Cancelled"],
-        Arrived: ["Completed"],
-        Completed: [],
-        Cancelled: [],
-    };
-
-    const allowed = allowedTransitions[currentStatus] || [];
-    Array.from(statusElement.options).forEach((option) => {
-        const optionStatus = option.value;
-        if (!optionStatus) {
-            option.disabled = true;
-
-            return;
-        }
-        if (optionStatus === currentStatus) {
-            option.disabled = false;
-
-            return;
-        }
-        option.disabled = !allowed.includes(optionStatus);
-    });
-    statusElement.value = currentStatus;
-    statusElement.disabled = ["Completed", "Cancelled"].includes(currentStatus);
 }
 
 function formatEditVehicle(vehicle) {
@@ -319,7 +273,7 @@ async function populateEditDispatchForm(dispatchId) {
 
         if (statusElement) {
             const currentStatus = dispatch.trip_status || "Pending";
-            updateEditDispatchStatusOptions(currentStatus);
+            statusElement.value = currentStatus;
         }
         const contactElement = document.getElementById("editDispatchContact");
         if (contactElement) {

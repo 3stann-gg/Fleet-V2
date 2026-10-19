@@ -17,6 +17,34 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 class MaintenanceController extends Controller
 {
     use AuthorizesRequests;
+
+    private function startVehicleMaintenance(Vehicle $vehicle): void
+    {
+        $vehicle->update(['status' => 'Maintenance']);
+        $vehicle->applyReadinessWithPrecedence('maintenance');
+    }
+
+    private function releaseVehicleFromMaintenance(Vehicle $vehicle): void
+    {
+        if ($vehicle->status !== 'Maintenance') {
+            return;
+        }
+
+        $readinessStatus = $vehicle->readiness_status;
+
+        if ($readinessStatus === 'maintenance') {
+            $hasActiveSanitation = $vehicle->sanitationLogs()
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists();
+            $readinessStatus = $hasActiveSanitation ? 'cleaning' : 'ready';
+        }
+
+        $vehicle->update([
+            'status' => 'Available',
+            'readiness_status' => $readinessStatus,
+        ]);
+    }
+
     /**
      * Display a listing of maintenance records.
      */
@@ -522,17 +550,19 @@ class MaintenanceController extends Controller
         | Emergency requests start immediately.
         |--------------------------------------------------------------------------
         */
+        $initialStatus = $request->input('request_type') === 'Emergency'
+            ? 'In Progress'
+            : 'Scheduled';
+
         if ($request->input('request_type') === 'Emergency') {
             $request->merge([
                 'maintenance_date' => now()->toDateString(),
                 'priority' => 'Emergency',
-                'status' => 'In Progress',
                 'completion_date' => null,
             ]);
         } else {
             $request->merge([
                 'request_type' => 'Normal',
-                'status' => 'Scheduled',
             ]);
         }
 
@@ -608,8 +638,7 @@ class MaintenanceController extends Controller
                     'min:0',
                 ],
                 'status' => [
-                    'required',
-                    'in:Scheduled,In Progress,Completed,Cancelled',
+                    'prohibited',
                 ],
                 'notes' => [
                     'nullable',
@@ -629,9 +658,11 @@ class MaintenanceController extends Controller
         try {
             $result = DB::transaction(function () use (
                 $validator,
-                $maintenanceSettings
+                $maintenanceSettings,
+                $initialStatus,
             ) {
                 $validated = $validator->validated();
+                $validated['status'] = $initialStatus;
 
                 $validated['maintenance_number'] =
                     $this->generateMaintenanceNumber();
@@ -686,23 +717,7 @@ class MaintenanceController extends Controller
                 |--------------------------------------------------------------------------
                 */
                 if ($validated['status'] === 'In Progress') {
-                    $vehicle->update([
-                        'status' => 'Maintenance',
-                        'readiness_status' => 'maintenance',
-                    ]);
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | If created as Completed,
-                | keep Vehicle Available.
-                |--------------------------------------------------------------------------
-                */
-                if ($validated['status'] === 'Completed') {
-                    $vehicle->update([
-                        'status' => 'Available',
-                        'readiness_status' => 'ready',
-                    ]);
+                    $this->startVehicleMaintenance($vehicle);
                 }
 
                 $maintenance->load('vehicle');
@@ -755,12 +770,20 @@ class MaintenanceController extends Controller
         ]);
     }
 
+    public function transition(
+        Request $request,
+        Maintenance $maintenance,
+    ) {
+        return $this->update($request, $maintenance, true);
+    }
+
     /**
      * Update the specified maintenance record.
      */
     public function update(
         Request $request,
-        Maintenance $maintenance
+        Maintenance $maintenance,
+        bool $isLifecycleTransition = false,
     ) {
         $this->authorize('update', $maintenance);
 
@@ -769,6 +792,16 @@ class MaintenanceController extends Controller
                 'success' => false,
                 'message' =>
                     'Archived maintenance records cannot be modified.',
+            ], 422);
+        }
+
+        if (
+            $isLifecycleTransition &&
+            array_diff(array_keys($request->all()), ['status']) !== []
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Maintenance transition requests may only contain status.',
             ], 422);
         }
         
@@ -798,10 +831,12 @@ class MaintenanceController extends Controller
             $request->all(),
             [
                 'vehicle_id' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     'exists:vehicles,id',
                 ],
                 'maintenance_type' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     'string',
                     'max:100',
@@ -830,25 +865,30 @@ class MaintenanceController extends Controller
                 ],
 
                 'description' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     'string',
                 ],
                 'maintenance_date' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     'date',
                     'after_or_equal:today',
                 ],
                 'completion_date' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'date',
                     'after_or_equal:today',
                     'after_or_equal:maintenance_date',
                 ],
                 'next_schedule' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'date',
                 ],
                 'technician' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     'string',
                     'max:255',
@@ -876,6 +916,7 @@ class MaintenanceController extends Controller
                     },
                 ],
                 'priority' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'required',
                     Rule::in(
                         $currentRequestType === 'Emergency'
@@ -884,24 +925,27 @@ class MaintenanceController extends Controller
                     ),
                 ],
                 'odometer' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'integer',
                     'min:0',
                 ],
                 'parts_used' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'string',
                 ],
                 'cost' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'numeric',
                     'min:0',
                 ],
-                'status' => [
-                    'required',
-                    'in:Scheduled,In Progress,Completed,Cancelled',
-                ],
+                'status' => $isLifecycleTransition
+                    ? ['required', Rule::in(Maintenance::STATUSES)]
+                    : ['sometimes', Rule::in([$maintenance->status])],
                 'notes' => [
+                    Rule::excludeIf($isLifecycleTransition),
                     'nullable',
                     'string',
                 ],
@@ -920,7 +964,8 @@ class MaintenanceController extends Controller
             $result = DB::transaction(function () use (
                 $validator,
                 $maintenance,
-                $maintenanceSettings
+                $maintenanceSettings,
+                $isLifecycleTransition,
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -954,6 +999,25 @@ class MaintenanceController extends Controller
                     ->findOrFail($maintenance->vehicle_id);
 
                 $validated = $validator->validated();
+                if ($isLifecycleTransition) {
+                    $validated = array_merge(
+                        $maintenance->only([
+                            'vehicle_id',
+                            'maintenance_type',
+                            'description',
+                            'maintenance_date',
+                            'completion_date',
+                            'next_schedule',
+                            'technician',
+                            'priority',
+                            'odometer',
+                            'parts_used',
+                            'cost',
+                            'notes',
+                        ]),
+                        $validated,
+                    );
+                }
                 /*
                 $maintenance->fill($validated);
 
@@ -967,6 +1031,7 @@ class MaintenanceController extends Controller
                 $currentVehicleId = (int) $maintenance->vehicle_id;
 
                 $currentStatus = $maintenance->status;
+                $validated['status'] ??= $currentStatus;
                 $maintenance->fill($validated);
                 $newStatus = $validated['status'];
 
@@ -988,28 +1053,17 @@ class MaintenanceController extends Controller
                 | Maintenance Status Lifecycle
                 |--------------------------------------------------------------------------
                 */
-                $allowedTransitions = [
-                    'Scheduled' => [
-                        'In Progress',
-                        'Cancelled',
-                    ],
-                    'In Progress' => [
-                        'Completed',
-                        'Cancelled',
-                    ],
-                    'Completed' => [],
-                    'Cancelled' => [],
-                ];
                 /*
                 |--------------------------------------------------------------------------
                 | Prevent Invalid Status Transition
                 |--------------------------------------------------------------------------
                 */
                 if (
-                    $currentStatus !== $newStatus &&
+                    $isLifecycleTransition &&
                     !in_array(
                         $newStatus,
-                        $allowedTransitions[$currentStatus] ?? []
+                        Maintenance::TRANSITIONS[$currentStatus] ?? [],
+                        true,
                     )
                 ) {
                     throw new \Exception(
@@ -1080,10 +1134,7 @@ class MaintenanceController extends Controller
                         );
                     }
 
-                    $activeVehicle->update([
-                        'status' => 'Maintenance',
-                        'readiness_status' => 'maintenance',
-                    ]);
+                    $this->startVehicleMaintenance($activeVehicle);
                 }
                 /*
                 |--------------------------------------------------------------------------
@@ -1107,15 +1158,7 @@ class MaintenanceController extends Controller
                             ->findOrFail($newVehicleId)
                         : $currentVehicle;
 
-                    if ($completionVehicle->status === 'Maintenance') {
-                        $completionVehicle->update([
-                            'status' => 'Available',
-                            'readiness_status' =>
-                                $completionVehicle->readiness_status === 'maintenance'
-                                    ? 'ready'
-                                    : $completionVehicle->readiness_status,
-                        ]);
-                    }
+                    $this->releaseVehicleFromMaintenance($completionVehicle);
 
                     if (empty($validated['completion_date'])) {
                         $validated['completion_date'] =
@@ -1135,17 +1178,7 @@ class MaintenanceController extends Controller
                     $currentStatus !== 'Cancelled' &&
                     $newStatus === 'Cancelled'
                 ) {
-                    if (
-                        $currentVehicle->status === 'Maintenance'
-                    ) {
-                        $currentVehicle->update([
-                            'status' => 'Available',
-                            'readiness_status' =>
-                                $currentVehicle->readiness_status === 'maintenance'
-                                    ? 'ready'
-                                    : $currentVehicle->readiness_status,
-                        ]);
-                    }
+                    $this->releaseVehicleFromMaintenance($currentVehicle);
                     /*
                     | If it was never started, its vehicle stays Available.
                     */

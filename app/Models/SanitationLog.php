@@ -35,6 +35,12 @@ class SanitationLog extends Model
         'completed' => 'Completed',
     ];
 
+    public const TRANSITIONS = [
+        'pending' => ['in_progress'],
+        'in_progress' => ['completed'],
+        'completed' => [],
+    ];
+
     protected $fillable = [
         'vehicle_id',
         'dispatch_id',

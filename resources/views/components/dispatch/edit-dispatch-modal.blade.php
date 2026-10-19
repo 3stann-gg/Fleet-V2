@@ -209,7 +209,7 @@
 
                     <div class="form-section-heading">
                         <h3>Status &amp; Additional Information</h3>
-                        <p>Update the workflow status and review coordination details.</p>
+                        <p>Review the workflow status and update coordination details.</p>
                     </div>
 
                     <!-- Status -->
@@ -217,19 +217,12 @@
                         <label for="editDispatchStatus">
                             Status
                         </label>
-                        <select
+                        <input
+                            type="text"
                             id="editDispatchStatus"
                             name="editDispatchStatus"
-                            required
-                        >
-                            <option value="">Select status</option>
-                            <option value="Pending">Pending</option>
-                            <option value="Assigned">Assigned</option>
-                            <option value="En Route">En Route</option>
-                            <option value="Arrived">Arrived</option>
-                            <option value="Completed">Completed</option>
-                            <option value="Cancelled">Cancelled</option>
-                        </select>
+                            readonly
+                        />
                     </div>
 
                     <!-- Contact -->

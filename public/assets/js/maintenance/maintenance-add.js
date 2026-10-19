@@ -821,7 +821,6 @@ async function saveMaintenance(form) {
             document.getElementById("maintenanceCompletionDate")?.value || null,
         cost: document.getElementById("maintenanceCost")?.value || null,
         priority: document.getElementById("maintenancePriority")?.value || "",
-        status: document.getElementById("maintenanceStatus")?.value || "",
         odometer: document.getElementById("maintenanceOdometer")?.value || null,
         description:
             document.getElementById("maintenanceDescription")?.value.trim() ||

@@ -10,11 +10,32 @@ document.addEventListener("DOMContentLoaded", () => {
         window.location.href = url.toString();
     });
 
-    document.querySelectorAll(".sanitation-status-update").forEach((select) => {
-        select.addEventListener("change", async () => {
-            const row = select.closest("tr");
-            const response = await fetch(`/sanitation/${row.dataset.id}`, {
-                method: "PUT",
+    document.querySelectorAll(".sanitation-transition").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const row = button.closest("tr");
+            const targetStatus = button.dataset.status;
+            const confirmed = await window.showFleetConfirm({
+                title:
+                    targetStatus === "completed"
+                        ? "Complete Cleaning?"
+                        : "Start Cleaning?",
+                message: "Confirm this sanitation lifecycle action.",
+                confirmLabel:
+                    targetStatus === "completed"
+                        ? "Complete Cleaning"
+                        : "Start Cleaning",
+                confirmIcon:
+                    targetStatus === "completed"
+                        ? "ph ph-check-circle"
+                        : "ph ph-play",
+            });
+            if (!confirmed) {
+                return;
+            }
+
+            button.disabled = true;
+            const response = await fetch(`/sanitation/${row.dataset.id}/transition`, {
+                method: "POST",
                 headers: {
                     Accept: "application/json",
                     "Content-Type": "application/json",
@@ -23,11 +44,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         ?.getAttribute("content"),
                 },
                 credentials: "same-origin",
-                body: JSON.stringify({ status: select.value }),
+                body: JSON.stringify({ status: targetStatus }),
             });
             const data = await response.json();
             if (!response.ok) {
                 window.showToast?.(data.message || "Unable to update sanitation status.", "error");
+                button.disabled = false;
                 return;
             }
             window.showToast?.(data.message, "success");
