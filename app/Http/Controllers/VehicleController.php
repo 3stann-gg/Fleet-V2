@@ -31,12 +31,7 @@ class VehicleController extends Controller
 
         $vehicleSettings = $settings['vehicles'] ?? [];
 
-        $allowedStatuses = [
-            'Available',
-            'On Trip',
-            'Maintenance',
-            'Out of Service',
-        ];
+        $allowedStatuses = Vehicle::MANUAL_STATUSES;
 
         $defaultStatus =
             $vehicleSettings['defaultStatus'] ?? 'Available';
@@ -405,16 +400,12 @@ class VehicleController extends Controller
                 ],
                 'status' => [
                     'required',
-                    Rule::in([
-                        'Available',
-                        'On Trip',
-                        'Maintenance',
-                        'Out of Service',
-                    ]),
+                    Rule::in(Vehicle::MANUAL_STATUSES),
                 ],
                 'readiness_status' => [
+                    'sometimes',
                     'nullable',
-                    Rule::in(array_keys(Vehicle::READINESS_LABELS)),
+                    Rule::in(Vehicle::MANUAL_READINESS_STATUSES),
                 ],
                 'assigned_driver_id' => 'nullable|exists:drivers,id',
                 'capabilities' => ['nullable', 'array'],
@@ -574,6 +565,17 @@ class VehicleController extends Controller
         $user = $request->user();
 
         $vehicle->load('drivers');
+
+        $hasWorkflowStatus = in_array(
+            $vehicle->status,
+            Vehicle::WORKFLOW_STATUSES,
+            true
+        );
+        $hasWorkflowReadiness = in_array(
+            $vehicle->readiness_status,
+            Vehicle::WORKFLOW_READINESS_STATUSES,
+            true
+        );
 
         $oldAuditValues =
             $this->getVehicleAuditValues(
@@ -779,18 +781,15 @@ class VehicleController extends Controller
                         'min:0',
                     ],
                     'status' => [
-                        'required',
-                        Rule::in([
-                            'Available',
-                            'On Trip',
-                            'Maintenance',
-                            'Out of Service',
-                        ]),
+                        Rule::prohibitedIf($hasWorkflowStatus),
+                        'sometimes',
+                        Rule::in(Vehicle::MANUAL_STATUSES),
                     ],
                     'readiness_status' => [
+                        Rule::prohibitedIf($hasWorkflowReadiness),
                         'sometimes',
                         'nullable',
-                        Rule::in(array_keys(Vehicle::READINESS_LABELS)),
+                        Rule::in(Vehicle::MANUAL_READINESS_STATUSES),
                     ],
                     'assigned_driver_id' => [
                         'nullable',
@@ -913,15 +912,15 @@ class VehicleController extends Controller
             $validated =
                 $request->validate([
                     'status' => [
+                        Rule::prohibitedIf($hasWorkflowStatus),
                         'sometimes',
-                        Rule::in([
-                            'Available',
-                            'Out of Service',
-                        ]),
+                        Rule::in(Vehicle::MANUAL_STATUSES),
                     ],
                     'readiness_status' => [
+                        Rule::prohibitedIf($hasWorkflowReadiness),
                         'sometimes',
-                        Rule::in(array_keys(Vehicle::READINESS_LABELS)),
+                        'nullable',
+                        Rule::in(Vehicle::MANUAL_READINESS_STATUSES),
                     ],
                     'current_fuel' => [
                         'sometimes',
@@ -972,21 +971,15 @@ class VehicleController extends Controller
             $validated =
                 $request->validate([
                     'status' => [
+                        Rule::prohibitedIf($hasWorkflowStatus),
                         'sometimes',
-                        Rule::in([
-                            'Available',
-                            'Maintenance',
-                            'Out of Service',
-                        ]),
+                        Rule::in(Vehicle::MANUAL_STATUSES),
                     ],
                     'readiness_status' => [
+                        Rule::prohibitedIf($hasWorkflowReadiness),
                         'sometimes',
-                        Rule::in([
-                            'ready',
-                            'maintenance',
-                            'cleaning',
-                            'unavailable',
-                        ]),
+                        'nullable',
+                        Rule::in(Vehicle::MANUAL_READINESS_STATUSES),
                     ],
                     'current_odometer' => [
                         'sometimes',

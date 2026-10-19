@@ -138,20 +138,7 @@ function applyVehicleEditStatusOptions(currentStatus) {
     if (!select) {
         return;
     }
-    const role = getVehicleEditRole();
-    let allowedStatuses = [];
-    if (role === "fleet_manager") {
-        allowedStatuses = [
-            "Available",
-            "On Trip",
-            "Maintenance",
-            "Out of Service",
-        ];
-    } else if (role === "dispatcher") {
-        allowedStatuses = ["Available", "Out of Service"];
-    } else if (role === "maintenance") {
-        allowedStatuses = ["Available", "Maintenance", "Out of Service"];
-    }
+    const allowedStatuses = JSON.parse(select.dataset.manualValues || "[]");
     /*
      * Preserve current status for display.
      */
@@ -175,9 +162,38 @@ function applyVehicleEditStatusOptions(currentStatus) {
      * Limited users can see it but not
      * manually change it.
      */
-    if (role !== "fleet_manager" && currentStatus === "On Trip") {
-        select.disabled = true;
+    select.disabled = !allowedStatuses.includes(currentStatus);
+}
+
+function applyVehicleEditReadinessOptions(currentReadiness) {
+    const select = document.getElementById("editVehicleReadiness");
+    if (!select) {
+        return;
     }
+    const allowedReadiness = JSON.parse(select.dataset.manualValues || "[]");
+    const labels = {
+        "": "Not Specified (legacy)",
+        ready: "Ready for Dispatch",
+        refueling: "Refueling",
+        charging: "Charging",
+        in_use: "In Use",
+        maintenance: "Maintenance",
+        cleaning: "Cleaning / Sanitation",
+        unavailable: "Unavailable",
+    };
+    const displayedReadiness = currentReadiness ? [...allowedReadiness] : ["", ...allowedReadiness];
+    if (currentReadiness && !displayedReadiness.includes(currentReadiness)) {
+        displayedReadiness.unshift(currentReadiness);
+    }
+    select.innerHTML = displayedReadiness
+        .map(
+            (readiness) =>
+                `<option value="${readiness}">${labels[readiness] || readiness}</option>`,
+        )
+        .join("");
+    select.value = currentReadiness || "";
+    select.disabled =
+        Boolean(currentReadiness) && !allowedReadiness.includes(currentReadiness);
 }
 
 
@@ -491,6 +507,7 @@ async function initEditVehicleModal() {
             populateEditDriverDropdown(data.drivers || [], data.vehicle);
             applyVehicleEditRbac();
             applyVehicleEditStatusOptions(data.vehicle.status);
+            applyVehicleEditReadinessOptions(data.vehicle.readiness_status || "");
             openEditVehicleModal(modal);
         } catch (error) {
             console.error("EDIT VEHICLE LOAD ERROR:", error);
@@ -599,6 +616,13 @@ async function initEditVehicleModal() {
                         "editVehicleCapabilities",
                     ) || [],
             };
+
+            if (document.getElementById("editVehicleStatus")?.disabled) {
+                delete formData.status;
+            }
+            if (document.getElementById("editVehicleReadiness")?.disabled) {
+                delete formData.readiness_status;
+            }
 
             if (formData.vehicle_type === "Motorcycle") {
                 formData.engine_displacement_cc =

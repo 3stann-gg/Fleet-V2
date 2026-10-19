@@ -1003,7 +1003,11 @@ class ReservationController extends Controller
                     'priority' => $priorityRules,
                     'status' => [
                         'nullable',
-                        'in:Pending,Approved,Scheduled,Completed,Rejected,Cancelled',
+                        Rule::in(array_unique([
+                            'Pending',
+                            'Approved',
+                            $reservation->status,
+                        ])),
                     ],
                     'contact_number' => [
                         'nullable',
@@ -1044,9 +1048,10 @@ class ReservationController extends Controller
                     ...$validator->validated(),
                     ...$emergencyValues,
                 ];
-                if ($reservation->status !== 'Pending') {
-                    $validated['status'] = $reservation->status;
-                }
+                $validated['status'] = $isEmergencyRequest
+                    && in_array($reservation->status, ['Pending', 'Approved'], true)
+                        ? 'Approved'
+                        : $reservation->status;
                 /*
                 |--------------------------------------------------------------------------
                 | Hospital Facility Resolution

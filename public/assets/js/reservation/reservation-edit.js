@@ -258,58 +258,6 @@ function applyReservationEditRbac() {
     }
 }
 
-const RESERVATION_STATUS_TRANSITIONS = {
-    Pending: ["Approved", "Rejected"],
-    Approved: [],
-    Rejected: [],
-
-    // Lifecycle statuses cannot be changed from Reservation Edit.
-    Scheduled: [],
-    Completed: [],
-    Cancelled: [],
-};
-
-function applyReservationStatusTransitions(selectElement, currentStatus) {
-    if (!selectElement) {
-        return;
-    }
-    const allowedStatuses = RESERVATION_STATUS_TRANSITIONS[currentStatus] || [];
-    // Make sure the current status exists in the dropdown.
-    let currentOption = Array.from(selectElement.options).find(
-        (option) => option.value === currentStatus,
-    );
-    if (!currentOption && currentStatus) {
-        currentOption = document.createElement("option");
-        currentOption.value = currentStatus;
-        currentOption.textContent = currentStatus;
-
-        selectElement.appendChild(currentOption);
-    }
-    Array.from(selectElement.options).forEach((option) => {
-        if (!option.value) {
-            option.hidden = false;
-            option.disabled = false;
-            return;
-        }
-
-        // Always display the current status.
-        if (option.value === currentStatus) {
-            option.hidden = false;
-            option.disabled = false;
-            return;
-        }
-
-        // Only show statuses allowed from the current status.
-        const isAllowed = allowedStatuses.includes(option.value);
-
-        option.hidden = !isAllowed;
-        option.disabled = !isAllowed;
-    });
-
-    // Keep the current status selected.
-    selectElement.value = currentStatus;
-}
-
 async function loadEditReservationOptions(selectedVehicleId = null) {
     const vehicleSelect = document.getElementById("editReservationVehicle");
     const driverSelect = document.getElementById("editReservationDriver");
@@ -521,8 +469,6 @@ async function initEditReservationModal() {
     if (getReservationEditRole() === "fleet_manager") {
         const currentStatus = getRowText(row, ".status-badge");
         setValue("editReservationStatus", currentStatus);
-        const statusSelect = document.getElementById("editReservationStatus");
-        applyReservationStatusTransitions(statusSelect, currentStatus);
     }
     setValue("editReservationContact", getRowData(row, "contactNumber"));
     setValue("editReservationNotes", getRowData(row, "notes"));
@@ -625,7 +571,6 @@ async function initEditReservationModal() {
       const reservationDate = document.getElementById("editReservationDate");
       const reservationTime = document.getElementById("editReservationTime");
       const reservationPriority = document.getElementById("editReservationPriority");
-      const reservationStatus = document.getElementById("editReservationStatus");
       const reservationContact = document.getElementById("editReservationContact");
 
       let firstInvalid = null;
@@ -763,21 +708,6 @@ async function initEditReservationModal() {
         isValid = false;
       }
 
-      if (role === "fleet_manager") {
-          if (!reservationStatus || !reservationStatus.value) {
-              showReservationFieldError(
-                  reservationStatus,
-                  "Status is required.",
-              );
-
-              if (!firstInvalid) {
-                  firstInvalid = reservationStatus;
-              }
-
-              isValid = false;
-          }
-      }
-
       if (
         reservationContact &&
         reservationContact.value.trim() &&
@@ -825,7 +755,6 @@ async function initEditReservationModal() {
               ...formData,
               vehicle_id: reservationVehicle.value || null,
               driver_id: reservationDriver.value || null,
-              status: reservationStatus.value,
           };
       }
       if (role === "dispatcher") {

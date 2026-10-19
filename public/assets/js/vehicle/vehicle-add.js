@@ -43,8 +43,6 @@ window.getVehicleModuleSettings =
       }
       const allowedStatuses = [
         "Available",
-        "On Trip",
-        "Maintenance",
         "Out of Service",
       ];
       return {

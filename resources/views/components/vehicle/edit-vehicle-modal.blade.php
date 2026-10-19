@@ -235,26 +235,32 @@
 
           <div class="form-group">
             <label for="editVehicleStatus">Status <span class="required" aria-hidden="true">*</span></label>
-            <select id="editVehicleStatus" name="status" required>
+            <select
+              id="editVehicleStatus"
+              name="status"
+              data-manual-values='@json(\App\Models\Vehicle::MANUAL_STATUSES)'
+              required
+            >
               <option value="">Select Status</option>
-              <option>Available</option>
-              <option>On Trip</option>
-              <option>Maintenance</option>
-              <option>Out of Service</option>
+              @foreach(\App\Models\Vehicle::MANUAL_STATUSES as $status)
+                <option value="{{ $status }}">{{ $status }}</option>
+              @endforeach
             </select>
           </div>
 
           <div class="form-group">
             <label for="editVehicleReadiness">Operational Readiness</label>
-            <select id="editVehicleReadiness" name="readiness_status">
+            <select
+              id="editVehicleReadiness"
+              name="readiness_status"
+              data-manual-values='@json(\App\Models\Vehicle::MANUAL_READINESS_STATUSES)'
+            >
               <option value="">Not Specified (legacy)</option>
-              <option value="ready">Ready for Dispatch</option>
-              <option value="in_use">In Use</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="refueling">Refueling</option>
-              <option value="charging">Charging</option>
-              <option value="cleaning">Cleaning / Sanitation</option>
-              <option value="unavailable">Unavailable</option>
+              @foreach(\App\Models\Vehicle::MANUAL_READINESS_STATUSES as $readiness)
+                <option value="{{ $readiness }}">
+                  {{ \App\Models\Vehicle::READINESS_LABELS[$readiness] }}
+                </option>
+              @endforeach
             </select>
           </div>
 
