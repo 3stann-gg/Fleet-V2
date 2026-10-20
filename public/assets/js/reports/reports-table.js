@@ -232,17 +232,7 @@ function buildReportsPagination(totalPages) {
       }),
   );
 
-  for (let p = 1; p <= totalPages; p += 1) {
-    if (totalPages > 7 && Math.abs(p - page) > 1 && p !== 1 && p !== totalPages) {
-      if (p === 2 || p === totalPages - 1) {
-        const ellipsis = document.createElement("button");
-        ellipsis.type = "button";
-        ellipsis.textContent = "…";
-        ellipsis.disabled = true;
-        fragment.appendChild(ellipsis);
-      }
-      continue;
-    }
+  window.FleetPagination.getVisiblePages(page, totalPages).forEach((p) => {
     fragment.appendChild(
       makeBtn({
         label: String(p),
@@ -252,7 +242,7 @@ function buildReportsPagination(totalPages) {
         pageNumber: p,
       }),
     );
-  }
+  });
 
   fragment.appendChild(
       makeBtn({

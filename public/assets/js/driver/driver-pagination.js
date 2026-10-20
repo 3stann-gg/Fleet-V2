@@ -29,6 +29,7 @@ function createDriverPaginationButton({
 
   if (active) {
     button.classList.add("active");
+    button.setAttribute("aria-current", "page");
   }
 
   if (iconClass) {
@@ -116,7 +117,10 @@ function renderDriverPagination() {
 
   pagination.appendChild(previousButton);
 
-  for (let page = 1; page <= totalPages; page += 1) {
+  window.FleetPagination.getVisiblePages(
+    driverPaginationState.currentPage,
+    totalPages,
+  ).forEach((page) => {
     pagination.appendChild(
       createDriverPaginationButton({
         label: page,
@@ -128,7 +132,7 @@ function renderDriverPagination() {
         },
       }),
     );
-  }
+  });
 
   const nextButton = createDriverPaginationButton({
     ariaLabel: "Next page",

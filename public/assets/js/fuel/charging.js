@@ -157,15 +157,29 @@
         document.getElementById("chargingPaginationInfo").innerHTML = `Showing <strong>${first}–${last}</strong> of <strong>${total}</strong> charging transactions`;
         const pagination = document.getElementById("chargingPagination");
         pagination.innerHTML = "";
-        [["ph-caret-left", state.page - 1, state.page === 1, "Previous page"], ["ph-caret-right", state.page + 1, state.page === pages, "Next page"]].forEach(([icon, page, disabled, ariaLabel]) => {
+        const addButton = ({ label, icon, page, disabled = false, active = false, ariaLabel }) => {
             const button = document.createElement("button");
             button.type = "button";
             button.disabled = disabled;
             button.setAttribute("aria-label", ariaLabel);
-            button.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`;
+            if (active) {
+                button.classList.add("active");
+                button.setAttribute("aria-current", "page");
+            }
+            if (icon) {
+                button.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`;
+            } else {
+                button.textContent = String(label);
+            }
             button.addEventListener("click", () => { state.page = page; render(); });
             pagination.appendChild(button);
+        };
+
+        addButton({ icon: "ph-caret-left", page: state.page - 1, disabled: state.page === 1, ariaLabel: "Previous page" });
+        window.FleetPagination.getVisiblePages(state.page, pages).forEach((page) => {
+            addButton({ label: page, page, active: page === state.page, ariaLabel: `Page ${page}` });
         });
+        addButton({ icon: "ph-caret-right", page: state.page + 1, disabled: state.page === pages, ariaLabel: "Next page" });
     }
 
     function showDetails(record) {

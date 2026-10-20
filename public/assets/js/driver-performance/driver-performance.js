@@ -462,9 +462,12 @@
       ariaLabel: "Previous page",
     });
 
-    for (let page = 1; page <= totalPages; page += 1) {
+    window.FleetPagination.getVisiblePages(
+      state.currentPage,
+      totalPages,
+    ).forEach((page) => {
       addButton(String(page), page, { active: page === state.currentPage });
-    }
+    });
 
     addButton("›", Math.min(totalPages, state.currentPage + 1), {
       disabled: state.currentPage === totalPages,

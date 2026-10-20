@@ -256,7 +256,10 @@ function renderCostTable() {
             iconClass: "ph ph-caret-left",
         }),
     );
-    for (let p = 1; p <= totalPages; p += 1) {
+    window.FleetPagination.getVisiblePages(
+        costTableState.page,
+        totalPages,
+    ).forEach((p) => {
         frag.appendChild(
             btn({
                 label: String(p),
@@ -266,7 +269,7 @@ function renderCostTable() {
                 pageNumber: p,
             }),
         );
-    }
+    });
     frag.appendChild(
         btn({
             aria: "Next page",

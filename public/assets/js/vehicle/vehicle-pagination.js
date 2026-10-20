@@ -31,6 +31,7 @@ function createVehiclePaginationButton({
 
   if (active) {
     button.classList.add("active");
+    button.setAttribute("aria-current", "page");
   }
 
   if (iconClass) {
@@ -115,7 +116,10 @@ function renderVehiclePagination() {
 
   pagination.appendChild(previousButton);
 
-  for (let page = 1; page <= totalPages; page += 1) {
+  window.FleetPagination.getVisiblePages(
+    vehiclePaginationState.currentPage,
+    totalPages,
+  ).forEach((page) => {
     pagination.appendChild(
       createVehiclePaginationButton({
         label: page,
@@ -127,7 +131,7 @@ function renderVehiclePagination() {
         },
       }),
     );
-  }
+  });
 
   const nextButton = createVehiclePaginationButton({
     ariaLabel: "Next page",

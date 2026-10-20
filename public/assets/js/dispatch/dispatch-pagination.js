@@ -32,11 +32,14 @@ function buildDispatchPaginationControls(paginationEl, totalPages) {
   const prevBtn = document.createElement("button");
   prevBtn.type = "button";
   prevBtn.setAttribute("aria-label", "Previous page");
-  prevBtn.innerHTML = '<i class="ph ph-caret-left"></i>';
+  prevBtn.innerHTML = '<i class="ph ph-caret-left" aria-hidden="true"></i>';
   prevBtn.dataset.dispatchPaginationAction = "prev";
   paginationEl.appendChild(prevBtn);
 
-  for (let page = 1; page <= totalPages; page++) {
+  window.FleetPagination.getVisiblePages(
+    dispatchCurrentPage,
+    totalPages,
+  ).forEach((page) => {
     const pageBtn = document.createElement("button");
     pageBtn.type = "button";
     pageBtn.textContent = String(page);
@@ -44,12 +47,12 @@ function buildDispatchPaginationControls(paginationEl, totalPages) {
     pageBtn.dataset.dispatchPaginationAction = "page";
     pageBtn.dataset.dispatchPage = String(page);
     paginationEl.appendChild(pageBtn);
-  }
+  });
 
   const nextBtn = document.createElement("button");
   nextBtn.type = "button";
   nextBtn.setAttribute("aria-label", "Next page");
-  nextBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
+  nextBtn.innerHTML = '<i class="ph ph-caret-right" aria-hidden="true"></i>';
   nextBtn.dataset.dispatchPaginationAction = "next";
   paginationEl.appendChild(nextBtn);
 }
@@ -240,8 +243,10 @@ function updateDispatchPagination() {
 
             if (page === dispatchCurrentPage) {
                 pageBtn.classList.add("active");
+                pageBtn.setAttribute("aria-current", "page");
             } else {
                 pageBtn.classList.remove("active");
+                pageBtn.removeAttribute("aria-current");
             }
         });
 }

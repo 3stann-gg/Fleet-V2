@@ -46,6 +46,7 @@
     <script src="{{ asset('assets/js/components/navbar.js') }}"></script>
     <script src="{{ asset('assets/js/core/toast.js') }}"></script>
     <script src="{{ asset('assets/js/core/confirmation.js') }}"></script>
+    <script src="{{ asset('assets/js/core/pagination.js') }}"></script>
     <script src="{{ asset('assets/js/core/main.js') }}"></script>
     <script src="{{ asset('assets/js/core/session-security.js') }}"></script>
     <script src="{{ asset('assets/js/fleet-gps.js') }}"></script>
