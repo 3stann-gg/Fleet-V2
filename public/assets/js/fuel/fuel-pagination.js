@@ -29,6 +29,7 @@ function createFuelPaginationButton({
 
     if (active) {
         button.classList.add("active");
+        button.setAttribute("aria-current", "page");
     }
 
     if (iconClass) {
@@ -128,7 +129,10 @@ function renderFuelPagination() {
 
     pagination.appendChild(previousButton);
 
-    for (let page = 1; page <= totalPages; page += 1) {
+    window.FleetPagination.getVisiblePages(
+        fuelPaginationState.currentPage,
+        totalPages,
+    ).forEach((page) => {
         pagination.appendChild(
             createFuelPaginationButton({
                 label: page,
@@ -143,7 +147,7 @@ function renderFuelPagination() {
                 },
             }),
         );
-    }
+    });
 
     const nextButton = createFuelPaginationButton({
         ariaLabel: "Next page",

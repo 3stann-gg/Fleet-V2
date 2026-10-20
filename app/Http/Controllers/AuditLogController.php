@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 
 class AuditLogController extends Controller
 {
@@ -107,7 +107,7 @@ class AuditLogController extends Controller
         }
 
         $auditLogs =
-            $query->paginate(25);
+            $query->paginate(25)->withQueryString();
 
         if ($request->expectsJson()) {
             return response()->json(

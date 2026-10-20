@@ -78,7 +78,13 @@
       </div>
     </div>
 
-    <div class="table-footer">{{ $sanitationLogs->links() }}</div>
+    <div class="table-footer">
+      <x-shared.pagination
+        :paginator="$sanitationLogs"
+        id="sanitationPagination"
+        aria-label="Sanitation log pagination"
+      />
+    </div>
   </div>
 </section>
 @push('scripts')

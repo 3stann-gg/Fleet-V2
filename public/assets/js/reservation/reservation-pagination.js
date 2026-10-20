@@ -22,6 +22,7 @@ function createReservationPaginationButton({label, ariaLabel, iconClass, disable
 
     if (active) {
         button.classList.add("active");
+        button.setAttribute("aria-current", "page");
     }
     if (iconClass) {
         const icon = document.createElement("i");
@@ -115,7 +116,10 @@ function renderReservationPagination() {
     });
 
     pagination.appendChild(previousButton);
-    for (let page = 1; page <= totalPages; page += 1) {
+    window.FleetPagination.getVisiblePages(
+      reservationPaginationState.currentPage,
+      totalPages,
+    ).forEach((page) => {
       pagination.appendChild(
         createReservationPaginationButton({
           label: page,
@@ -127,7 +131,7 @@ function renderReservationPagination() {
             },
         })
       );
-    }
+    });
     
     const nextButton = createReservationPaginationButton({
       ariaLabel: "Next page",

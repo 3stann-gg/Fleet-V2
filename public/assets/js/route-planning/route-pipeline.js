@@ -903,7 +903,10 @@ function renderRoutePagination(total) {
         }),
     );
 
-    for (let p = 1; p <= Math.max(1, totalPages); p += 1) {
+    window.FleetPagination.getVisiblePages(
+        page,
+        Math.max(1, totalPages),
+    ).forEach((p) => {
         fragment.appendChild(
             createButton({
                 label: String(p),
@@ -914,7 +917,7 @@ function renderRoutePagination(total) {
                 disabled: totalPages === 0,
             }),
         );
-    }
+    });
 
     fragment.appendChild(
         createButton({

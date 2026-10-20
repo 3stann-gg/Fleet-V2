@@ -44,7 +44,7 @@ class SanitationLogController extends Controller
             $query->where('status', $request->status);
         }
 
-        $sanitationLogs = $query->latest('id')->paginate(15);
+        $sanitationLogs = $query->latest('id')->paginate(15)->withQueryString();
 
         if ($request->expectsJson()) {
             return response()->json([

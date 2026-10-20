@@ -327,87 +327,13 @@
                 audit records
             </div>
 
-            <div
-                class="pagination audit-pagination"
+            <x-shared.pagination
+                :paginator="$auditLogs"
                 id="auditPagination"
+                class="audit-pagination"
+                button-class="audit-page-btn"
                 aria-label="Audit log pagination"
-            >
-
-                {{-- Previous --}}
-                @if($auditLogs->onFirstPage())
-                    <button
-                        type="button"
-                        class="audit-page-btn"
-                        aria-label="Previous page"
-                        disabled
-                    >
-                        <i class="ph ph-caret-left" aria-hidden="true"></i>
-                    </button>
-                @else
-                    <a
-                        href="{{ $auditLogs->previousPageUrl() }}"
-                        class="audit-page-btn"
-                        aria-label="Previous page"
-                    >
-                        <i class="ph ph-caret-left" aria-hidden="true"></i>
-                    </a>
-                @endif
-
-
-                {{-- Page Numbers --}}
-                @for(
-                    $page = 1;
-                    $page <= max(1, $auditLogs->lastPage());
-                    $page++
-                )
-
-                    @if($auditLogs->currentPage() === $page)
-
-                        <button
-                            type="button"
-                            class="audit-page-btn active"
-                            aria-label="Page {{ $page }}"
-                            aria-current="page"
-                        >
-                            {{ $page }}
-                        </button>
-
-                    @else
-
-                        <a
-                            href="{{ $auditLogs->url($page) }}"
-                            class="audit-page-btn"
-                            aria-label="Page {{ $page }}"
-                        >
-                            {{ $page }}
-                        </a>
-
-                    @endif
-
-                @endfor
-
-
-                {{-- Next --}}
-                @if($auditLogs->hasMorePages())
-                    <a
-                        href="{{ $auditLogs->nextPageUrl() }}"
-                        class="audit-page-btn"
-                        aria-label="Next page"
-                    >
-                        <i class="ph ph-caret-right" aria-hidden="true"></i>
-                    </a>
-                @else
-                    <button
-                        type="button"
-                        class="audit-page-btn"
-                        aria-label="Next page"
-                        disabled
-                    >
-                        <i class="ph ph-caret-right" aria-hidden="true"></i>
-                    </button>
-                @endif
-
-            </div>
+            />
 
         </div>
 

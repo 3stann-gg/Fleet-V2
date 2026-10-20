@@ -25,23 +25,6 @@ function updateMaintenancePaginationInfo(info, start, end, total) {
   );
 }
 
-function getMaintenanceVisiblePages(currentPage, totalPages) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const pages = new Set([1, totalPages, currentPage]);
-
-  for (let offset = -1; offset <= 1; offset += 1) {
-    const page = currentPage + offset;
-    if (page > 1 && page < totalPages) {
-      pages.add(page);
-    }
-  }
-
-  return Array.from(pages).sort((a, b) => a - b);
-}
-
 function createMaintenancePaginationButton({
   label,
   ariaLabel,
@@ -98,20 +81,12 @@ function buildMaintenancePaginationControls(totalPages) {
     }),
   );
 
-  const visiblePages = getMaintenanceVisiblePages(currentPage, totalPages);
-  let previousPage = 0;
+  const visiblePages = window.FleetPagination.getVisiblePages(
+    currentPage,
+    totalPages,
+  );
 
   visiblePages.forEach((page) => {
-    if (previousPage && page - previousPage > 1) {
-      const ellipsis = document.createElement("button");
-      ellipsis.type = "button";
-      ellipsis.textContent = "…";
-      ellipsis.disabled = true;
-      ellipsis.setAttribute("aria-hidden", "true");
-      ellipsis.setAttribute("tabindex", "-1");
-      fragment.appendChild(ellipsis);
-    }
-
     fragment.appendChild(
       createMaintenancePaginationButton({
         label: page,
@@ -121,8 +96,6 @@ function buildMaintenancePaginationControls(totalPages) {
         pageNumber: page,
       }),
     );
-
-    previousPage = page;
   });
 
   fragment.appendChild(

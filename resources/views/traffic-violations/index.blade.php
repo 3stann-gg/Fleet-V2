@@ -133,7 +133,13 @@
                 </table>
             </div>
         </div>
-        <div class="table-footer">{{ $trafficViolations->links() }}</div>
+        <div class="table-footer">
+            <x-shared.pagination
+                :paginator="$trafficViolations"
+                id="trafficViolationPagination"
+                aria-label="Traffic violation pagination"
+            />
+        </div>
     </div>
 </section>
 
