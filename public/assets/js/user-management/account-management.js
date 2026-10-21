@@ -335,17 +335,26 @@ async function renderAccountUpdateForm(selectedUserId = null) {
     if (!content) {
         return;
     }
+
+    if (selectedUserId) {
+        content.innerHTML = `
+            <div id="updateAccountFormContainer">
+                <div class="settings-empty-state">
+                    <i class="ph ph-spinner" aria-hidden="true"></i>
+                    <p>Loading account...</p>
+                </div>
+            </div>
+        `;
+        await loadUpdateAccountForm(selectedUserId);
+        return;
+    }
+
     content.innerHTML = `
         <div class="settings-empty-state">
             <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading user accounts...</p>
         </div>
     `;
-
-    if (selectedUserId) {
-        await loadUpdateAccountForm(selectedUserId);
-        return;
-    }
 
     try {
         const response = await fetch("/settings/accounts", {
@@ -608,17 +617,25 @@ async function renderAccountDeleteForm(selectedUserId = null) {
         return;
     }
 
+    if (selectedUserId) {
+        content.innerHTML = `
+            <div id="deleteAccountDetails">
+                <div class="settings-empty-state">
+                    <i class="ph ph-spinner" aria-hidden="true"></i>
+                    <p>Loading account...</p>
+                </div>
+            </div>
+        `;
+        await loadDeleteAccountDetails(selectedUserId);
+        return;
+    }
+
     content.innerHTML = `
         <div class="settings-empty-state">
             <i class="ph ph-spinner" aria-hidden="true"></i>
             <p>Loading user accounts...</p>
         </div>
     `;
-
-    if (selectedUserId) {
-        await loadDeleteAccountDetails(selectedUserId);
-        return;
-    }
 
     try {
         const response = await fetch("/settings/accounts", {
