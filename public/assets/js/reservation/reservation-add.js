@@ -701,6 +701,14 @@ let facilitySearchTimers = {
     pickup: null,
     destination: null,
 };
+const facilitySearchRequests = new WeakMap();
+
+function clearFacilitySuggestionState(input, suggestions) {
+    facilitySearchRequests.get(input)?.abort();
+    facilitySearchRequests.delete(input);
+    suggestions.innerHTML = "";
+    suggestions.hidden = true;
+}
 
 function setupFacilityAutocomplete(
     inputId,
@@ -717,20 +725,17 @@ function setupFacilityAutocomplete(
         delete input.dataset.facilityId;
         delete input.dataset.latitude;
         delete input.dataset.longitude;
+        clearFacilitySuggestionState(input, suggestions);
+        clearTimeout(facilitySearchTimers[type]);
         if (
             ["medical_supply_delivery", "Supply Delivery"].includes(
                 document.getElementById(requestTypeId)?.value,
             )
         ) {
-            suggestions.innerHTML = "";
-            suggestions.hidden = true;
             return;
         }
         const search = input.value.trim();
-        clearTimeout(facilitySearchTimers[type]);
         if (search.length < 2) {
-            suggestions.innerHTML = "";
-            suggestions.hidden = true;
             return;
         }
         facilitySearchTimers[type] = setTimeout(async () => {
@@ -743,8 +748,8 @@ function setupFacilityAutocomplete(
                 document.getElementById(requestTypeId)?.value,
             )
         ) {
-            suggestions.innerHTML = "";
-            suggestions.hidden = true;
+            clearTimeout(facilitySearchTimers[type]);
+            clearFacilitySuggestionState(input, suggestions);
             return;
         }
         const search = input.value.trim();
@@ -763,6 +768,11 @@ function setupFacilityAutocomplete(
 }
 
 async function loadFacilitySuggestions(search, input, suggestions) {
+    facilitySearchRequests.get(input)?.abort();
+
+    const requestController = new AbortController();
+    facilitySearchRequests.set(input, requestController);
+
     try {
         const response = await fetch(
             `/reservation/hospital-facilities?search=${encodeURIComponent(search)}`,
@@ -772,25 +782,29 @@ async function loadFacilitySuggestions(search, input, suggestions) {
                     Accept: "application/json",
                     "X-Requested-With": "XMLHttpRequest",
                 },
+                credentials: "same-origin",
+                signal: requestController.signal,
             },
         );
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         const data = await response.json();
-        if (!data.success || !Array.isArray(data.facilities)) {
-            suggestions.innerHTML = `
-                <div class="facility-suggestion-empty">
-                    No facility found.
-                </div>
-            `;
-            suggestions.hidden = false;
+
+        if (
+            facilitySearchRequests.get(input) !== requestController ||
+            input.value.trim() !== search
+        ) {
             return;
+        }
+
+        if (!data.success || !Array.isArray(data.facilities)) {
+            throw new Error("Invalid facility suggestion response.");
         }
         if (data.facilities.length === 0) {
             suggestions.innerHTML = `
                 <div class="facility-suggestion-empty">
-                    No matching hospital or facility found.
+                    No matching facilities found.
                 </div>
             `;
             suggestions.hidden = false;
@@ -860,6 +874,14 @@ async function loadFacilitySuggestions(search, input, suggestions) {
                 });
             });
     } catch (error) {
+        if (
+            error.name === "AbortError" ||
+            facilitySearchRequests.get(input) !== requestController ||
+            input.value.trim() !== search
+        ) {
+            return;
+        }
+
         console.error("Failed to load hospital facilities:", error);
         suggestions.innerHTML = `
             <div class="facility-suggestion-empty">
@@ -868,6 +890,10 @@ async function loadFacilitySuggestions(search, input, suggestions) {
         `;
 
         suggestions.hidden = false;
+    } finally {
+        if (facilitySearchRequests.get(input) === requestController) {
+            facilitySearchRequests.delete(input);
+        }
     }
 }
 
