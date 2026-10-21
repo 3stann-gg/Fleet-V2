@@ -168,6 +168,9 @@ it('centralizes canonical priority normalization and emergency detection', funct
         ->and(Reservation::canonicalPriority('High'))->toBe('urgent')
         ->and(Reservation::canonicalPriority('Normal'))->toBe('routine')
         ->and(Reservation::canonicalPriority('Low'))->toBe('scheduled')
+        ->and(Reservation::isEmergencyPriority('emergency'))->toBeTrue()
+        ->and(Reservation::isEmergencyPriority('Emergency'))->toBeTrue()
+        ->and(Reservation::isEmergencyPriority('routine'))->toBeFalse()
         ->and(Reservation::isEmergencyRequestType('emergency_response'))->toBeTrue()
         ->and(Reservation::isEmergencyRequestType('Emergency Transfer'))->toBeTrue();
 });
@@ -291,6 +294,62 @@ it('promotes a draft emergency route through its valid planned transition when t
         ->assertJsonPath('routePlan.status', 'Ready For Dispatch');
 
     expect($routePlan->fresh()->status)->toBe('Ready For Dispatch');
+});
+
+it('uses canonical reservation priority for emergency readiness when request type differs', function () {
+    $reservation = p53Reservation([
+        'request_type' => 'patient_transfer',
+        'priority' => 'emergency',
+    ]);
+    $routePlan = p53Route($reservation, ['status' => 'Draft']);
+    $user = p53User();
+    $tomTom = Mockery::mock(TomTomRoutingService::class);
+    $tomTom->shouldReceive('calculateRoute')->once()->andReturn(p53TomTomResult());
+    $this->app->instance(TomTomRoutingService::class, $tomTom);
+
+    $this->actingAs($user)
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
+            'optimization_applied' => false,
+        ]))
+        ->assertSuccessful()
+        ->assertJsonPath('routePlan.status', 'Planned')
+        ->assertJsonPath('routePlan.reservation.is_emergency', true);
+
+    $optimization = $this->actingAs($user)
+        ->postJson(route('route-planning.traffic-route'), [
+            'reservation_id' => $reservation->id,
+            'coordinates' => [
+                ['latitude' => 14.5995, 'longitude' => 120.9842],
+                ['latitude' => 14.6091, 'longitude' => 121.0223],
+            ],
+        ])
+        ->assertSuccessful();
+
+    $this->actingAs($user)
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
+            'optimization_proof' => $optimization->json('optimization_proof'),
+        ]))
+        ->assertSuccessful()
+        ->assertJsonPath('routePlan.status', 'Ready For Dispatch')
+        ->assertJsonPath('routePlan.reservation.is_emergency', true);
+
+    expect($routePlan->fresh()->status)->toBe('Ready For Dispatch');
+});
+
+it('does not infer emergency readiness from request type when canonical priority is routine', function () {
+    $reservation = p53Reservation([
+        'request_type' => 'emergency_response',
+        'priority' => 'routine',
+    ]);
+    $routePlan = p53Route($reservation, ['status' => 'Draft']);
+
+    $this->actingAs(p53User())
+        ->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload())
+        ->assertSuccessful()
+        ->assertJsonPath('routePlan.status', 'Planned')
+        ->assertJsonPath('routePlan.reservation.is_emergency', false);
+
+    expect($routePlan->fresh()->status)->toBe('Planned');
 });
 
 it('does not let an OSRM fallback authorize draft emergency promotion', function () {
