@@ -760,8 +760,8 @@ class RoutePlanController extends Controller
 
                 $newStatus = $requestedStatus;
 
-                $isEmergency = Reservation::isEmergencyRequestType(
-                    $routePlan->reservation?->request_type
+                $isEmergency = Reservation::isEmergencyPriority(
+                    $routePlan->reservation?->priority
                 );
                 $optimizationApplied = (bool) ($validated['optimization_applied'] ?? false);
 
@@ -1717,8 +1717,8 @@ class RoutePlanController extends Controller
             );
         }
 
-        if (! Reservation::isEmergencyRequestType($reservation->request_type)) {
-            throw new \Exception('The linked reservation is not an emergency request.');
+        if (! Reservation::isEmergencyPriority($reservation->priority)) {
+            throw new \Exception('The linked reservation does not have emergency priority.');
         }
 
         if (! $reservation->vehicle_id) {

@@ -343,12 +343,28 @@ it('does not introduce a super admin role and rejects that assignment', function
 
 it('keeps row account actions bound to their selected user without a replacement selector', function () {
     $script = file_get_contents(public_path('assets/js/user-management/account-management.js'));
+    preg_match_all(
+        '/if \(selectedUserId\) \{(.*?)await load(?:UpdateAccountForm|DeleteAccountDetails)\(selectedUserId\);\s*return;\s*\}/s',
+        $script,
+        $selectedRowBranches,
+    );
 
     expect($script)
         ->toContain('accountManagementSelectedUserId = String(userId)')
         ->toContain('renderAccountUpdateForm(accountManagementSelectedUserId)')
         ->toContain('renderAccountResetPasswordForm(accountManagementSelectedUserId)')
         ->toContain('renderAccountDeleteForm(accountManagementSelectedUserId)')
+        ->toContain('<div id="updateAccountFormContainer">')
+        ->toContain('await loadUpdateAccountForm(selectedUserId)')
+        ->toContain('<div id="deleteAccountDetails">')
+        ->toContain('await loadDeleteAccountDetails(selectedUserId)')
         ->toContain('buildSelectedAccountIdentity(selectedUser)')
-        ->toContain('form.dataset.userId');
+        ->toContain('form.dataset.userId')
+        ->and($selectedRowBranches[0])->toHaveCount(2)
+        ->and($selectedRowBranches[0][0])
+        ->toContain('id="updateAccountFormContainer"')
+        ->not->toContain('fetch("/settings/accounts"')
+        ->and($selectedRowBranches[0][1])
+        ->toContain('id="deleteAccountDetails"')
+        ->not->toContain('fetch("/settings/accounts"');
 });

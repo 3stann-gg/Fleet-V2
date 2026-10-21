@@ -108,6 +108,11 @@ class Reservation extends Model
         return $legacyPriorities[$normalizedPriority] ?? $normalizedPriority;
     }
 
+    public static function isEmergencyPriority(?string $priority): bool
+    {
+        return self::canonicalPriority($priority) === 'emergency';
+    }
+
     /** @return list<string> */
     public static function equivalentPriorityValues(?string $priority): array
     {
@@ -157,7 +162,7 @@ class Reservation extends Model
 
     public function getIsEmergencyAttribute(): bool
     {
-        return self::isEmergencyRequestType($this->request_type);
+        return self::isEmergencyPriority($this->priority);
     }
 
     public function priorityRank(): int
