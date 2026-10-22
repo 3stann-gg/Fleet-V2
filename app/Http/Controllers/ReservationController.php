@@ -12,7 +12,9 @@ use App\Models\Vehicle;
 use App\Models\VehicleCapability;
 use App\Services\AuditLogService;
 use App\Services\FleetNotificationService;
+use App\Services\ReservationAssignmentEligibilityService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -21,6 +23,10 @@ use Illuminate\Validation\Rule;
 class ReservationController extends Controller
 {
     use AuthorizesRequests;
+
+    public function __construct(
+        private ReservationAssignmentEligibilityService $assignmentEligibility,
+    ) {}
 
     private function getReservationSettings(): array
     {
@@ -72,117 +78,28 @@ class ReservationController extends Controller
 
     private function validateVehicleAndDriverAvailability(
         ?int $vehicleId,
-        ?int $driverId
+        ?int $driverId,
+        string $scheduleDate,
+        string $scheduleTime,
+        int $durationHours,
+        ?int $exceptReservationId = null,
+        array $requiredCapabilityIds = [],
     ): void {
-        /*
-        |--------------------------------------------------------------------------
-        | Vehicle and Driver must be paired
-        |--------------------------------------------------------------------------
-        */
-        if ($vehicleId && ! $driverId) {
-            throw new \Exception(
-                'A driver must be assigned when a vehicle is selected.'
-            );
-        }
-        if (! $vehicleId && $driverId) {
-            throw new \Exception(
-                'A driver cannot be assigned without a vehicle.'
-            );
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Vehicle Validation
-        |--------------------------------------------------------------------------
-        */
-        if ($vehicleId) {
-            $vehicle = Vehicle::find($vehicleId);
-
-            if (! $vehicle) {
-                throw new \Exception(
-                    'Selected vehicle was not found.'
-                );
-            }
-
-            if ($vehicle->status !== 'Available') {
-                throw new \Exception(
-                    "Vehicle {$vehicle->brand} {$vehicle->model} is currently {$vehicle->status} and cannot be assigned."
-                );
-            }
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Driver Validation
-        |--------------------------------------------------------------------------
-        */
-        if ($driverId) {
-            $driver = Driver::find($driverId);
-
-            if (! $driver) {
-                throw new \Exception(
-                    'Selected driver was not found.'
-                );
-            }
-
-            if ($driver->status !== 'Available') {
-                $driverName = trim(
-                    ($driver->first_name ?? '').' '.
-                    ($driver->last_name ?? '')
-                );
-
-                throw new \Exception(
-                    "Driver {$driverName} is currently {$driver->status} and cannot be assigned."
-                );
-            }
-            /*
-            |--------------------------------------------------------------------------
-            | Driver must belong to selected vehicle
-            |--------------------------------------------------------------------------
-            */
-            if (
-                ! $vehicleId ||
-                (int) $driver->assigned_vehicle_id !== (int) $vehicleId
-            ) {
-                throw new \Exception(
-                    'The selected driver is not assigned to the selected vehicle.'
-                );
-            }
-        }
-    }
-
-    private function validateVehicleHasAssignedDriver(
-        ?int $vehicleId
-    ): void {
-        if (! $vehicleId) {
-            return;
-        }
-
-        $vehicle = Vehicle::find($vehicleId);
-
-        if (! $vehicle) {
-            throw new \Exception(
-                'Selected vehicle was not found.'
-            );
-        }
-
-        $hasAssignedDriver = Driver::query()
-            ->where(
-                'assigned_vehicle_id',
-                $vehicle->id
-            )
-            ->exists();
-
-        if (! $hasAssignedDriver) {
-            throw new \Exception(
-                "Vehicle {$vehicle->brand} {$vehicle->model} has no assigned driver and cannot be used for this reservation."
-            );
-        }
+        $this->assignmentEligibility->validateAndLock(
+            $vehicleId,
+            $driverId,
+            $scheduleDate,
+            $scheduleTime,
+            $durationHours,
+            $exceptReservationId,
+            $requiredCapabilityIds,
+        );
     }
 
     private function updateReservationUnderLock(
         Reservation $reservation,
         array $validated,
         bool $isEmergencyRequest,
-        bool $validateAssignment,
         bool $requirePending,
         bool $syncCapabilities,
     ): array {
@@ -190,7 +107,6 @@ class ReservationController extends Controller
             $reservation,
             $validated,
             $isEmergencyRequest,
-            $validateAssignment,
             $requirePending,
             $syncCapabilities,
         ): array {
@@ -228,10 +144,31 @@ class ReservationController extends Controller
                 $validated['status'] = 'Approved';
             }
 
-            if ($validateAssignment) {
+            $targetVehicleId = $validated['vehicle_id'] ?? $reservation->vehicle_id;
+            $targetDriverId = $validated['driver_id'] ?? $reservation->driver_id;
+            $targetScheduleDate = $validated['schedule_date'] ?? $reservation->schedule_date->toDateString();
+            $targetScheduleTime = $validated['schedule_time'] ?? $reservation->schedule_time;
+            $reservation->loadMissing('requiredCapabilities');
+            $targetCapabilityIds = $syncCapabilities
+                ? ($validated['required_capabilities'] ?? [])
+                : $reservation->requiredCapabilities->pluck('id')->all();
+            $currentCapabilityIds = $reservation->requiredCapabilities->pluck('id')->sort()->values()->all();
+            $sortedTargetCapabilityIds = collect($targetCapabilityIds)->map(fn ($id): int => (int) $id)->sort()->values()->all();
+            $assignmentChanged = (int) $targetVehicleId !== (int) $reservation->vehicle_id
+                || (int) $targetDriverId !== (int) $reservation->driver_id
+                || $targetScheduleDate !== $reservation->schedule_date->toDateString()
+                || substr((string) $targetScheduleTime, 0, 5) !== substr((string) $reservation->schedule_time, 0, 5)
+                || $sortedTargetCapabilityIds !== $currentCapabilityIds;
+
+            if ($assignmentChanged) {
                 $this->validateVehicleAndDriverAvailability(
-                    $validated['vehicle_id'] ?? null,
-                    $validated['driver_id'] ?? null
+                    $targetVehicleId,
+                    $targetDriverId,
+                    $targetScheduleDate,
+                    $targetScheduleTime,
+                    $this->getReservationSettings()['defaultDurationHours'],
+                    $reservation->id,
+                    $targetCapabilityIds,
                 );
             }
 
@@ -300,7 +237,12 @@ class ReservationController extends Controller
 
             $this->validateVehicleAndDriverAvailability(
                 $reservation->vehicle_id,
-                $reservation->driver_id
+                $reservation->driver_id,
+                $reservation->schedule_date->toDateString(),
+                (string) $reservation->schedule_time,
+                $this->getReservationSettings()['defaultDurationHours'],
+                $reservation->id,
+                $reservation->requiredCapabilities()->pluck('vehicle_capabilities.id')->all(),
             );
 
             $oldValues = $this->getReservationAuditValues($reservation);
@@ -806,22 +748,29 @@ class ReservationController extends Controller
                 $validated['reservation_number']
                     ?? $this->generateReservationNumber();
 
-            $this->validateVehicleAndDriverAvailability(
-                $validated['vehicle_id'] ?? null,
-                $validated['driver_id'] ?? null
-            );
-            $this->validateVehicleHasAssignedDriver(
-                $validated['vehicle_id'] ?? null
-            );
+            $reservation = DB::transaction(function () use (
+                $validated,
+                $reservationSettings,
+            ): Reservation {
+                $this->validateVehicleAndDriverAvailability(
+                    $validated['vehicle_id'] ?? null,
+                    $validated['driver_id'] ?? null,
+                    $validated['schedule_date'],
+                    $validated['schedule_time'],
+                    $reservationSettings['defaultDurationHours'],
+                    null,
+                    $validated['required_capabilities'] ?? [],
+                );
 
-            $reservation = Reservation::create(
-                $validated
-            );
+                $reservation = Reservation::create($validated);
 
-            $this->syncRequiredCapabilities(
-                $reservation,
-                $validated['required_capabilities'] ?? []
-            );
+                $this->syncRequiredCapabilities(
+                    $reservation,
+                    $validated['required_capabilities'] ?? []
+                );
+
+                return $reservation;
+            });
 
             $reservation->load([
                 'vehicle',
@@ -1223,7 +1172,6 @@ class ReservationController extends Controller
                     reservation: $reservation,
                     validated: $validated,
                     isEmergencyRequest: $isEmergencyRequest,
-                    validateAssignment: true,
                     requirePending: false,
                     syncCapabilities: $request->has('required_capabilities'),
                 );
@@ -1445,7 +1393,6 @@ class ReservationController extends Controller
                     reservation: $reservation,
                     validated: $validated,
                     isEmergencyRequest: $isEmergencyRequest,
-                    validateAssignment: false,
                     requirePending: true,
                     syncCapabilities: $request->has('required_capabilities'),
                 );
@@ -2343,6 +2290,35 @@ class ReservationController extends Controller
             'capabilities' => VehicleCapability::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'slug', 'description']),
+        ]);
+    }
+
+    public function eligibleAssignments(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Reservation::class);
+
+        $validated = $request->validate([
+            'schedule_date' => ['required', 'date'],
+            'schedule_time' => ['required', 'date_format:H:i'],
+            'reservation_id' => ['nullable', 'integer', 'exists:reservations,id'],
+            'required_capabilities' => ['nullable', 'array'],
+            'required_capabilities.*' => ['integer', 'exists:vehicle_capabilities,id'],
+        ]);
+        $reservation = null;
+
+        if (! empty($validated['reservation_id'])) {
+            $reservation = Reservation::findOrFail($validated['reservation_id']);
+            $this->authorize('view', $reservation);
+        }
+
+        return response()->json([
+            'vehicles' => $this->assignmentEligibility->eligibleVehicles(
+                $validated['schedule_date'],
+                $validated['schedule_time'],
+                $this->getReservationSettings()['defaultDurationHours'],
+                $reservation,
+                $validated['required_capabilities'] ?? [],
+            ),
         ]);
     }
 
