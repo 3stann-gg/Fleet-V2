@@ -2,6 +2,8 @@
 
 use App\Models\Dispatch;
 use App\Models\Driver;
+use App\Models\DriverLicenseCode;
+use App\Models\DriverVehicleQualification;
 use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Models\User;
@@ -49,6 +51,15 @@ function p52Assignment(): array
         'email' => fake()->unique()->safeEmail(),
         'assigned_vehicle_id' => $vehicle->id,
         'status' => 'Available',
+    ]);
+
+    DriverLicenseCode::query()->create([
+        'driver_id' => $driver->id,
+        'code' => 'B',
+    ]);
+    DriverVehicleQualification::query()->create([
+        'driver_id' => $driver->id,
+        'vehicle_type' => $vehicle->vehicle_type,
     ]);
 
     return [$vehicle, $driver];

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Driver;
 use App\Models\Vehicle;
+use Carbon\CarbonInterface;
 
 class DriverLicenseCompatibilityService
 {
@@ -37,8 +38,11 @@ class DriverLicenseCompatibilityService
     }
 
     /** @return array<string, mixed> */
-    public function evaluate(?Driver $driver, Vehicle $vehicle): array
-    {
+    public function evaluate(
+        ?Driver $driver,
+        Vehicle $vehicle,
+        ?CarbonInterface $requiredAt = null,
+    ): array {
         if ($driver === null) {
             return [
                 'impact' => 'neutral',
@@ -63,7 +67,7 @@ class DriverLicenseCompatibilityService
         $checks = [
             'dl_code_status' => $this->dlCodeCheck($driver, $vehicle),
             'transmission_status' => $this->transmissionCheck($driver, $vehicle),
-            'license_expiry_status' => $this->licenseExpiryCheck($driver),
+            'license_expiry_status' => $this->licenseExpiryCheck($driver, $requiredAt),
             'license_classification_status' => $this->classificationCheck($driver, $vehicle),
             'special_purpose_status' => $this->specialPurposeCheck($vehicle),
         ];
@@ -201,8 +205,47 @@ class DriverLicenseCompatibilityService
     }
 
     /** @return array<string, mixed> */
-    private function licenseExpiryCheck(Driver $driver): array
-    {
+    private function licenseExpiryCheck(
+        Driver $driver,
+        ?CarbonInterface $requiredAt,
+    ): array {
+        if ($requiredAt !== null) {
+            if ($driver->license_expiry === null) {
+                return $this->check(
+                    'not_recorded',
+                    'Not Recorded',
+                    'Driver license expiry is not recorded.',
+                    'gap',
+                    true,
+                );
+            }
+
+            if ($driver->license_expiry->startOfDay()->lt(now()->startOfDay())) {
+                return $this->check(
+                    'expired',
+                    'Expired',
+                    "Driver's license is expired.",
+                    'blocking',
+                );
+            }
+
+            if ($driver->license_expiry->startOfDay()->lt($requiredAt->copy()->startOfDay())) {
+                return $this->check(
+                    'expires_before_required_date',
+                    'Expires Before Requested Trip',
+                    "Driver's license expires before the requested trip date.",
+                    'blocking',
+                );
+            }
+
+            return $this->check(
+                'valid',
+                'Valid',
+                'Driver license is valid through the requested trip date.',
+                'suitable',
+            );
+        }
+
         $advisory = $this->operationalHealth->driverLicenseAdvisory($driver);
 
         return match (true) {

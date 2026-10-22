@@ -289,6 +289,11 @@ Route::middleware([
             [ReservationController::class, 'capabilities']
         )->name('reservation.capabilities');
 
+        Route::get(
+            '/reservation/eligible-assignments',
+            [ReservationController::class, 'eligibleAssignments']
+        )->name('reservation.eligible-assignments');
+
         Route::post(
             '/reservation/bulk-archive',
             [ReservationController::class, 'bulkArchive']

@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Driver;
+use App\Models\DriverLicenseCode;
+use App\Models\DriverVehicleQualification;
 use App\Models\FleetSetting;
 use App\Models\Reservation;
 use App\Models\User;
@@ -17,11 +19,13 @@ function phase5C1VehiclePayload(array $overrides = []): array
     return array_merge([
         'plate_number' => fake()->unique()->bothify('5C1-####'),
         'vehicle_type' => 'Service Vehicle',
+        'lto_vehicle_category' => 'M1',
         'department' => 'Facilities',
         'brand' => 'Lifecycle',
         'model' => 'Guard',
         'capacity' => 4,
         'powertrain_type' => 'gasoline',
+        'transmission_type' => 'automatic',
         'fuel_type' => 'Gasoline',
         'tank_capacity' => 50,
         'current_fuel' => 25,
@@ -66,6 +70,15 @@ function phase5C1Assignment(): array
         'email' => fake()->unique()->safeEmail(),
         'assigned_vehicle_id' => $vehicle->id,
         'status' => 'Available',
+    ]);
+
+    DriverLicenseCode::query()->create([
+        'driver_id' => $driver->id,
+        'code' => 'B',
+    ]);
+    DriverVehicleQualification::query()->create([
+        'driver_id' => $driver->id,
+        'vehicle_type' => $vehicle->vehicle_type,
     ]);
 
     return [$vehicle, $driver];

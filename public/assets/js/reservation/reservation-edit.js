@@ -258,17 +258,80 @@ function applyReservationEditRbac() {
     }
 }
 
-async function loadEditReservationOptions(selectedVehicleId = null) {
+let editReservationEligibleVehicles = [];
+let editReservationEligibilityTimer = null;
+
+function updateEditReservationDriver(vehicleId, driverSelect, selectedDriverId = null) {
+    driverSelect.innerHTML = "";
+
+    if (!vehicleId) {
+        driverSelect.innerHTML = '<option value="">Select Vehicle First</option>';
+        driverSelect.disabled = true;
+        return;
+    }
+
+    const selectedVehicle = editReservationEligibleVehicles.find(
+        (vehicle) => String(vehicle.id) === String(vehicleId),
+    );
+
+    if (!selectedVehicle?.drivers?.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent =
+            selectedVehicle?.reservation_eligibility_message ||
+            "No eligible driver";
+        driverSelect.appendChild(option);
+        driverSelect.disabled = true;
+        return;
+    }
+
+    driverSelect.appendChild(new Option("Select Driver", ""));
+    selectedVehicle.drivers.forEach((driver) => {
+        const suffix = driver.reservation_existing_assignment
+            && !driver.reservation_eligible
+            ? " (existing assignment)"
+            : "";
+        driverSelect.appendChild(
+            new Option(
+                `${driver.first_name} ${driver.last_name}${suffix}`,
+                driver.id,
+            ),
+        );
+    });
+    driverSelect.disabled = false;
+    driverSelect.value = selectedDriverId ? String(selectedDriverId) : "";
+}
+
+async function loadEditReservationOptions(
+    selectedVehicleId = null,
+    selectedDriverId = null,
+) {
     const vehicleSelect = document.getElementById("editReservationVehicle");
     const driverSelect = document.getElementById("editReservationDriver");
+    const modal = document.getElementById("editReservationModal");
+    const date = document.getElementById("editReservationDate")?.value;
+    const time = document.getElementById("editReservationTime")?.value;
 
     if (!vehicleSelect || !driverSelect) return;
+    if (!date || !time) return;
     vehicleSelect.innerHTML =
         '<option value="">Loading vehicles...</option>';
     driverSelect.innerHTML =
         '<option value="">Select Driver</option>';
     try {
-        const response = await fetch("/fleet/available", {
+        const params = new URLSearchParams({
+            schedule_date: date,
+            schedule_time: time,
+        });
+        (
+            window.ReservationCapabilityFields?.selected(
+                "editReservationRequiredCapabilities",
+            ) || []
+        ).forEach((id) => params.append("required_capabilities[]", id));
+        if (modal?.currentRow?.dataset.id) {
+            params.set("reservation_id", modal.currentRow.dataset.id);
+        }
+        const response = await fetch(`/reservation/eligible-assignments?${params}`, {
             headers: {
                 Accept: "application/json",
             },
@@ -276,10 +339,11 @@ async function loadEditReservationOptions(selectedVehicleId = null) {
         if (!response.ok) {
             throw new Error("Failed to load vehicles.");
         }
-        const vehicles = await response.json();
+        const data = await response.json();
+        editReservationEligibleVehicles = data.vehicles || [];
         vehicleSelect.innerHTML =
             '<option value="">Select Vehicle</option>';
-        vehicles.forEach((vehicle) => {
+        editReservationEligibleVehicles.forEach((vehicle) => {
             const option = document.createElement("option");
             option.value = vehicle.id;
             const energy = [];
@@ -302,20 +366,25 @@ async function loadEditReservationOptions(selectedVehicleId = null) {
                 .join(" | ");
             vehicleSelect.appendChild(option);
         });
-        vehicleSelect.addEventListener("change", () => {
-            updateEditReservationDriver(
-                vehicles,
-                vehicleSelect.value,
-                driverSelect
-            );
-        });
+        if (vehicleSelect.dataset.eligibilityInitialized !== "true") {
+            vehicleSelect.dataset.eligibilityInitialized = "true";
+            vehicleSelect.addEventListener("change", () => {
+                updateEditReservationDriver(vehicleSelect.value, driverSelect);
+            });
+        }
         if (selectedVehicleId) {
             vehicleSelect.value = String(selectedVehicleId);
             updateEditReservationDriver(
-                vehicles,
                 selectedVehicleId,
-                driverSelect
+                driverSelect,
+                selectedDriverId,
             );
+            if (selectedDriverId && !driverSelect.value) {
+                window.showToast?.(
+                    "The previously selected driver is no longer eligible for this schedule.",
+                    "warning",
+                );
+            }
         }
 
     } catch (error) {
@@ -324,41 +393,6 @@ async function loadEditReservationOptions(selectedVehicleId = null) {
         driverSelect.innerHTML =
             '<option value="">Failed to load driver</option>';
     }
-}
-
-function updateEditReservationDriver(vehicles, vehicleId, driverSelect) {
-    driverSelect.innerHTML =
-        "";
-    driverSelect.disabled = false;
-
-    if (!vehicleId) return;
-
-    const selectedVehicle = vehicles.find(
-        (vehicle) =>
-            String(vehicle.id) === String(vehicleId)
-    );
-
-    if (
-        !selectedVehicle ||
-        !selectedVehicle.drivers ||
-        !selectedVehicle.drivers.length
-    ) {
-        driverSelect.innerHTML =
-            '<option value="">No assigned driver</option>';
-        driverSelect.disabled = true;
-
-        return;
-    }
-
-    const driver = selectedVehicle.drivers[0];
-    const option = document.createElement("option");
-
-    option.value = driver.id;
-    option.textContent =
-        `${driver.first_name} ${driver.last_name}`;
-    option.selected = true;
-
-    driverSelect.appendChild(option);
 }
 
 async function initEditReservationModal() {
@@ -431,11 +465,6 @@ async function initEditReservationModal() {
         shipmentField.disabled = true;
     }
 
-    if (getReservationEditRole() !== "department_head") {
-        const vehicleId = getRowData(row, "vehicleId");
-        loadEditReservationOptions(vehicleId);
-    }
-
     const pickupInput = document.getElementById("editReservationPickup");
     const destinationInput = document.getElementById(
         "editReservationDestination",
@@ -473,6 +502,12 @@ async function initEditReservationModal() {
     setValue("editReservationContact", getRowData(row, "contactNumber"));
     setValue("editReservationNotes", getRowData(row, "notes"));
     applyEditReservationEmergencyBehavior(reservationSettings);
+    if (getReservationEditRole() !== "department_head") {
+        void loadEditReservationOptions(
+            getRowData(row, "vehicleId"),
+            getRowData(row, "driverId"),
+        );
+    }
   };
 
   openEditReservationModal = (row) => {
@@ -540,15 +575,66 @@ async function initEditReservationModal() {
 
   const form = document.getElementById("editReservationForm");
   const editReservationType = document.getElementById("editReservationType");
+  ["editReservationDate", "editReservationTime"].forEach((id) => {
+      const field = document.getElementById(id);
+      if (!field || field.dataset.eligibilityInitialized === "true") return;
+      field.dataset.eligibilityInitialized = "true";
+      field.addEventListener("change", () => {
+          clearTimeout(editReservationEligibilityTimer);
+          editReservationEligibilityTimer = setTimeout(() => {
+              const vehicleSelect = document.getElementById(
+                  "editReservationVehicle",
+              );
+              const driverSelect = document.getElementById(
+                  "editReservationDriver",
+              );
+              void loadEditReservationOptions(
+                  vehicleSelect?.value || null,
+                  driverSelect?.value || null,
+              );
+          }, 250);
+      });
+  });
+  const editCapabilityFields = document.getElementById(
+      "editReservationRequiredCapabilities",
+  );
+  if (
+      editCapabilityFields &&
+      editCapabilityFields.dataset.eligibilityInitialized !== "true"
+  ) {
+      editCapabilityFields.dataset.eligibilityInitialized = "true";
+      editCapabilityFields.addEventListener("change", () => {
+          const vehicleSelect = document.getElementById(
+              "editReservationVehicle",
+          );
+          const driverSelect = document.getElementById(
+              "editReservationDriver",
+          );
+          void loadEditReservationOptions(
+              vehicleSelect?.value || null,
+              driverSelect?.value || null,
+          );
+      });
+  }
   if (
       editReservationType &&
       editReservationType.dataset.behaviorInitialized !== "true"
   ) {
       editReservationType.dataset.behaviorInitialized = "true";
-      editReservationType.addEventListener("change", () => {
+      editReservationType.addEventListener("change", async () => {
           applyEditReservationPatientRequirement();
           applyEditReservationLogisticsVisibility();
           applyEditReservationEmergencyBehavior(reservationSettings);
+          const vehicleSelect = document.getElementById(
+              "editReservationVehicle",
+          );
+          const driverSelect = document.getElementById(
+              "editReservationDriver",
+          );
+          await loadEditReservationOptions(
+              vehicleSelect?.value || null,
+              driverSelect?.value || null,
+          );
       });
   }
   if (form && !form.dataset.editReservationFormInitialized) {
