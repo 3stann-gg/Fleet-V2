@@ -46,6 +46,57 @@
   flex-wrap: nowrap;
 }
 
+.fuel-page .stat-content small,
+.fuel-page .fuel-efficiency-secondary {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-meta);
+  line-height: 1.4;
+}
+
+.fuel-efficiency-methodology {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.fuel-efficiency-methodology > i {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+}
+
+.fuel-efficiency-methodology p {
+  margin: 0;
+}
+
+.fuel-efficiency-methodology--modal {
+  margin-top: var(--space-4);
+  margin-bottom: 0;
+}
+
+.fuel-efficiency-methodology--modal strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text);
+}
+
+#viewFuelEfficiencyAdvisory {
+  margin-top: var(--space-2);
+  color: var(--color-warning-text);
+  font-weight: var(--font-semibold);
+}
+
 /* Vehicle name formatting*/
 .fuel-vehicle {
     display: inline-flex;

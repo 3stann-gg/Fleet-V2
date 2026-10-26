@@ -82,6 +82,18 @@
           <label>Odometer</label>
           <p id="viewFuelOdometer"></p>
         </div>
+        <div class="view-fuel-detail-item">
+          <label>Distance Since Previous Fuel Log</label>
+          <p id="viewFuelIntervalDistance"></p>
+        </div>
+        <div class="view-fuel-detail-item">
+          <label>Estimated Fuel Efficiency</label>
+          <p id="viewFuelEstimatedEfficiency"></p>
+        </div>
+        <div class="view-fuel-detail-item">
+          <label>Efficiency Trend</label>
+          <p id="viewFuelEfficiencyTrend"></p>
+        </div>
 
         <div class="detail-section-heading">
           <h3>Station &amp; Transaction Reference</h3>
@@ -108,6 +120,15 @@
       <div class="view-fuel-notes">
         <label>Notes</label>
         <p id="viewFuelNotes"></p>
+      </div>
+
+      <div class="fuel-efficiency-methodology fuel-efficiency-methodology--modal" role="note">
+        <i class="ph ph-info" aria-hidden="true"></i>
+        <div>
+          <strong>Estimated metric</strong>
+          <p id="viewFuelEfficiencyExplanation">Calculated from valid same-vehicle fuel-log odometer intervals and liters recorded as loaded. This is not real-time fuel consumption.</p>
+          <p id="viewFuelEfficiencyAdvisory" hidden></p>
+        </div>
       </div>
     </div>
 

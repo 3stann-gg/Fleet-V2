@@ -69,7 +69,7 @@
                 </div>
                 <div class="stat-content">
                   <h3 id="totalFuelConsumed">0.00 L</h3>
-                  <p>Total Fuel Consumed</p>
+                  <p>Total Liters Recorded</p>
                 </div>
               </div>
 
@@ -92,6 +92,34 @@
                   <p>Average Cost per Liter</p>
                 </div>
               </div>
+
+              <div class="stat-card">
+                <div class="stat-icon info">
+                  <i class="ph-fill ph-gauge"></i>
+                </div>
+                <div class="stat-content">
+                  <h3 id="latestEstimatedFuelEfficiency">N/A</h3>
+                  <p>Latest Valid Estimated km/L</p>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon success">
+                  <i class="ph-fill ph-chart-line"></i>
+                </div>
+                <div class="stat-content">
+                  <h3 id="aggregateEstimatedFuelEfficiency">N/A</h3>
+                  <p>Aggregate Estimated km/L</p>
+                  <small id="validFuelEfficiencyIntervals">0 valid intervals</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="fuel-efficiency-methodology" role="note">
+              <i class="ph ph-info" aria-hidden="true"></i>
+              <p>
+                Fuel quantity is the liters recorded as loaded during each fuel transaction. Distance is the odometer difference between valid same-vehicle fuel records. Estimated fuel efficiency is that distance divided by the current record's liters. No physical tank sensor or real-time fuel telemetry is used.
+              </p>
             </div>
 
             <div class="toolbar">

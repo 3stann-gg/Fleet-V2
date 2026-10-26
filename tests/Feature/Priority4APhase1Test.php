@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\ChargingLog;
 use App\Models\AuditLog;
+use App\Models\ChargingLog;
 use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\FuelLog;
@@ -78,9 +78,21 @@ function priority4Trip(Vehicle $vehicle, float $distance): TripLog
     ]);
 }
 
-function priority4Fuel(Vehicle $vehicle, float $liters, float $cost): FuelLog
+function priority4Fuel(Vehicle $vehicle, float $liters, float $cost, float $distance): FuelLog
 {
     $driver = priority4Driver();
+
+    FuelLog::query()->create([
+        'fuel_number' => fake()->unique()->bothify('P4-BASE-####'),
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'fuel_amount' => 1,
+        'cost_per_liter' => 1,
+        'cost' => 1,
+        'odometer' => $vehicle->current_odometer,
+        'date' => now()->subDays(2)->toDateString(),
+        'fuel_type' => 'Gasoline',
+    ]);
 
     return FuelLog::query()->create([
         'fuel_number' => fake()->unique()->bothify('P4-FUEL-####'),
@@ -89,7 +101,7 @@ function priority4Fuel(Vehicle $vehicle, float $liters, float $cost): FuelLog
         'fuel_amount' => $liters,
         'cost_per_liter' => $cost / $liters,
         'cost' => $cost,
-        'odometer' => $vehicle->current_odometer,
+        'odometer' => (float) $vehicle->current_odometer + $distance,
         'date' => now()->toDateString(),
         'fuel_type' => 'Gasoline',
     ]);
@@ -124,7 +136,7 @@ function priority4Filters(): array
 it('calculates liquid-fuel distance, liters, efficiency, cost, and cost per kilometer', function () {
     $vehicle = priority4Vehicle();
     priority4Trip($vehicle, 100);
-    priority4Fuel($vehicle, 20, 200);
+    priority4Fuel($vehicle, 20, 200, 100);
 
     $result = priority4Analytics()->analyze(priority4Filters());
     $row = $result['vehicles'][0];
@@ -166,7 +178,7 @@ it('keeps PHEV liters and kWh separate while combining only monetary cost', func
         'battery_level_percent' => 70,
     ]);
     priority4Trip($vehicle, 100);
-    priority4Fuel($vehicle, 10, 100);
+    priority4Fuel($vehicle, 10, 100, 100);
     priority4Charge($vehicle, 20, 200);
 
     $row = priority4Analytics()->analyze(priority4Filters())['vehicles'][0];
@@ -201,7 +213,7 @@ it('uses the correct analytics path for gasoline and electric motorcycles', func
         'current_fuel' => 0,
     ]);
     priority4Trip($gasoline, 50);
-    priority4Fuel($gasoline, 5, 50);
+    priority4Fuel($gasoline, 5, 50, 50);
     priority4Trip($electric, 60);
     priority4Charge($electric, 10, 80);
 

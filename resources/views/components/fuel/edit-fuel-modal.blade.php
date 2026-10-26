@@ -43,8 +43,8 @@
           </div>
 
           <div class="form-group">
-            <label for="editFuelRefuelTime">Refueling Time</label>
-            <input type="time" id="editFuelRefuelTime" />
+            <label for="editFuelRefuelTime">Refueling Time *</label>
+            <input type="time" id="editFuelRefuelTime" required />
           </div>
 
           <div class="form-group">

@@ -228,7 +228,7 @@
               <!-- Overview charts -->
               <div data-cost-view="energy" hidden aria-hidden="true">
                 <p class="cost-availability-note">
-                  Distance comes from Trip Logs. Fuel and electricity values come from recorded Fuel and Charging Transactions; these are operational records, not live telemetry.
+                  Trip distance and electric efficiency use Trip Logs and Charging Transactions. Estimated fuel efficiency uses valid same-vehicle Fuel Log odometer intervals and recorded liters. These are operational records, not live telemetry.
                 </p>
                 <div class="stats-grid cost-sub-kpis">
                   <div class="stat-card"><div class="stat-content"><h3 id="energyKpiDistance">0 km</h3><p>Total Distance</p></div></div>
@@ -238,6 +238,7 @@
                   <div class="stat-card"><div class="stat-content"><h3 id="energyKpiChargingCost">₱0.00</h3><p>Charging Cost</p></div></div>
                   <div class="stat-card"><div class="stat-content"><h3 id="energyKpiTotalCost">₱0.00</h3><p>Total Energy Cost</p></div></div>
                   <div class="stat-card"><div class="stat-content"><h3 id="energyKpiCostKm">Insufficient Data</h3><p>Average Cost / km</p></div></div>
+                  <div class="stat-card"><div class="stat-content"><h3 id="energyKpiEstimatedFuelEfficiency">N/A</h3><p>Aggregate Estimated km/L</p><small id="energyKpiFuelIntervals">0 valid intervals</small></div></div>
                 </div>
                 <div class="cost-charts-grid">
                   <div class="cost-chart-card" id="energyCostTrend">
@@ -245,9 +246,14 @@
                     <p class="cost-chart-empty" hidden>No energy transaction costs were recorded.</p>
                     <div class="cost-chart-body"><div class="cost-bars"></div></div>
                   </div>
-                  <div class="cost-chart-card" id="energyEfficiencyRanking">
-                    <h4>Vehicle Efficiency Context</h4>
-                    <p class="cost-chart-empty" hidden>Insufficient data for efficiency comparison.</p>
+                  <div class="cost-chart-card" id="energyFuelEfficiencyRanking">
+                    <h4>Estimated Fuel Efficiency</h4>
+                    <p class="cost-chart-empty" hidden>Insufficient valid Fuel Log intervals for comparison.</p>
+                    <div class="cost-chart-body"><div class="cost-bars"></div></div>
+                  </div>
+                  <div class="cost-chart-card" id="energyElectricEfficiencyRanking">
+                    <h4>Electric Efficiency Context</h4>
+                    <p class="cost-chart-empty" hidden>Insufficient Trip Log and Charging data for comparison.</p>
                     <div class="cost-chart-body"><div class="cost-bars"></div></div>
                   </div>
                 </div>

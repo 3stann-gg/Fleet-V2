@@ -110,6 +110,19 @@ function renderEnergyAnalytics(data) {
             ? "Insufficient Data"
             : `${energyCurrency(summary.average_cost_per_km)} / km`,
     );
+    setCostText(
+        "energyKpiEstimatedFuelEfficiency",
+        summary.estimated_fuel_efficiency_km_per_liter == null
+            ? "N/A"
+            : `${energyNumber(summary.estimated_fuel_efficiency_km_per_liter)} km/L`,
+    );
+    const intervalCount = Number(
+        summary.valid_fuel_efficiency_interval_count || 0,
+    );
+    setCostText(
+        "energyKpiFuelIntervals",
+        `${intervalCount} valid ${intervalCount === 1 ? "interval" : "intervals"}`,
+    );
 
     renderEnergyBars(
         "energyCostTrend",
@@ -119,21 +132,37 @@ function renderEnergyAnalytics(data) {
         energyCurrency,
     );
 
-    const ranked = (data?.vehicles || [])
-        .map((vehicle) => ({
-            ...vehicle,
-            efficiency:
-                vehicle.electric_efficiency_km_per_kwh ??
-                vehicle.fuel_efficiency_km_per_liter,
-        }))
-        .filter((vehicle) => vehicle.efficiency != null)
-        .sort((first, second) => second.efficiency - first.efficiency);
+    const fuelRanked = (data?.vehicles || [])
+        .filter(
+            (vehicle) =>
+                vehicle.estimated_fuel_efficiency_km_per_liter != null,
+        )
+        .sort(
+            (first, second) =>
+                second.estimated_fuel_efficiency_km_per_liter -
+                first.estimated_fuel_efficiency_km_per_liter,
+        );
     renderEnergyBars(
-        "energyEfficiencyRanking",
-        ranked,
-        "efficiency",
+        "energyFuelEfficiencyRanking",
+        fuelRanked,
+        "estimated_fuel_efficiency_km_per_liter",
         "vehicle",
-        (value) => `${energyNumber(value)} km/unit`,
+        (value) => `${energyNumber(value)} km/L`,
+    );
+
+    const electricRanked = (data?.vehicles || [])
+        .filter((vehicle) => vehicle.electric_efficiency_km_per_kwh != null)
+        .sort(
+            (first, second) =>
+                second.electric_efficiency_km_per_kwh -
+                first.electric_efficiency_km_per_kwh,
+        );
+    renderEnergyBars(
+        "energyElectricEfficiencyRanking",
+        electricRanked,
+        "electric_efficiency_km_per_kwh",
+        "vehicle",
+        (value) => `${energyNumber(value)} km/kWh`,
     );
 }
 
