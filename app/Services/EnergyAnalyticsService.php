@@ -13,6 +13,8 @@ use Illuminate\Support\Collection;
 
 class EnergyAnalyticsService
 {
+    public function __construct(private FuelEfficiencyService $fuelEfficiencyService) {}
+
     /** @param array{start_date: string, end_date: string, vehicle_id?: int|null, vehicle_type?: string|null, powertrain_type?: string|null, department?: string|null} $filters */
     public function analyze(array $filters): array
     {
@@ -34,13 +36,22 @@ class EnergyAnalyticsService
         }
 
         $distanceByVehicle = $this->distanceByVehicle($vehicleIds, $filters);
-        $fuelByVehicle = $this->fuelByVehicle($vehicleIds, $filters);
+        $fuelLogs = FuelLog::query()
+            ->whereIn('vehicle_id', $vehicleIds)
+            ->whereBetween('date', [$filters['start_date'], $filters['end_date']])
+            ->get();
+        $fuelAnalysis = $this->fuelEfficiencyService->analyze($fuelLogs);
+        $fuelByVehicle = $fuelAnalysis['fuelLogs']->groupBy('vehicle_id');
         $chargingByVehicle = $this->chargingByVehicle($vehicleIds, $filters);
 
         $rows = $vehicles->map(function (Vehicle $vehicle) use ($distanceByVehicle, $fuelByVehicle, $chargingByVehicle) {
             $distance = (float) ($distanceByVehicle->get($vehicle->id)?->distance_km ?? 0);
-            $fuelUsed = (float) ($fuelByVehicle->get($vehicle->id)?->fuel_liters ?? 0);
-            $fuelCost = (float) ($fuelByVehicle->get($vehicle->id)?->fuel_cost ?? 0);
+            $vehicleFuelSummary = $this->fuelEfficiencyService->summarize(
+                $fuelByVehicle->get($vehicle->id, collect())
+            );
+            $fuelUsed = (float) $vehicleFuelSummary['total_liters_recorded'];
+            $fuelCost = (float) $vehicleFuelSummary['total_fuel_cost'];
+            $estimatedFuelEfficiency = $vehicleFuelSummary['aggregate_estimated_efficiency_km_per_liter'];
             $electricityUsed = (float) ($chargingByVehicle->get($vehicle->id)?->electricity_kwh ?? 0);
             $chargingCost = (float) ($chargingByVehicle->get($vehicle->id)?->charging_cost ?? 0);
             $supportsFuel = $vehicle->supportsLiquidFuel();
@@ -60,8 +71,11 @@ class EnergyAnalyticsService
                 'fuel_cost' => $supportsFuel ? $fuelCost : 0.0,
                 'charging_cost' => $supportsCharging ? $chargingCost : 0.0,
                 'total_energy_cost' => $operatingCost,
-                'fuel_efficiency_km_per_liter' => $supportsFuel && $fuelUsed > 0
-                    ? round($distance / $fuelUsed, 2)
+                'estimated_fuel_efficiency_km_per_liter' => $supportsFuel
+                    ? $estimatedFuelEfficiency
+                    : null,
+                'fuel_efficiency_km_per_liter' => $supportsFuel
+                    ? $estimatedFuelEfficiency
                     : null,
                 'electric_efficiency_km_per_kwh' => $supportsCharging && $electricityUsed > 0
                     ? round($distance / $electricityUsed, 2)
@@ -69,7 +83,10 @@ class EnergyAnalyticsService
                 'cost_per_km' => $distance > 0 && $operatingCost > 0
                     ? round($operatingCost / $distance, 2)
                     : null,
-                'data_status' => $distance > 0 && ($fuelUsed > 0 || $electricityUsed > 0)
+                'valid_fuel_efficiency_interval_count' => $supportsFuel
+                    ? $vehicleFuelSummary['valid_efficiency_interval_count']
+                    : 0,
+                'data_status' => $estimatedFuelEfficiency !== null || ($distance > 0 && $electricityUsed > 0)
                     ? 'Available'
                     : 'Insufficient Data',
             ];
@@ -90,12 +107,15 @@ class EnergyAnalyticsService
                 'average_cost_per_km' => $distance > 0 && $totalCost > 0
                     ? round($totalCost / $distance, 2)
                     : null,
+                'estimated_fuel_efficiency_km_per_liter' => $fuelAnalysis['summary']['aggregate_estimated_efficiency_km_per_liter'],
+                'valid_fuel_efficiency_interval_count' => $fuelAnalysis['summary']['valid_efficiency_interval_count'],
             ],
             'vehicles' => $rows,
             'trend' => $this->trend($vehicleIds, $filters),
             'sources' => [
                 'distance' => 'Trip Log',
                 'fuel' => 'Fuel Transaction',
+                'fuel_efficiency_distance' => 'Fuel Log Odometer Interval',
                 'electricity' => 'Charging Transaction',
             ],
         ];
@@ -138,17 +158,6 @@ class EnergyAnalyticsService
             })
             ->selectRaw("{$reservationTable}.vehicle_id, SUM({$tripTable}.distance) AS distance_km")
             ->groupBy("{$reservationTable}.vehicle_id")
-            ->get()
-            ->keyBy('vehicle_id');
-    }
-
-    private function fuelByVehicle(Collection $vehicleIds, array $filters): Collection
-    {
-        return FuelLog::query()
-            ->whereIn('vehicle_id', $vehicleIds)
-            ->whereBetween('date', [$filters['start_date'], $filters['end_date']])
-            ->selectRaw('vehicle_id, SUM(fuel_amount) AS fuel_liters, SUM(cost) AS fuel_cost')
-            ->groupBy('vehicle_id')
             ->get()
             ->keyBy('vehicle_id');
     }
@@ -212,12 +221,15 @@ class EnergyAnalyticsService
                 'charging_cost' => 0,
                 'total_energy_cost' => 0,
                 'average_cost_per_km' => null,
+                'estimated_fuel_efficiency_km_per_liter' => null,
+                'valid_fuel_efficiency_interval_count' => 0,
             ],
             'vehicles' => [],
             'trend' => [],
             'sources' => [
                 'distance' => 'Trip Log',
                 'fuel' => 'Fuel Transaction',
+                'fuel_efficiency_distance' => 'Fuel Log Odometer Interval',
                 'electricity' => 'Charging Transaction',
             ],
         ];

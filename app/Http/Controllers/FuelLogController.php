@@ -8,6 +8,7 @@ use App\Models\Driver;
 use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
 use App\Services\AuditLogService;
+use App\Services\FuelEfficiencyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -16,6 +17,9 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 class FuelLogController extends Controller
 {
     use AuthorizesRequests;
+
+    public function __construct(private FuelEfficiencyService $fuelEfficiencyService) {}
+
     /**
      * Display a listing of fuel records.
      */
@@ -178,8 +182,11 @@ class FuelLogController extends Controller
                 return $fuelLog;
             });
 
+        $analysis = $this->fuelEfficiencyService->analyze($fuelLogs);
+
         return response()->json([
-            'fuelLogs' => $fuelLogs,
+            'fuelLogs' => $analysis['fuelLogs'],
+            'efficiencySummary' => $analysis['summary'],
 
             'settings' => [
                 'high_cost_alert' =>
@@ -247,7 +254,7 @@ class FuelLogController extends Controller
                     'date',
                 ],
                 'refuel_time' => [
-                    'nullable',
+                    'required',
                     'date_format:H:i',
                 ],
                 'fuel_type' =>
@@ -598,6 +605,8 @@ class FuelLogController extends Controller
                 );
             }
 
+            $fuelLog = $this->fuelEfficiencyService->enrich($fuelLog);
+
             return response()->json([
                 'success' => true,
                 'message' =>
@@ -624,6 +633,7 @@ class FuelLogController extends Controller
             'vehicle',
             'driver',
         ]);
+        $fuelLog = $this->fuelEfficiencyService->enrich($fuelLog);
 
         return response()->json([
             'fuelLog' => $fuelLog,
@@ -655,7 +665,7 @@ class FuelLogController extends Controller
                     'date',
                 ],
                 'refuel_time' => [
-                    'nullable',
+                    'required',
                     'date_format:H:i',
                 ],
                 'cost_per_liter' => [
@@ -924,6 +934,8 @@ class FuelLogController extends Controller
                     route('fuel')
                 );
             }
+
+            $fuelLogResult = $this->fuelEfficiencyService->enrich($fuelLogResult);
 
             return response()->json([
                 'success' => true,

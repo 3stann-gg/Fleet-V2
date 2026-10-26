@@ -143,10 +143,48 @@ async function openViewFuelModal(row) {
             formatFuelCurrency(fuel.cost_per_liter),
         );
         setText("viewFuelOdometer", formatFuelOdometer(fuel.odometer));
+        setText(
+            "viewFuelIntervalDistance",
+            formatFuelEfficiencyMetric(
+                fuel.distance_since_previous_fuel_log_km,
+                "km",
+            ),
+            "N/A",
+        );
+        setText(
+            "viewFuelEstimatedEfficiency",
+            formatFuelEfficiencyMetric(
+                fuel.estimated_fuel_efficiency_km_per_liter,
+                "km/L",
+            ),
+            "N/A",
+        );
+        setText(
+            "viewFuelEfficiencyTrend",
+            fuel.fuel_efficiency_trend,
+            "Insufficient Data",
+        );
         setText("viewFuelStation", fuel.fuel_station);
         setText("viewFuelReceipt", fuel.receipt_number, "—");
         setText("viewFuelPayment", fuel.payment_method, "—");
         setText("viewFuelNotes", fuel.notes, "—");
+
+        const explanation = document.getElementById(
+            "viewFuelEfficiencyExplanation",
+        );
+        if (explanation) {
+            explanation.textContent = fuel.fuel_efficiency_reason
+                ? `${fuel.fuel_efficiency_reason} Estimated efficiency uses valid same-vehicle fuel-log odometer intervals and liters recorded as loaded; it is not real-time fuel consumption.`
+                : "Calculated from valid same-vehicle fuel-log odometer intervals and liters recorded as loaded. This is not real-time fuel consumption.";
+        }
+
+        const advisory = document.getElementById(
+            "viewFuelEfficiencyAdvisory",
+        );
+        if (advisory) {
+            advisory.textContent = fuel.fuel_efficiency_advisory || "";
+            advisory.hidden = !fuel.fuel_efficiency_advisory;
+        }
 
         
         modal.classList.add("show");
@@ -160,6 +198,23 @@ async function openViewFuelModal(row) {
 
         return false;
     }
+}
+
+function formatFuelEfficiencyMetric(value, unit) {
+    if (value === null || value === undefined || value === "") {
+        return "N/A";
+    }
+
+    const number = Number(value);
+
+    if (Number.isNaN(number)) {
+        return "N/A";
+    }
+
+    return `${number.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} ${unit}`;
 }
 
 function closeViewFuelModal() {

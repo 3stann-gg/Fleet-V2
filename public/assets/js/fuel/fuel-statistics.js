@@ -28,7 +28,9 @@ function getFuelStatisticsRows(tableBody) {
   );
 }
 
-function updateFuelStatistics() {
+let latestFuelEfficiencySummary = null;
+
+function updateFuelStatistics(fuelLogs = null, efficiencySummary = undefined) {
   const totalEl = document.getElementById("totalFuelRecords");
   const consumedEl = document.getElementById("totalFuelConsumed");
   const costEl = document.getElementById("totalFuelCost");
@@ -58,6 +60,44 @@ function updateFuelStatistics() {
   } else {
     avgEl.textContent = "₱0.00/L";
   }
+
+  if (efficiencySummary !== undefined) {
+    latestFuelEfficiencySummary = efficiencySummary;
+  }
+
+  updateFuelEfficiencySummary(latestFuelEfficiencySummary);
+}
+
+function updateFuelEfficiencySummary(summary) {
+  const latestEl = document.getElementById("latestEstimatedFuelEfficiency");
+  const aggregateEl = document.getElementById(
+    "aggregateEstimatedFuelEfficiency",
+  );
+  const intervalsEl = document.getElementById("validFuelEfficiencyIntervals");
+
+  if (!latestEl || !aggregateEl || !intervalsEl) return;
+
+  const formatEfficiency = (value) => {
+    if (value === null || value === undefined || value === "") return "N/A";
+
+    const number = Number(value);
+    if (Number.isNaN(number)) return "N/A";
+
+    return `${number.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} km/L`;
+  };
+
+  latestEl.textContent = formatEfficiency(
+    summary?.latest_valid_estimated_efficiency_km_per_liter,
+  );
+  aggregateEl.textContent = formatEfficiency(
+    summary?.aggregate_estimated_efficiency_km_per_liter,
+  );
+
+  const count = Number(summary?.valid_efficiency_interval_count || 0);
+  intervalsEl.textContent = `${count} valid ${count === 1 ? "interval" : "intervals"}`;
 }
 
 function initFuelStatistics() {

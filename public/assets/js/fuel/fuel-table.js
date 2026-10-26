@@ -32,7 +32,7 @@ async function loadFuelRecords() {
               : [];
         renderFuelTable(fuelLogs);
         if (typeof updateFuelStatistics === "function") {
-            updateFuelStatistics(fuelLogs);
+            updateFuelStatistics(fuelLogs, data.efficiencySummary || null);
         }
         if (typeof refreshFuelBulkState === "function") {
             refreshFuelBulkState();
@@ -117,6 +117,10 @@ function formatFuelTableCurrency(value) {
 }
 
 function formatFuelTableOdometer(value) {
+    if (value === null || value === undefined || value === "") {
+        return "N/A";
+    }
+
     const number = Number(value);
 
     if (Number.isNaN(number)) {
@@ -129,6 +133,23 @@ function formatFuelTableOdometer(value) {
             maximumFractionDigits: 2,
         }) + " km"
     );
+}
+
+function formatFuelTableMetric(value, unit) {
+    if (value === null || value === undefined || value === "") {
+        return "N/A";
+    }
+
+    const number = Number(value);
+
+    if (Number.isNaN(number)) {
+        return "N/A";
+    }
+
+    return `${number.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} ${unit}`;
 }
 
 function getFuelVehicleName(vehicle) {
@@ -179,7 +200,11 @@ function renderFuelTable(fuelLogs) {
         const fuelAmount = fuel.fuel_amount ?? 0;
         const costPerLiter = fuel.cost_per_liter ?? 0;
         const totalCost = fuel.cost ?? 0;
-        const odometer = fuel.odometer ?? 0;
+        const odometer = fuel.odometer ?? null;
+        const intervalDistance =
+            fuel.distance_since_previous_fuel_log_km ?? null;
+        const estimatedEfficiency =
+            fuel.estimated_fuel_efficiency_km_per_liter ?? null;
         const fuelType = fuel.fuel_type || "";
         const station = fuel.fuel_station || "Not provided";
         const receipt = fuel.receipt_number || "";
@@ -204,7 +229,9 @@ function renderFuelTable(fuelLogs) {
                     data-quantity="${fuelAmount}"
                     data-cost-per-liter="${costPerLiter}"
                     data-total-cost="${totalCost}"
-                    data-odometer="${odometer}"
+                    data-odometer="${odometer ?? ""}"
+                    data-interval-distance="${intervalDistance ?? ""}"
+                    data-estimated-efficiency="${estimatedEfficiency ?? ""}"
                     data-station="${station}"
                     data-receipt="${receipt}"
                     data-payment="${payment}"
@@ -287,6 +314,10 @@ function renderFuelTable(fuelLogs) {
                         <span class="fuel-odometer">
                             ${formatFuelTableOdometer(odometer)}
                         </span>
+                        <small class="fuel-efficiency-secondary">
+                            Distance: ${formatFuelTableMetric(intervalDistance, "km")}<br>
+                            Estimated: ${formatFuelTableMetric(estimatedEfficiency, "km/L")}
+                        </small>
                     </td>
 
                     <!-- Fuel Station -->
