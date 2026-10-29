@@ -2,21 +2,94 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FleetSetting;
 use App\Models\Maintenance;
 use App\Models\Vehicle;
-use App\Models\FleetSetting;
-use App\Services\FleetNotificationService;
 use App\Services\AuditLogService;
+use App\Services\FleetNotificationService;
+use App\Services\MaintenanceClassificationService;
 use Carbon\Carbon;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\Validator as ValidationValidator;
 
 class MaintenanceController extends Controller
 {
     use AuthorizesRequests;
+
+    public function __construct(private MaintenanceClassificationService $maintenanceClassificationService) {}
+
+    private function addNextScheduleChronologyValidation(
+        ValidationValidator $validator,
+        Request $request,
+        ?Maintenance $maintenance = null,
+        bool $isLifecycleTransition = false,
+    ): void {
+        if (
+            $isLifecycleTransition ||
+            ! $request->exists('next_schedule') ||
+            ! $request->filled('next_schedule')
+        ) {
+            return;
+        }
+
+        $requestedNextSchedule = trim((string) $request->input('next_schedule'));
+        $storedNextSchedule = $maintenance?->next_schedule?->toDateString();
+
+        if ($maintenance && $requestedNextSchedule === $storedNextSchedule) {
+            return;
+        }
+
+        $validator->after(function (ValidationValidator $validator) use (
+            $request,
+            $maintenance,
+            $requestedNextSchedule,
+        ): void {
+            if (
+                $validator->errors()->has('next_schedule') ||
+                $validator->errors()->has('maintenance_date') ||
+                $validator->errors()->has('completion_date')
+            ) {
+                return;
+            }
+
+            $maintenanceDateValue = $request->input('maintenance_date')
+                ?? $maintenance?->maintenance_date?->toDateString();
+            $completionDateValue = $request->exists('completion_date')
+                ? $request->input('completion_date')
+                : $maintenance?->completion_date?->toDateString();
+            $nextSchedule = Carbon::parse($requestedNextSchedule)->startOfDay();
+
+            if (
+                $maintenanceDateValue &&
+                $nextSchedule->lessThanOrEqualTo(
+                    Carbon::parse($maintenanceDateValue)->startOfDay()
+                )
+            ) {
+                $validator->errors()->add(
+                    'next_schedule',
+                    'The next service due date must be after the current maintenance date.'
+                );
+
+                return;
+            }
+
+            if (
+                $completionDateValue &&
+                $nextSchedule->lessThanOrEqualTo(
+                    Carbon::parse($completionDateValue)->startOfDay()
+                )
+            ) {
+                $validator->errors()->add(
+                    'next_schedule',
+                    'The next service due date must be after the completion date.'
+                );
+            }
+        });
+    }
 
     private function startVehicleMaintenance(Vehicle $vehicle): void
     {
@@ -125,8 +198,8 @@ class MaintenanceController extends Controller
         $activeServiceTypes = collect($serviceTypes)
             ->filter(function ($service) {
                 return is_array($service)
-                    && !empty($service['id'])
-                    && !empty($service['name'])
+                    && ! empty($service['id'])
+                    && ! empty($service['name'])
                     && ($service['active'] ?? true) !== false;
             })
             ->map(function ($service) {
@@ -151,8 +224,8 @@ class MaintenanceController extends Controller
         $activeProviders = collect($providers)
             ->filter(function ($provider) {
                 return is_array($provider)
-                    && !empty($provider['id'])
-                    && !empty($provider['name'])
+                    && ! empty($provider['id'])
+                    && ! empty($provider['name'])
                     && ($provider['active'] ?? true) !== false;
             })
             ->map(function ($provider) {
@@ -165,18 +238,19 @@ class MaintenanceController extends Controller
                     ($provider['contractType'] ?? 'Contractual') === 'In-house'
                         ? 'In-house'
                         : 'Contractual';
+
                 return [
                     'id' => (string) $provider['id'],
                     'name' => $name,
                     'type' => $type,
                     'contractType' => $contractType,
-                    'display' =>
-                        "{$name} — {$type} — {$contractType}",
+                    'display' => "{$name} — {$type} — {$contractType}",
                 ];
             })
             ->filter(fn ($provider) => $provider['name'] !== '')
             ->values()
             ->all();
+
         return [
             'overdueWarnDays' => max(
                 1,
@@ -188,20 +262,16 @@ class MaintenanceController extends Controller
                     )
                 )
             ),
-            'requireCost' =>
-                $maintenanceSettings['requireCost']
+            'requireCost' => $maintenanceSettings['requireCost']
                 ?? true,
-            'defaultType' =>
-                trim(
-                    (string) (
-                        $maintenanceSettings['defaultType']
-                        ?? 'Preventive Maintenance'
-                    )
-                ) ?: 'Preventive Maintenance',
-            'serviceTypes' =>
-                $activeServiceTypes,
-            'providers' =>
-                $activeProviders,
+            'defaultType' => trim(
+                (string) (
+                    $maintenanceSettings['defaultType']
+                    ?? 'Preventive Maintenance'
+                )
+            ) ?: 'Preventive Maintenance',
+            'serviceTypes' => $activeServiceTypes,
+            'providers' => $activeProviders,
         ];
     }
 
@@ -209,7 +279,7 @@ class MaintenanceController extends Controller
         ?string $nextSchedule,
         int $warningDays
     ): array {
-        if (!$nextSchedule) {
+        if (! $nextSchedule) {
             return [
                 'days' => null,
                 'overdue' => false,
@@ -232,8 +302,7 @@ class MaintenanceController extends Controller
         return [
             'days' => $days,
             'overdue' => $days < 0,
-            'dueSoon' =>
-                $days >= 0 &&
+            'dueSoon' => $days >= 0 &&
                 $days <= $warningDays,
         ];
     }
@@ -242,7 +311,7 @@ class MaintenanceController extends Controller
         Maintenance $maintenance,
         int $warningDays
     ): void {
-        if (!$maintenance->next_schedule) {
+        if (! $maintenance->next_schedule) {
             return;
         }
 
@@ -255,15 +324,15 @@ class MaintenanceController extends Controller
             );
 
         if (
-            !$state['overdue'] &&
-            !$state['dueSoon']
+            ! $state['overdue'] &&
+            ! $state['dueSoon']
         ) {
             return;
         }
 
         $vehicleLabel = trim(
-            ($maintenance->vehicle?->brand ?? '') .
-            ' ' .
+            ($maintenance->vehicle?->brand ?? '').
+            ' '.
             ($maintenance->vehicle?->model ?? '')
         );
 
@@ -276,8 +345,8 @@ class MaintenanceController extends Controller
                 abs($state['days']);
 
             $message =
-                "{$vehicleLabel} maintenance {$maintenance->maintenance_number} is overdue by {$daysOverdue} day" .
-                ($daysOverdue === 1 ? '' : 's') .
+                "{$vehicleLabel} maintenance {$maintenance->maintenance_number} is overdue by {$daysOverdue} day".
+                ($daysOverdue === 1 ? '' : 's').
                 '.';
         } else {
             $days =
@@ -286,7 +355,7 @@ class MaintenanceController extends Controller
             $when =
                 $days === 0
                     ? 'today'
-                    : "in {$days} day" .
+                    : "in {$days} day".
                         ($days === 1 ? '' : 's');
 
             $message =
@@ -294,9 +363,9 @@ class MaintenanceController extends Controller
         }
 
         $eventKey =
-            'maintenance_due:' .
-            $maintenance->id .
-            ':' .
+            'maintenance_due:'.
+            $maintenance->id.
+            ':'.
             Carbon::parse(
                 $maintenance->next_schedule
             )->format('Y-m-d');
@@ -328,9 +397,9 @@ class MaintenanceController extends Controller
             now()->format('m');
 
         $prefix =
-            'MNT-' .
-            $year .
-            '-' .
+            'MNT-'.
+            $year.
+            '-'.
             $month;
 
         $latestNumber =
@@ -338,7 +407,7 @@ class MaintenanceController extends Controller
                 ->where(
                     'maintenance_number',
                     'like',
-                    $prefix . '%'
+                    $prefix.'%'
                 )
                 ->orderByDesc(
                     'maintenance_number'
@@ -374,7 +443,7 @@ class MaintenanceController extends Controller
         }
 
         return
-            $prefix .
+            $prefix.
             str_pad(
                 (string) $nextSequence,
                 3,
@@ -395,8 +464,7 @@ class MaintenanceController extends Controller
         );
 
         return response()->json([
-            'maintenance_number' =>
-                $this->generateMaintenanceNumber(),
+            'maintenance_number' => $this->generateMaintenanceNumber(),
         ]);
     }
 
@@ -418,13 +486,11 @@ class MaintenanceController extends Controller
         $maintenances = Maintenance::with('vehicle')
             ->when(
                 $showArchived,
-                fn ($query) =>
-                    $query->whereNotNull('archived_at')
+                fn ($query) => $query->whereNotNull('archived_at')
             )
             ->when(
-                !$showArchived,
-                fn ($query) =>
-                    $query->whereNull('archived_at')
+                ! $showArchived,
+                fn ($query) => $query->whereNull('archived_at')
             )
             ->orderBy('id', 'asc')
             ->get()
@@ -451,7 +517,7 @@ class MaintenanceController extends Controller
                         $daysUntilNextSchedule < 0;
 
                     $isDueSoon =
-                        !$isOverdue &&
+                        ! $isOverdue &&
                         $daysUntilNextSchedule <=
                             $warningDays;
                 }
@@ -474,35 +540,30 @@ class MaintenanceController extends Controller
                 return $maintenance;
             });
 
+        $this->maintenanceClassificationService->enrich($maintenances);
+
         if ($request->expectsJson()) {
             return response()->json([
-                'maintenances' =>
-                    $maintenances,
+                'maintenances' => $maintenances,
 
                 'settings' => [
-                    'overdue_warn_days' =>
-                        $warningDays,
+                    'overdue_warn_days' => $warningDays,
                 ],
             ]);
         }
 
         $maintenancePermissions = [
-            'role' =>
-                $user->role,
-            'canCreate' =>
-                $user->can(
-                    'create',
-                    Maintenance::class
-                ),
-            'canUpdate' =>
-                $user->hasPermission('maintenance.update'),
-            'canArchive' =>
-                $user->hasPermission('maintenance.archive'),
-            'canBulkArchive' =>
-                $user->hasPermission('maintenance.archive'),
-            'canRestore' =>
-                $user->hasPermission('maintenance.archive'),
+            'role' => $user->role,
+            'canCreate' => $user->can(
+                'create',
+                Maintenance::class
+            ),
+            'canUpdate' => $user->hasPermission('maintenance.update'),
+            'canArchive' => $user->hasPermission('maintenance.archive'),
+            'canBulkArchive' => $user->hasPermission('maintenance.archive'),
+            'canRestore' => $user->hasPermission('maintenance.archive'),
         ];
+
         return view(
             'maintenance.index',
             compact('maintenancePermissions')
@@ -537,10 +598,9 @@ class MaintenanceController extends Controller
 
         $maintenanceSettings =
         $this->getMaintenanceSettings();
-        if (!$request->filled('maintenance_type')) {
+        if (! $request->filled('maintenance_type')) {
             $request->merge([
-                'maintenance_type' =>
-                    $maintenanceSettings['defaultType'],
+                'maintenance_type' => $maintenanceSettings['defaultType'],
             ]);
         }
         /*
@@ -647,6 +707,8 @@ class MaintenanceController extends Controller
             ]
         );
 
+        $this->addNextScheduleChronologyValidation($validator, $request);
+
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
@@ -671,7 +733,7 @@ class MaintenanceController extends Controller
                     $maintenanceSettings['requireCost'] &&
                     ($validated['status'] ?? null) === 'Completed' &&
                     (
-                        !isset($validated['cost']) ||
+                        ! isset($validated['cost']) ||
                         $validated['cost'] === null ||
                         $validated['cost'] === ''
                     )
@@ -725,13 +787,11 @@ class MaintenanceController extends Controller
                 AuditLogService::log(
                     module: 'Maintenance Management',
                     action: 'Created',
-                    description:
-                        "Created maintenance record {$maintenance->maintenance_number}.",
+                    description: "Created maintenance record {$maintenance->maintenance_number}.",
                     record: $maintenance,
-                    newValues:
-                        $this->getMaintenanceAuditValues(
-                            $maintenance
-                        )
+                    newValues: $this->getMaintenanceAuditValues(
+                        $maintenance
+                    )
                 );
 
                 return $maintenance;
@@ -741,6 +801,8 @@ class MaintenanceController extends Controller
                 $result,
                 $maintenanceSettings['overdueWarnDays']
             );
+
+            $this->maintenanceClassificationService->enrichOne($result);
 
             return response()->json([
                 'success' => true,
@@ -764,6 +826,7 @@ class MaintenanceController extends Controller
         $this->authorize('view', $maintenance);
 
         $maintenance->load('vehicle');
+        $this->maintenanceClassificationService->enrichOne($maintenance);
 
         return response()->json([
             'maintenance' => $maintenance,
@@ -790,8 +853,7 @@ class MaintenanceController extends Controller
         if ($maintenance->archived_at) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Archived maintenance records cannot be modified.',
+                'message' => 'Archived maintenance records cannot be modified.',
             ], 422);
         }
 
@@ -804,7 +866,7 @@ class MaintenanceController extends Controller
                 'message' => 'Maintenance transition requests may only contain status.',
             ], 422);
         }
-        
+
         $maintenanceSettings =
             $this->getMaintenanceSettings();
 
@@ -849,7 +911,7 @@ class MaintenanceController extends Controller
                         $currentServiceType
                     ) {
                         if (
-                            !in_array(
+                            ! in_array(
                                 $value,
                                 $activeServiceTypeNames,
                                 true
@@ -901,7 +963,7 @@ class MaintenanceController extends Controller
                         $currentTechnician
                     ) {
                         if (
-                            !in_array(
+                            ! in_array(
                                 $value,
                                 $activeProviderValues,
                                 true
@@ -950,6 +1012,13 @@ class MaintenanceController extends Controller
                     'string',
                 ],
             ]
+        );
+
+        $this->addNextScheduleChronologyValidation(
+            $validator,
+            $request,
+            $maintenance,
+            $isLifecycleTransition,
         );
 
         if ($validator->fails()) {
@@ -1051,7 +1120,7 @@ class MaintenanceController extends Controller
                     $maintenanceSettings['requireCost'] &&
                     $newStatus === 'Completed' &&
                     (
-                        !isset($validated['cost']) ||
+                        ! isset($validated['cost']) ||
                         $validated['cost'] === null ||
                         $validated['cost'] === ''
                     )
@@ -1072,7 +1141,7 @@ class MaintenanceController extends Controller
                 */
                 if (
                     $isLifecycleTransition &&
-                    !in_array(
+                    ! in_array(
                         $newStatus,
                         Maintenance::TRANSITIONS[$currentStatus] ?? [],
                         true,
@@ -1224,12 +1293,9 @@ class MaintenanceController extends Controller
                 $maintenance->load('vehicle');
 
                 return [
-                    'maintenance' =>
-                        $maintenance,
-                    'previousNextSchedule' =>
-                        $previousNextSchedule,
-                    'previousStatus' =>
-                        $previousStatus,
+                    'maintenance' => $maintenance,
+                    'previousNextSchedule' => $previousNextSchedule,
+                    'previousStatus' => $previousStatus,
                 ];
             });
 
@@ -1261,12 +1327,12 @@ class MaintenanceController extends Controller
                 );
             }
 
+            $this->maintenanceClassificationService->enrichOne($updatedMaintenance);
+
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Maintenance record updated successfully.',
-                'maintenance' =>
-                    $updatedMaintenance,
+                'message' => 'Maintenance record updated successfully.',
+                'maintenance' => $updatedMaintenance,
             ]);
 
         } catch (\Exception $e) {
@@ -1327,43 +1393,35 @@ class MaintenanceController extends Controller
                     );
 
                 $maintenance->update([
-                    'archived_at' =>
-                        now(),
+                    'archived_at' => now(),
 
-                    'archived_by' =>
-                        $request->user()->id,
+                    'archived_by' => $request->user()->id,
                 ]);
 
                 AuditLogService::log(
                     module: 'Maintenance Management',
                     action: 'Archived',
-                    description:
-                        "Archived maintenance record {$maintenance->maintenance_number}.",
+                    description: "Archived maintenance record {$maintenance->maintenance_number}.",
                     record: $maintenance,
-                    oldValues:
-                        $oldValues,
+                    oldValues: $oldValues,
                     newValues: [
-                        'archived_at' =>
-                            $maintenance->archived_at
-                                ?->toDateTimeString(),
+                        'archived_at' => $maintenance->archived_at
+                            ?->toDateTimeString(),
 
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
                     ]
                 );
             });
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Maintenance record archived successfully.',
+                'message' => 'Maintenance record archived successfully.',
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1387,19 +1445,17 @@ class MaintenanceController extends Controller
                             $maintenance->id
                         );
 
-                if (!$maintenance->archived_at) {
+                if (! $maintenance->archived_at) {
                     throw new \Exception(
                         'Maintenance record is not archived.'
                     );
                 }
 
                 $oldValues = [
-                    'archived_at' =>
-                        $maintenance->archived_at
-                            ?->toDateTimeString(),
+                    'archived_at' => $maintenance->archived_at
+                        ?->toDateTimeString(),
 
-                    'archived_by' =>
-                        $maintenance->archived_by,
+                    'archived_by' => $maintenance->archived_by,
                 ];
 
                 $maintenance->update([
@@ -1410,8 +1466,7 @@ class MaintenanceController extends Controller
                 AuditLogService::log(
                     module: 'Maintenance Management',
                     action: 'Restored',
-                    description:
-                        "Restored maintenance record {$maintenance->maintenance_number}.",
+                    description: "Restored maintenance record {$maintenance->maintenance_number}.",
                     record: $maintenance,
                     oldValues: $oldValues,
                     newValues: [
@@ -1423,20 +1478,18 @@ class MaintenanceController extends Controller
 
             $maintenance->refresh();
             $maintenance->load('vehicle');
+            $this->maintenanceClassificationService->enrichOne($maintenance);
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                    'Maintenance record restored successfully.',
-                'maintenance' =>
-                    $maintenance,
+                'message' => 'Maintenance record restored successfully.',
+                'maintenance' => $maintenance,
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -1471,10 +1524,8 @@ class MaintenanceController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Please select valid maintenance records.',
-                'errors' =>
-                    $validator->errors(),
+                'message' => 'Please select valid maintenance records.',
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -1522,28 +1573,22 @@ class MaintenanceController extends Controller
                         );
 
                     $maintenance->update([
-                        'archived_at' =>
-                            now(),
+                        'archived_at' => now(),
 
-                        'archived_by' =>
-                            $request->user()->id,
+                        'archived_by' => $request->user()->id,
                     ]);
 
                     AuditLogService::log(
                         module: 'Maintenance Management',
                         action: 'Archived',
-                        description:
-                            "Archived maintenance record {$maintenance->maintenance_number}.",
+                        description: "Archived maintenance record {$maintenance->maintenance_number}.",
                         record: $maintenance,
-                        oldValues:
-                            $oldValues,
+                        oldValues: $oldValues,
                         newValues: [
-                            'archived_at' =>
-                                $maintenance->archived_at
-                                    ?->toDateTimeString(),
+                            'archived_at' => $maintenance->archived_at
+                                ?->toDateTimeString(),
 
-                            'archived_by' =>
-                                $request->user()->id,
+                            'archived_by' => $request->user()->id,
                         ]
                     );
 
@@ -1555,22 +1600,20 @@ class MaintenanceController extends Controller
             if (empty($archivedIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' =>
-                        'Only maintenance records that are not In Progress can be archived.',
+                    'message' => 'Only maintenance records that are not In Progress can be archived.',
                     'archived_ids' => [],
-                    'skipped_in_progress_ids' =>
-                        $skippedInProgressIds,
+                    'skipped_in_progress_ids' => $skippedInProgressIds,
                 ], 422);
             }
 
             $message =
                 count($archivedIds) === 1
                     ? 'Maintenance record archived successfully.'
-                    : count($archivedIds) .
+                    : count($archivedIds).
                         ' maintenance records archived successfully.';
 
             if (
-                !empty(
+                ! empty(
                     $skippedInProgressIds
                 )
             ) {
@@ -1581,19 +1624,15 @@ class MaintenanceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'archived_ids' =>
-                    $archivedIds,
-                'skipped_in_progress_ids' =>
-                    $skippedInProgressIds,
+                'archived_ids' => $archivedIds,
+                'skipped_in_progress_ids' => $skippedInProgressIds,
             ]);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Failed to archive maintenance records.',
-                'error' =>
-                    $e->getMessage(),
+                'message' => 'Failed to archive maintenance records.',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -1602,53 +1641,41 @@ class MaintenanceController extends Controller
         Maintenance $maintenance
     ): array {
         return [
-            'maintenance_number' =>
-                $maintenance->maintenance_number,
+            'maintenance_number' => $maintenance->maintenance_number,
 
-            'vehicle_id' =>
-                $maintenance->vehicle_id,
+            'vehicle_id' => $maintenance->vehicle_id,
 
-            'request_type' =>
-                $maintenance->request_type,
+            'request_type' => $maintenance->request_type,
 
-            'maintenance_type' =>
-                $maintenance->maintenance_type,
+            'maintenance_type' => $maintenance->maintenance_type,
 
-            'maintenance_date' =>
-                $maintenance->maintenance_date
+            'maintenance_date' => $maintenance->maintenance_date
                     ? Carbon::parse(
                         $maintenance->maintenance_date
                     )->format('Y-m-d')
                     : null,
 
-            'completion_date' =>
-                $maintenance->completion_date
+            'completion_date' => $maintenance->completion_date
                     ? Carbon::parse(
                         $maintenance->completion_date
                     )->format('Y-m-d')
                     : null,
 
-            'next_schedule' =>
-                $maintenance->next_schedule
+            'next_schedule' => $maintenance->next_schedule
                     ? Carbon::parse(
                         $maintenance->next_schedule
                     )->format('Y-m-d')
                     : null,
 
-            'technician' =>
-                $maintenance->technician,
+            'technician' => $maintenance->technician,
 
-            'priority' =>
-                $maintenance->priority,
+            'priority' => $maintenance->priority,
 
-            'odometer' =>
-                $maintenance->odometer,
+            'odometer' => $maintenance->odometer,
 
-            'cost' =>
-                $maintenance->cost,
+            'cost' => $maintenance->cost,
 
-            'status' =>
-                $maintenance->status,
+            'status' => $maintenance->status,
         ];
     }
 
@@ -1690,38 +1717,28 @@ class MaintenanceController extends Controller
             $newStatus
         ) {
             $action = match ($newStatus) {
-                'In Progress' =>
-                    'Started',
+                'In Progress' => 'Started',
 
-                'Completed' =>
-                    'Completed',
+                'Completed' => 'Completed',
 
-                'Cancelled' =>
-                    'Cancelled',
+                'Cancelled' => 'Cancelled',
 
-                'Scheduled' =>
-                    'Scheduled',
+                'Scheduled' => 'Scheduled',
 
-                default =>
-                    'Updated',
+                default => 'Updated',
             };
         }
 
         $description = match ($action) {
-            'Started' =>
-                "Started maintenance {$maintenance->maintenance_number}.",
+            'Started' => "Started maintenance {$maintenance->maintenance_number}.",
 
-            'Completed' =>
-                "Completed maintenance {$maintenance->maintenance_number}.",
+            'Completed' => "Completed maintenance {$maintenance->maintenance_number}.",
 
-            'Cancelled' =>
-                "Cancelled maintenance {$maintenance->maintenance_number}.",
+            'Cancelled' => "Cancelled maintenance {$maintenance->maintenance_number}.",
 
-            'Scheduled' =>
-                "Scheduled maintenance {$maintenance->maintenance_number}.",
+            'Scheduled' => "Scheduled maintenance {$maintenance->maintenance_number}.",
 
-            default =>
-                "Updated maintenance {$maintenance->maintenance_number}.",
+            default => "Updated maintenance {$maintenance->maintenance_number}.",
         };
 
         AuditLogService::log(

@@ -2,12 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\Dispatch;
+use App\Models\Driver;
 use App\Models\FleetNotification;
 use App\Models\FleetSetting;
-use App\Models\User;
-use App\Models\Driver;
 use App\Models\Reservation;
-use App\Models\Dispatch;
+use App\Models\User;
 
 class FleetNotificationService
 {
@@ -30,7 +30,7 @@ class FleetNotificationService
             $settings['notifications'] ?? [];
 
         if (
-            !array_key_exists(
+            ! array_key_exists(
                 $key,
                 $notificationSettings
             )
@@ -50,7 +50,7 @@ class FleetNotificationService
     public static function moduleFromLink(
         ?string $link
     ): ?string {
-        if (!$link) {
+        if (! $link) {
             return null;
         }
 
@@ -60,12 +60,12 @@ class FleetNotificationService
                 PHP_URL_PATH
             );
 
-        if (!$path) {
+        if (! $path) {
             return null;
         }
 
         $path =
-            '/' .
+            '/'.
             ltrim(
                 $path,
                 '/'
@@ -195,7 +195,7 @@ class FleetNotificationService
          * Notifications without links are informational
          * and may still be shown.
          */
-        if (!$link) {
+        if (! $link) {
             return true;
         }
 
@@ -208,7 +208,7 @@ class FleetNotificationService
          * Unknown internal destination:
          * do not trust it automatically.
          */
-        if (!$module) {
+        if (! $module) {
             return false;
         }
 
@@ -228,7 +228,7 @@ class FleetNotificationService
         |--------------------------------------------------------------------------
         */
         if (
-            !$user->hasRole(
+            ! $user->hasRole(
                 'driver'
             )
         ) {
@@ -238,7 +238,7 @@ class FleetNotificationService
         $driver =
             $user->driverProfile;
 
-        if (!$driver) {
+        if (! $driver) {
             return false;
         }
 
@@ -276,10 +276,9 @@ class FleetNotificationService
                     ? (int) $parts[1]
                     : 0;
 
-            return (
+            return
                 $notificationDriverId ===
-                (int) $driver->id
-            );
+                (int) $driver->id;
         }
 
         /*
@@ -308,7 +307,7 @@ class FleetNotificationService
                     ? (int) $parts[1]
                     : 0;
 
-            if (!$reservationId) {
+            if (! $reservationId) {
                 return false;
             }
 
@@ -355,10 +354,9 @@ class FleetNotificationService
                     ? (int) $parts[4]
                     : 0;
 
-            return (
+            return
                 $requesterUserId ===
-                (int) $user->id
-            );
+                (int) $user->id;
         }
         /*
         |--------------------------------------------------------------------------
@@ -386,7 +384,7 @@ class FleetNotificationService
                     ? (int) $parts[1]
                     : 0;
 
-            if (!$dispatchId) {
+            if (! $dispatchId) {
                 return false;
             }
 
@@ -428,7 +426,7 @@ class FleetNotificationService
     ): ?FleetNotification {
         $user = auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return null;
         }
 
@@ -438,7 +436,7 @@ class FleetNotificationService
         |--------------------------------------------------------------------------
         */
         if (
-            !self::userCanAccessLink(
+            ! self::userCanAccessLink(
                 $user,
                 $link
             )
@@ -447,20 +445,15 @@ class FleetNotificationService
         }
 
         return FleetNotification::create([
-            'user_id' =>
-                $user->id,
+            'user_id' => $user->id,
 
-            'title' =>
-                $title,
+            'title' => $title,
 
-            'message' =>
-                $message,
+            'message' => $message,
 
-            'status' =>
-                'Unread',
+            'status' => 'Unread',
 
-            'link' =>
-                $link,
+            'link' => $link,
         ]);
     }
 
@@ -475,7 +468,7 @@ class FleetNotificationService
         ?string $link = null
     ): ?FleetNotification {
         if (
-            !self::enabled(
+            ! self::enabled(
                 $settingKey,
                 $default
             )
@@ -504,7 +497,7 @@ class FleetNotificationService
         ?int $excludeUserId = null
     ): array {
         if (
-            !self::enabled(
+            ! self::enabled(
                 $settingKey,
                 $default
             )
@@ -539,7 +532,7 @@ class FleetNotificationService
             |--------------------------------------------------------------------------
             */
             if (
-                !self::userCanAccessLink(
+                ! self::userCanAccessLink(
                     $user,
                     $link
                 )
@@ -548,20 +541,15 @@ class FleetNotificationService
             }
 
             $created[] = FleetNotification::create([
-                'user_id' =>
-                    $user->id,
+                'user_id' => $user->id,
 
-                'title' =>
-                    $title,
+                'title' => $title,
 
-                'message' =>
-                    $message,
+                'message' => $message,
 
-                'status' =>
-                    'Unread',
+                'status' => 'Unread',
 
-                'link' =>
-                    $link,
+                'link' => $link,
             ]);
         }
 
@@ -582,7 +570,7 @@ class FleetNotificationService
         ?string $link = null
     ): ?FleetNotification {
         if (
-            !self::enabled(
+            ! self::enabled(
                 $settingKey,
                 $default
             )
@@ -600,7 +588,7 @@ class FleetNotificationService
         |
         */
         if (
-            !self::userCanAccessLink(
+            ! self::userCanAccessLink(
                 $user,
                 $link
             )
@@ -656,7 +644,7 @@ class FleetNotificationService
                     $link;
             }
 
-            if (!empty($updates)) {
+            if (! empty($updates)) {
                 $existing->update($updates);
                 $existing->refresh();
             }
@@ -665,23 +653,17 @@ class FleetNotificationService
         }
 
         return FleetNotification::create([
-            'user_id' =>
-                $user->id,
+            'user_id' => $user->id,
 
-            'title' =>
-                $title,
+            'title' => $title,
 
-            'message' =>
-                $message,
+            'message' => $message,
 
-            'status' =>
-                'Unread',
+            'status' => 'Unread',
 
-            'event_key' =>
-                $eventKey,
+            'event_key' => $eventKey,
 
-            'link' =>
-                $link,
+            'link' => $link,
         ]);
     }
 
@@ -697,7 +679,7 @@ class FleetNotificationService
         ?string $link = null
     ): ?FleetNotification {
         if (
-            !self::enabled(
+            ! self::enabled(
                 $settingKey,
                 $default
             )
@@ -708,7 +690,7 @@ class FleetNotificationService
         $user =
             auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return null;
         }
 
@@ -718,7 +700,7 @@ class FleetNotificationService
         |--------------------------------------------------------------------------
         */
         if (
-            !self::userCanAccessLink(
+            ! self::userCanAccessLink(
                 $user,
                 $link
             )
@@ -728,22 +710,25 @@ class FleetNotificationService
 
         $existing =
             FleetNotification::query()
-                ->where(
-                    'user_id',
-                    $user->id
-                )
-                ->where(
-                    'event_key',
-                    $eventKey
-                )
-                ->first();
+                ->firstOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'event_key' => $eventKey,
+                    ],
+                    [
+                        'title' => $title,
+                        'message' => $message,
+                        'status' => 'Unread',
+                        'link' => $link,
+                    ]
+                );
 
         /*
         |--------------------------------------------------------------------------
         | Existing Notification
         |--------------------------------------------------------------------------
         */
-        if ($existing) {
+        if (! $existing->wasRecentlyCreated) {
             $updates = [];
 
             if (
@@ -771,7 +756,7 @@ class FleetNotificationService
                     $link;
             }
 
-            if (!empty($updates)) {
+            if (! empty($updates)) {
                 $existing
                     ->update(
                         $updates
@@ -784,25 +769,6 @@ class FleetNotificationService
             return $existing;
         }
 
-        return FleetNotification::create([
-            'user_id' =>
-                $user->id,
-
-            'title' =>
-                $title,
-
-            'message' =>
-                $message,
-
-            'status' =>
-                'Unread',
-
-            'event_key' =>
-                $eventKey,
-
-            'link' =>
-                $link,
-        ]);
+        return $existing;
     }
-    
 }

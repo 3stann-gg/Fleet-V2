@@ -60,6 +60,11 @@
         </div>
 
         <div class="view-maintenance-detail-item">
+          <label>Maintenance Category</label>
+          <p id="viewMaintenanceCategory"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
           <label>Request Type</label>
           <p id="viewMaintenanceRequestType"></p>
         </div>
@@ -74,7 +79,7 @@
         </div>
 
         <div class="view-maintenance-detail-item">
-          <label>Scheduled Date</label>
+          <label>Current Maintenance Date</label>
           <p id="viewMaintenanceScheduledDate"></p>
         </div>
 
@@ -92,6 +97,36 @@
           <label>Odometer Reading</label>
           <p id="viewMaintenanceOdometer"></p>
         </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Current Vehicle Odometer</label>
+          <p id="viewMaintenanceVehicleOdometer"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Vehicle Purchase Date</label>
+          <p id="viewMaintenancePurchaseDate"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Schedule Context</label>
+          <p id="viewMaintenanceDueStatus"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Due Basis</label>
+          <p id="viewMaintenanceDueBasis"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Context Date</label>
+          <p id="viewMaintenanceDueDate"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Next Service Due</label>
+          <p id="viewMaintenanceNextSchedule"></p>
+        </div>
       </div>
 
       <div class="detail-section-heading detail-section-heading--standalone">
@@ -107,6 +142,11 @@
 
         <label>Notes</label>
         <p id="viewMaintenanceNotes"></p>
+      </div>
+
+      <div class="maintenance-classification-note maintenance-classification-note--modal" role="note">
+        <i class="ph ph-info" aria-hidden="true"></i>
+        <p id="viewMaintenanceBasis"></p>
       </div>
     </div>
 

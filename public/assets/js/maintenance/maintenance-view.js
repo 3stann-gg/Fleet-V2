@@ -155,6 +155,11 @@ async function openViewMaintenanceModal(row) {
         setText("viewMaintenanceVehicle", vehicleText, "Unassigned");
         setText("viewMaintenanceServiceType", maintenance.maintenance_type);
         setText(
+            "viewMaintenanceCategory",
+            maintenance.maintenance_category,
+            "Other / Not Classified",
+        );
+        setText(
             "viewMaintenanceRequestType",
             maintenance.request_type,
             "Normal",
@@ -176,6 +181,56 @@ async function openViewMaintenanceModal(row) {
         );
         setText("viewMaintenancePriority", maintenance.priority);
         setText("viewMaintenanceOdometer", maintenance.odometer);
+        setText(
+            "viewMaintenanceVehicleOdometer",
+            formatMaintenanceViewOdometer(
+                maintenance.vehicle_service_context?.current_odometer,
+            ),
+            "Not recorded",
+        );
+        setText(
+            "viewMaintenancePurchaseDate",
+            maintenance.vehicle_service_context?.purchase_date
+                ? formatMaintenanceViewDate(
+                      maintenance.vehicle_service_context.purchase_date,
+                  )
+                : null,
+            "Not recorded",
+        );
+        const dueStatusLabel =
+            maintenance.status === "In Progress" &&
+            maintenance.maintenance_due_state === "overdue"
+                ? "Scheduled date passed"
+                : maintenance.maintenance_due_label;
+        setText(
+            "viewMaintenanceDueStatus",
+            dueStatusLabel,
+            "Not Scheduled",
+        );
+        setText(
+            "viewMaintenanceDueBasis",
+            maintenance.maintenance_due_basis,
+            "Not available",
+        );
+        setText(
+            "viewMaintenanceDueDate",
+            maintenance.maintenance_due_date
+                ? formatMaintenanceViewDate(maintenance.maintenance_due_date)
+                : null,
+            "Not scheduled",
+        );
+        setText(
+            "viewMaintenanceNextSchedule",
+            maintenance.next_schedule
+                ? formatMaintenanceViewDate(maintenance.next_schedule)
+                : null,
+            "Not scheduled",
+        );
+        setText(
+            "viewMaintenanceBasis",
+            maintenance.vehicle_service_context?.basis,
+            "Category is derived from the recorded request and service types. Due context is derived from maintenance status and recorded dates. Vehicle purchase date and odometer are display context only.",
+        );
         setText("viewMaintenanceDescription", maintenance.description);
         setText("viewMaintenancePartsUsed", maintenance.parts_used);
         setText("viewMaintenanceNotes", maintenance.notes);
@@ -248,6 +303,22 @@ function formatMaintenanceViewCost(cost) {
             maximumFractionDigits: 2,
         })
     );
+}
+
+function formatMaintenanceViewOdometer(odometer) {
+    if (odometer === null || odometer === undefined || odometer === "") {
+        return "Not recorded";
+    }
+
+    const value = Number(odometer);
+
+    if (Number.isNaN(value)) {
+        return "Not recorded";
+    }
+
+    return `${value.toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+    })} km`;
 }
 
 function closeViewMaintenanceModal() {

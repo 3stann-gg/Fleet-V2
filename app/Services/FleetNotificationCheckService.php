@@ -3,12 +3,17 @@
 namespace App\Services;
 
 use App\Models\Driver;
-use App\Models\Maintenance;
 use App\Models\FleetSetting;
+use App\Models\Maintenance;
+use App\Models\Vehicle;
 use Carbon\Carbon;
 
 class FleetNotificationCheckService
 {
+    public function __construct(
+        private MaintenanceScheduleResolver $maintenanceScheduleResolver
+    ) {}
+
     /*
     |--------------------------------------------------------------------------
     | Notification Settings
@@ -25,29 +30,27 @@ class FleetNotificationCheckService
             $record?->settings ?? [];
 
         return [
-            'licenseWarnDays' =>
-                max(
-                    1,
-                    min(
-                        180,
-                        (int) (
-                            $settings['drivers']['warnLicenseDays']
-                            ?? 30
-                        )
+            'licenseWarnDays' => max(
+                1,
+                min(
+                    180,
+                    (int) (
+                        $settings['drivers']['warnLicenseDays']
+                        ?? 30
                     )
-                ),
+                )
+            ),
 
-            'maintenanceWarnDays' =>
-                max(
-                    1,
-                    min(
-                        90,
-                        (int) (
-                            $settings['maintenance']['overdueWarnDays']
-                            ?? 3
-                        )
+            'maintenanceWarnDays' => max(
+                1,
+                min(
+                    90,
+                    (int) (
+                        $settings['maintenance']['overdueWarnDays']
+                        ?? 3
                     )
-                ),
+                )
+            ),
         ];
     }
 
@@ -60,7 +63,7 @@ class FleetNotificationCheckService
     {
         $user = auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -113,7 +116,7 @@ class FleetNotificationCheckService
         $user =
             auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -123,7 +126,7 @@ class FleetNotificationCheckService
         |--------------------------------------------------------------------------
         */
         if (
-            !$user->canViewModule(
+            ! $user->canViewModule(
                 'drivers'
             )
         ) {
@@ -207,8 +210,8 @@ class FleetNotificationCheckService
 
             $name =
                 trim(
-                    ($driver->first_name ?? '') .
-                    ' ' .
+                    ($driver->first_name ?? '').
+                    ' '.
                     ($driver->last_name ?? '')
                 );
 
@@ -219,7 +222,7 @@ class FleetNotificationCheckService
             $when =
                 $days === 0
                     ? 'today'
-                    : "in {$days} day" .
+                    : "in {$days} day".
                         (
                             $days === 1
                                 ? ''
@@ -234,9 +237,9 @@ class FleetNotificationCheckService
                 "{$name}'s license ({$licenseNumber}) expires {$when}.";
 
             $eventKey =
-                'driver_license_expiring:' .
-                $driver->id .
-                ':' .
+                'driver_license_expiring:'.
+                $driver->id.
+                ':'.
                 $expiry->format(
                     'Y-m-d'
                 );
@@ -250,19 +253,18 @@ class FleetNotificationCheckService
             | module-level RBAC before saving the notification.
             |--------------------------------------------------------------------------
             */
-            FleetNotificationService
-                ::createUniqueWhenEnabled(
-                    'licenseExpiring',
-                    (
-                        $driver->driver_number
-                        ?: 'Driver'
-                    ) .
-                    ' · Driver License Expiring',
-                    $message,
-                    $eventKey,
-                    true,
-                    route('driver')
-                );
+            FleetNotificationService::createUniqueWhenEnabled(
+                'licenseExpiring',
+                (
+                    $driver->driver_number
+                    ?: 'Driver'
+                ).
+                ' · Driver License Expiring',
+                $message,
+                $eventKey,
+                true,
+                route('driver')
+            );
         }
     }
 
@@ -277,7 +279,7 @@ class FleetNotificationCheckService
         $user =
             auth()->user();
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -287,7 +289,7 @@ class FleetNotificationCheckService
         |--------------------------------------------------------------------------
         */
         if (
-            !$user->canViewModule(
+            ! $user->canViewModule(
                 'maintenance'
             )
         ) {
@@ -314,129 +316,121 @@ class FleetNotificationCheckService
                 )
                 ->get();
 
-        $today =
-            now()->startOfDay();
-
         foreach (
             $maintenances as $maintenance
         ) {
-            $nextSchedule =
-                Carbon::parse(
-                    $maintenance
-                        ->next_schedule
-                )->startOfDay();
-
-            $days =
-                $today->diffInDays(
-                    $nextSchedule,
-                    false
-                );
-
-            /*
-            |--------------------------------------------------------------------------
-            | Ignore future records outside warning period
-            |--------------------------------------------------------------------------
-            */
-            if (
-                $days >
+            $this->createMaintenanceScheduleNotification(
+                $maintenance,
+                $maintenance->vehicle,
                 $warningDays
-            ) {
+            );
+        }
+
+        $vehicles =
+            Vehicle::query()
+                ->whereHas(
+                    'lastCompletedMaintenance'
+                )
+                ->with(
+                    'lastCompletedMaintenance'
+                )
+                ->get();
+
+        foreach ($vehicles as $vehicle) {
+            $context =
+                $this->maintenanceScheduleResolver
+                    ->resolve($vehicle);
+
+            $maintenance =
+                $context['maintenance'];
+
+            if (! $maintenance || ! $context['has_next_schedule']) {
                 continue;
             }
 
-            $vehicleName =
-                trim(
-                    (
-                        $maintenance
-                            ->vehicle?->brand
-                        ?? ''
-                    ) .
-                    ' ' .
-                    (
-                        $maintenance
-                            ->vehicle?->model
-                        ?? ''
-                    )
-                );
-
-            if (
-                $vehicleName === ''
-            ) {
-                $vehicleName =
-                    'Vehicle';
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Overdue
-            |--------------------------------------------------------------------------
-            */
-            if ($days < 0) {
-                $daysOverdue =
-                    abs($days);
-
-                $title =
-                    'Maintenance Overdue';
-
-                $message =
-                    "{$vehicleName} maintenance " .
-                    "{$maintenance->maintenance_number} " .
-                    "is overdue by {$daysOverdue} day" .
-                    (
-                        $daysOverdue === 1
-                            ? ''
-                            : 's'
-                    ) .
-                    '.';
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Due Soon
-            |--------------------------------------------------------------------------
-            */
-            else {
-                $when =
-                    $days === 0
-                        ? 'today'
-                        : "in {$days} day" .
-                            (
-                                $days === 1
-                                    ? ''
-                                    : 's'
-                            );
-
-                $title =
-                    'Maintenance Due Soon';
-
-                $message =
-                    "{$vehicleName} maintenance " .
-                    "{$maintenance->maintenance_number} " .
-                    "is due {$when}.";
-            }
-
-            $eventKey =
-                'maintenance_due:' .
-                $maintenance->id .
-                ':' .
-                $nextSchedule->format(
-                    'Y-m-d'
-                );
-
-            /*
-            |--------------------------------------------------------------------------
-            | RBAC-aware notification
-            |--------------------------------------------------------------------------
-            */
-            FleetNotificationService
-                ::createUniqueWhenEnabled(
-                    'maintenanceDue',
-                    $title,
-                    $message,
-                    $eventKey,
-                    true,
-                    route('maintenance')
-                );
+            $this->createMaintenanceScheduleNotification(
+                $maintenance,
+                $vehicle,
+                $warningDays,
+                true
+            );
         }
+    }
+
+    private function createMaintenanceScheduleNotification(
+        Maintenance $maintenance,
+        ?Vehicle $vehicle,
+        int $warningDays,
+        bool $isFutureService = false
+    ): void {
+        if (! $maintenance->next_schedule) {
+            return;
+        }
+
+        $today = now()->startOfDay();
+        $nextSchedule =
+            Carbon::parse(
+                $maintenance->next_schedule
+            )->startOfDay();
+        $days =
+            $today->diffInDays(
+                $nextSchedule,
+                false
+            );
+
+        if ($days > $warningDays) {
+            return;
+        }
+
+        $vehicleName =
+            trim(
+                ($vehicle?->brand ?? '').
+                ' '.
+                ($vehicle?->model ?? '')
+            );
+
+        if ($vehicleName === '') {
+            $vehicleName = 'Vehicle';
+        }
+
+        $maintenanceDescription =
+            $isFutureService
+                ? "next service after maintenance {$maintenance->maintenance_number}"
+                : "maintenance {$maintenance->maintenance_number}";
+
+        if ($days < 0) {
+            $daysOverdue = abs($days);
+            $title = 'Maintenance Overdue';
+            $message =
+                "{$vehicleName} {$maintenanceDescription} ".
+                "is overdue by {$daysOverdue} day".
+                ($daysOverdue === 1 ? '' : 's').
+                '.';
+        } else {
+            $when =
+                $days === 0
+                    ? 'today'
+                    : "in {$days} day".
+                        ($days === 1 ? '' : 's');
+            $title = 'Maintenance Due Soon';
+            $message =
+                "{$vehicleName} {$maintenanceDescription} ".
+                "is due {$when}.";
+        }
+
+        $eventKey =
+            'maintenance_due:'.
+            $maintenance->id.
+            ':'.
+            $nextSchedule->format('Y-m-d');
+
+        FleetNotificationService::createUniqueWhenEnabled(
+            'maintenanceDue',
+            $title,
+            $message,
+            $eventKey,
+            true,
+            route('maintenance')
+        );
     }
 }

@@ -67,6 +67,35 @@ class AuditLogService
         ]);
     }
 
+    public static function logSystem(
+        string $module,
+        string $action,
+        string $description,
+        ?Model $record = null,
+        ?array $oldValues = null,
+        ?array $newValues = null
+    ): AuditLog {
+        return AuditLog::create([
+            'user_id' => null,
+            'user_name' => null,
+            'user_email' => null,
+            'user_role' => 'system',
+            'module' => $module,
+            'action' => $action,
+            'description' => $description,
+            'auditable_type' => $record
+                ? get_class($record)
+                : null,
+            'auditable_id' => $record?->getKey(),
+            'old_values' => self::sanitize($oldValues),
+            'new_values' => self::sanitize($newValues),
+            'ip_address' => null,
+            'user_agent' => null,
+            'request_method' => null,
+            'request_path' => null,
+        ]);
+    }
+
     private static function sanitize(
         ?array $values
     ): ?array {

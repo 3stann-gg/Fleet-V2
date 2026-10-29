@@ -80,6 +80,13 @@
               </div>
             </div>
 
+            <div class="maintenance-classification-note" role="note">
+              <i class="ph ph-info" aria-hidden="true"></i>
+              <p>
+                Category is derived from the recorded request and service types. Due context is derived from maintenance status and recorded dates. Vehicle purchase date and odometer are display context only.
+              </p>
+            </div>
+
             <!-- Toolbar -->
             <div class="toolbar">
               <div class="toolbar-left">
@@ -285,7 +292,7 @@
                       </th>
 
                       <th class="sortable" data-column="5">
-                        Scheduled Date
+                        Current Maintenance Schedule
                         <i class="ph ph-caret-up-down sort-icon"></i>
                       </th>
 

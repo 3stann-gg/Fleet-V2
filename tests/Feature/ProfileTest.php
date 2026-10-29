@@ -3,7 +3,7 @@
 use App\Models\User;
 
 test('profile page is displayed', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => 'fleet_manager']);
 
     $response = $this
         ->actingAs($user)
@@ -12,14 +12,34 @@ test('profile page is displayed', function () {
     $response->assertOk();
 });
 
-test('profile information can be updated', function () {
+test('profile page is forbidden without an approved role', function () {
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get('/profile')
+        ->assertForbidden();
+});
+
+test('profile information can be updated', function () {
+    $user = User::factory()->create([
+        'role' => 'fleet_manager',
+        'status' => 'active',
+        'first_name' => 'Original',
+        'last_name' => 'Name',
+    ]);
+    $originalEmail = $user->email;
+    $originalRole = $user->role;
+    $originalStatus = $user->status;
 
     $response = $this
         ->actingAs($user)
         ->patch('/profile', [
+            'first_name' => 'Test',
+            'last_name' => 'User',
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'role' => 'it_admin',
+            'status' => 'inactive',
         ]);
 
     $response
@@ -28,17 +48,27 @@ test('profile information can be updated', function () {
 
     $user->refresh();
 
+    $this->assertSame('Test', $user->first_name);
+    $this->assertSame('User', $user->last_name);
     $this->assertSame('Test User', $user->name);
-    $this->assertSame('test@example.com', $user->email);
-    $this->assertNull($user->email_verified_at);
+    $this->assertSame($originalEmail, $user->email);
+    $this->assertSame($originalRole, $user->role);
+    $this->assertSame($originalStatus, $user->status);
+    $this->assertNotNull($user->email_verified_at);
 });
 
 test('email verification status is unchanged when the email address is unchanged', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'role' => 'fleet_manager',
+        'first_name' => 'Original',
+        'last_name' => 'Name',
+    ]);
 
     $response = $this
         ->actingAs($user)
         ->patch('/profile', [
+            'first_name' => 'Test',
+            'last_name' => 'User',
             'name' => 'Test User',
             'email' => $user->email,
         ]);

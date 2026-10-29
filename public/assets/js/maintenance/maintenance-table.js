@@ -146,6 +146,27 @@ function formatMaintenanceDate(date) {
     });
 }
 
+function getMaintenanceDuePresentation(maintenance) {
+    const label = maintenance.maintenance_due_label || "Not Scheduled";
+
+    if (
+        maintenance.status === "In Progress" &&
+        maintenance.maintenance_due_state === "overdue"
+    ) {
+        return "Scheduled date passed";
+    }
+
+    if (maintenance.status !== "Completed") {
+        return label;
+    }
+
+    const dueDate = maintenance.maintenance_due_date
+        ? formatMaintenanceDate(maintenance.maintenance_due_date)
+        : "Not scheduled";
+
+    return `Next service: ${dueDate} · ${label}`;
+}
+
 function formatMaintenanceCost(cost) {
     const value = Number(cost);
 
@@ -238,6 +259,8 @@ function renderMaintenanceTable(maintenances) {
                     data-notes="${maintenance.notes ?? ""}"
                     data-cost="${maintenance.cost ?? 0}"
                     data-status="${status}"
+                    data-maintenance-category="${maintenance.maintenance_category ?? "Other / Not Classified"}"
+                    data-maintenance-due-state="${maintenance.maintenance_due_state ?? "not_scheduled"}"
                     data-archived-at="${maintenance.archived_at ?? ""}"
                 >
 
@@ -278,6 +301,9 @@ function renderMaintenanceTable(maintenances) {
                         <span class="maintenance-service-type">
                             ${maintenance.maintenance_type ?? ""}
                         </span>
+                        <small class="maintenance-context-line">
+                            ${maintenance.maintenance_category ?? "Other / Not Classified"}
+                        </small>
                     </td>
 
                     <!-- Technician -->
@@ -287,11 +313,14 @@ function renderMaintenanceTable(maintenances) {
                         </span>
                     </td>
 
-                    <!-- Scheduled Date -->
+                    <!-- Current Maintenance Schedule -->
                     <td>
                         <span class="maintenance-scheduled-date">
                             ${formatMaintenanceDate(scheduledDate)}
                         </span>
+                        <small class="maintenance-context-line">
+                            ${getMaintenanceDuePresentation(maintenance)}
+                        </small>
                     </td>
 
                     <!-- Completion Date -->
