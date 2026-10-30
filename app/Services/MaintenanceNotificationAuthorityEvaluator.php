@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Maintenance;
+use App\Models\Vehicle;
 use DateTimeImmutable;
 use Illuminate\Support\Collection;
 
@@ -30,6 +31,40 @@ class MaintenanceNotificationAuthorityEvaluator
     }
 
     /**
+     * Evaluate authority from rows locked in the current transaction.
+     *
+     * @return array{
+     *     event_key: string,
+     *     verified: bool,
+     *     authoritative: bool|null,
+     *     maintenance_id: int|null,
+     *     vehicle_id: int|null,
+     *     schedule_date: string|null,
+     *     current_schedule_date: string|null,
+     *     resolution_reason: string|null
+     * }
+     */
+    public function evaluateEventKeyForUpdate(string $eventKey, int $expectedVehicleId): array
+    {
+        $identity = $this->parseEventKey($eventKey);
+
+        if ($identity === null) {
+            return $this->unverifiedEvaluation($eventKey);
+        }
+
+        $maintenance = $this->loadMaintenanceForUpdate(
+            $identity['maintenance_id'],
+            $expectedVehicleId
+        );
+
+        if (! $maintenance instanceof Maintenance || ! $maintenance->vehicle) {
+            return $this->unverifiedEvaluation($eventKey, $identity);
+        }
+
+        return $this->evaluateMaintenance($eventKey, $identity, $maintenance);
+    }
+
+    /**
      * @param  iterable<int, string>  $eventKeys
      * @return array<string, array{
      *     event_key: string,
@@ -46,6 +81,17 @@ class MaintenanceNotificationAuthorityEvaluator
     {
         $parsedEvents = $this->parseEventKeys($eventKeys);
         $maintenances = $this->loadMaintenances($parsedEvents);
+
+        return $this->evaluateParsedEvents($parsedEvents, $maintenances);
+    }
+
+    /**
+     * @param  array<string, array{maintenance_id: int, schedule_date: string}|null>  $parsedEvents
+     * @param  Collection<int, Maintenance>  $maintenances
+     * @return array<string, array<string, bool|int|string|null>>
+     */
+    private function evaluateParsedEvents(array $parsedEvents, Collection $maintenances): array
+    {
         $evaluations = [];
 
         foreach ($parsedEvents as $eventKey => $identity) {
@@ -81,6 +127,21 @@ class MaintenanceNotificationAuthorityEvaluator
     public function isCanonicalEventKey(string $eventKey): bool
     {
         return $this->parseEventKey($eventKey) !== null;
+    }
+
+    public function discoverVehicleId(string $eventKey): ?int
+    {
+        $identity = $this->parseEventKey($eventKey);
+
+        if ($identity === null) {
+            return null;
+        }
+
+        $vehicleId = Maintenance::query()
+            ->whereKey($identity['maintenance_id'])
+            ->value('vehicle_id');
+
+        return $vehicleId !== null ? (int) $vehicleId : null;
     }
 
     /**
@@ -150,6 +211,58 @@ class MaintenanceNotificationAuthorityEvaluator
             ->whereKey($maintenanceIds)
             ->get()
             ->keyBy(fn (Maintenance $maintenance): int => (int) $maintenance->getKey());
+    }
+
+    private function loadMaintenanceForUpdate(
+        int $maintenanceId,
+        int $expectedVehicleId
+    ): ?Maintenance {
+        $vehicle = Vehicle::query()
+            ->whereKey($expectedVehicleId)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $vehicle instanceof Vehicle) {
+            return null;
+        }
+
+        $maintenance = Maintenance::query()
+            ->whereKey($maintenanceId)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $maintenance instanceof Maintenance) {
+            return null;
+        }
+
+        if ((int) $maintenance->vehicle_id !== $expectedVehicleId) {
+            throw new MaintenanceAuthorityChangedException(
+                'The maintenance source changed vehicles during authority locking.'
+            );
+        }
+
+        $completedMaintenances = Maintenance::query()
+            ->where('vehicle_id', $expectedVehicleId)
+            ->where('status', 'Completed')
+            ->whereNotNull('completion_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $authoritativeMaintenance = $completedMaintenances
+            ->sort(function (Maintenance $left, Maintenance $right): int {
+                $dateComparison = $right->completion_date
+                    <=> $left->completion_date;
+
+                return $dateComparison !== 0
+                    ? $dateComparison
+                    : $right->getKey() <=> $left->getKey();
+            })
+            ->first();
+
+        $vehicle->setRelation('lastCompletedMaintenance', $authoritativeMaintenance);
+        $maintenance->setRelation('vehicle', $vehicle);
+
+        return $maintenance;
     }
 
     /**

@@ -5,7 +5,10 @@ use App\Models\FleetNotification;
 use App\Models\Maintenance;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\MaintenanceNotificationAuthorityEvaluator;
 use App\Services\MaintenanceNotificationReconciliationService;
+use App\Services\MaintenanceScheduleResolver;
+use App\Services\MySqlDeadlockRetryService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -504,7 +507,7 @@ it('preserves legacy null completion-date selection behavior', function () {
         ->and($notification->fresh()->resolution_reason)->toBe('source_no_longer_eligible');
 });
 
-it('batch loads multiple sources without per-event select queries', function () {
+it('uses bounded short locking transactions for multiple event sources', function () {
     $first = reconciliationMaintenance(reconciliationVehicle());
     $second = reconciliationMaintenance(reconciliationVehicle());
     $selectQueries = 0;
@@ -520,5 +523,91 @@ it('batch loads multiple sources without per-event select queries', function () 
         reconciliationEventKey($second),
     ]);
 
-    expect($selectQueries)->toBeLessThanOrEqual(3);
+    expect($selectQueries)->toBeLessThanOrEqual(8);
+});
+
+it('revalidates a restored schedule after vehicle discovery', function () {
+    $maintenance = reconciliationMaintenance(reconciliationVehicle());
+    $originalSchedule = $maintenance->next_schedule->toDateString();
+    $eventKey = reconciliationEventKey($maintenance);
+    $notification = reconciliationNotification($eventKey);
+    $notification->active_event_key = $eventKey;
+    $notification->save();
+    $maintenance->update(['next_schedule' => now()->addWeek()->toDateString()]);
+    $evaluator = new class(app(MaintenanceScheduleResolver::class), $maintenance, $originalSchedule) extends MaintenanceNotificationAuthorityEvaluator
+    {
+        public function __construct(
+            MaintenanceScheduleResolver $resolver,
+            private Maintenance $maintenance,
+            private string $originalSchedule
+        ) {
+            parent::__construct($resolver);
+        }
+
+        public function discoverVehicleId(string $eventKey): ?int
+        {
+            $vehicleId = parent::discoverVehicleId($eventKey);
+            $this->maintenance->update(['next_schedule' => $this->originalSchedule]);
+
+            return $vehicleId;
+        }
+    };
+    $service = new MaintenanceNotificationReconciliationService(
+        $evaluator,
+        app(MySqlDeadlockRetryService::class)
+    );
+
+    $result = $service->reconcileEventKey($eventKey);
+
+    expect($result['authoritative'])->toBeTrue()
+        ->and($notification->fresh()->resolved_at)->toBeNull()
+        ->and($notification->fresh()->active_event_key)->toBe($eventKey);
+});
+
+it('revalidates a newer completed maintenance after vehicle discovery', function () {
+    $vehicle = reconciliationVehicle();
+    $older = reconciliationMaintenance($vehicle, [
+        'status' => 'Completed',
+        'completion_date' => now()->subMonth()->toDateString(),
+    ]);
+    $eventKey = reconciliationEventKey($older);
+    $notification = reconciliationNotification($eventKey);
+    $notification->active_event_key = $eventKey;
+    $notification->save();
+    $evaluator = new class(app(MaintenanceScheduleResolver::class), $vehicle) extends MaintenanceNotificationAuthorityEvaluator
+    {
+        private bool $inserted = false;
+
+        public function __construct(
+            MaintenanceScheduleResolver $resolver,
+            private Vehicle $vehicle
+        ) {
+            parent::__construct($resolver);
+        }
+
+        public function discoverVehicleId(string $eventKey): ?int
+        {
+            $vehicleId = parent::discoverVehicleId($eventKey);
+
+            if (! $this->inserted) {
+                reconciliationMaintenance($this->vehicle, [
+                    'status' => 'Completed',
+                    'completion_date' => now()->toDateString(),
+                ]);
+                $this->inserted = true;
+            }
+
+            return $vehicleId;
+        }
+    };
+    $service = new MaintenanceNotificationReconciliationService(
+        $evaluator,
+        app(MySqlDeadlockRetryService::class)
+    );
+
+    $result = $service->reconcileEventKey($eventKey);
+
+    expect($result['resolution_reason'])->toBe('superseded_by_newer_completion')
+        ->and($notification->fresh()->resolution_reason)->toBe('superseded_by_newer_completion')
+        ->and($notification->fresh()->active_event_key)->toBeNull();
 });

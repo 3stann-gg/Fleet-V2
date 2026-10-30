@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\MySqlConcurrency\TestCase as MySqlConcurrencyTestCase;
 use Tests\TestCase;
 
 /*
@@ -17,6 +18,9 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+pest()->extend(MySqlConcurrencyTestCase::class)
+    ->in('MySqlConcurrency');
 
 /*
 |--------------------------------------------------------------------------
