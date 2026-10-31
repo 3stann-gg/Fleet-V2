@@ -11,7 +11,8 @@ use LogicException;
 class FleetNotificationActiveEventService
 {
     public function __construct(
-        private MaintenanceNotificationAuthorityEvaluator $authorityEvaluator
+        private MaintenanceNotificationAuthorityEvaluator $authorityEvaluator,
+        private FleetNotificationKeyedCreationService $keyedCreationService
     ) {}
 
     public function assignMaintenanceEventKey(
@@ -57,6 +58,26 @@ class FleetNotificationActiveEventService
                 return $currentNotification->refresh();
             });
         } catch (UniqueConstraintViolationException $exception) {
+            if (
+                ! $this->keyedCreationService
+                    ->isExpectedActiveEventUniqueConflict($exception)
+            ) {
+                throw $exception;
+            }
+
+            $winner = DB::transaction(fn (): ?FleetNotification => FleetNotification::query()
+                ->where('user_id', $notification->user_id)
+                ->where('event_key', $canonicalEventKey)
+                ->where('active_event_key', $canonicalEventKey)
+                ->whereNull('resolved_at')
+                ->lockForUpdate()
+                ->first()
+            );
+
+            if ($winner === null) {
+                throw $exception;
+            }
+
             throw new LogicException(
                 'An active notification occurrence already exists for this user and event key.',
                 0,

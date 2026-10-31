@@ -596,6 +596,17 @@ class FleetNotificationService
             return null;
         }
 
+        if (self::occurrenceCreationEnabled()) {
+            return app(FleetNotificationKeyedCreationService::class)
+                ->createOrUpdateActive(
+                    $user,
+                    $title,
+                    $message,
+                    $eventKey,
+                    $link
+                );
+        }
+
         /*
         |--------------------------------------------------------------------------
         | Prevent Duplicate Notification
@@ -708,6 +719,17 @@ class FleetNotificationService
             return null;
         }
 
+        if (self::occurrenceCreationEnabled()) {
+            return app(FleetNotificationKeyedCreationService::class)
+                ->createOrUpdateActive(
+                    $user,
+                    $title,
+                    $message,
+                    $eventKey,
+                    $link
+                );
+        }
+
         $existing =
             FleetNotification::query()
                 ->firstOrCreate(
@@ -770,5 +792,10 @@ class FleetNotificationService
         }
 
         return $existing;
+    }
+
+    private static function occurrenceCreationEnabled(): bool
+    {
+        return config('fleet-notifications.occurrences.enabled') === true;
     }
 }

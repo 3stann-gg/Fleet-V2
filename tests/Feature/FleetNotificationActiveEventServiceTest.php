@@ -10,6 +10,11 @@ use App\Services\FleetNotificationActiveEventService;
 use App\Services\FleetNotificationService;
 use App\Services\MaintenanceNotificationReconciliationService;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Schema;
+
+const TAE_LEGACY_UNIQUE_INDEX =
+    'fleet_notifications_user_id_event_key_unique';
 
 function trustedActiveEventUser(string $role = 'fleet_manager'): User
 {
@@ -129,9 +134,44 @@ it('requires the active key to match the stored canonical event identity', funct
 it('rejects an existing active occurrence collision for the same user', function () {
     $user = trustedActiveEventUser();
     $canonicalEventKey = 'maintenance_due:104:2026-12-04';
+
+    Schema::table('fleet_notifications', function ($table) {
+        $table->dropUnique(TAE_LEGACY_UNIQUE_INDEX);
+    });
+
+    $candidate = null;
+
+    try {
+        $existing = trustedActiveEventNotification($user, $canonicalEventKey);
+        $existing->active_event_key = $canonicalEventKey;
+        $existing->save();
+        $candidate = trustedActiveEventNotification($user, $canonicalEventKey);
+
+        expect(fn () => trustedActiveEventService()
+            ->assignMaintenanceEventKey($candidate, $canonicalEventKey))
+            ->toThrow(LogicException::class)
+            ->and($existing->fresh()->event_key)->toBe($canonicalEventKey)
+            ->and($existing->fresh()->active_event_key)->toBe($canonicalEventKey)
+            ->and($existing->fresh()->resolved_at)->toBeNull()
+            ->and($candidate->fresh()->active_event_key)->toBeNull();
+    } finally {
+        $candidate?->delete();
+
+        Schema::table('fleet_notifications', function ($table) {
+            $table->unique(
+                ['user_id', 'event_key'],
+                TAE_LEGACY_UNIQUE_INDEX
+            );
+        });
+    }
+});
+
+it('does not accept a collision winner with a mismatched canonical key', function () {
+    $user = trustedActiveEventUser();
+    $canonicalEventKey = 'maintenance_due:112:2026-12-12';
     $existing = trustedActiveEventNotification(
         $user,
-        'maintenance_due:999:2026-12-04'
+        'maintenance_due:999:2026-12-12'
     );
     $existing->active_event_key = $canonicalEventKey;
     $existing->save();
@@ -139,9 +179,46 @@ it('rejects an existing active occurrence collision for the same user', function
 
     expect(fn () => trustedActiveEventService()
         ->assignMaintenanceEventKey($candidate, $canonicalEventKey))
-        ->toThrow(LogicException::class)
+        ->toThrow(UniqueConstraintViolationException::class)
         ->and($existing->fresh()->active_event_key)->toBe($canonicalEventKey)
         ->and($candidate->fresh()->active_event_key)->toBeNull();
+});
+
+it('does not accept a resolved collision winner', function () {
+    $user = trustedActiveEventUser();
+    $canonicalEventKey = 'maintenance_due:113:2026-12-13';
+
+    Schema::table('fleet_notifications', function ($table) {
+        $table->dropUnique(TAE_LEGACY_UNIQUE_INDEX);
+    });
+
+    $candidate = null;
+
+    try {
+        $existing = trustedActiveEventNotification($user, $canonicalEventKey);
+        $existing->forceFill([
+            'active_event_key' => $canonicalEventKey,
+            'resolved_at' => now(),
+            'resolution_reason' => 'schedule_changed',
+        ])->save();
+        $candidate = trustedActiveEventNotification($user, $canonicalEventKey);
+
+        expect(fn () => trustedActiveEventService()
+            ->assignMaintenanceEventKey($candidate, $canonicalEventKey))
+            ->toThrow(UniqueConstraintViolationException::class)
+            ->and($existing->fresh()->resolved_at)->not->toBeNull()
+            ->and($existing->fresh()->active_event_key)->toBe($canonicalEventKey)
+            ->and($candidate->fresh()->active_event_key)->toBeNull();
+    } finally {
+        $candidate?->delete();
+
+        Schema::table('fleet_notifications', function ($table) {
+            $table->unique(
+                ['user_id', 'event_key'],
+                TAE_LEGACY_UNIQUE_INDEX
+            );
+        });
+    }
 });
 
 it('allows different users to hold the same active event identity', function () {
