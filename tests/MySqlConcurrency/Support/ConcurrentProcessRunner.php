@@ -13,10 +13,16 @@ final class ConcurrentProcessRunner
 
     private Closure $treeTerminator;
 
-    public function __construct(?Closure $processFactory = null, ?Closure $treeTerminator = null)
-    {
+    private Closure $environmentFactory;
+
+    public function __construct(
+        ?Closure $processFactory = null,
+        ?Closure $treeTerminator = null,
+        ?Closure $environmentFactory = null
+    ) {
         $this->processFactory = $processFactory ?? fn (array $command, int $timeout): Process => $this->makeProcess($command, $timeout);
         $this->treeTerminator = $treeTerminator ?? fn (Process $process): bool => $this->terminateProcessTree($process);
+        $this->environmentFactory = $environmentFactory ?? fn (): array => HarnessEnvironment::workerEnvironment();
     }
 
     /**
@@ -79,7 +85,7 @@ final class ConcurrentProcessRunner
 
     private function makeProcess(array $command, int $timeoutSeconds): Process
     {
-        $process = new Process($command, base_path(), HarnessEnvironment::workerEnvironment());
+        $process = new Process($command, base_path(), ($this->environmentFactory)());
         $process->setTimeout($timeoutSeconds);
 
         $options = self::processOptions();
@@ -140,15 +146,6 @@ final class ConcurrentProcessRunner
 
     private function sanitizeDiagnostic(string $diagnostic): string
     {
-        $secrets = array_filter([
-            $_ENV['MYSQL_CONCURRENCY_PASSWORD'] ?? null,
-            $_SERVER['MYSQL_CONCURRENCY_PASSWORD'] ?? null,
-            getenv('MYSQL_CONCURRENCY_PASSWORD') ?: null,
-            $_ENV['MYSQL_CONCURRENCY_ROOT_PASSWORD'] ?? null,
-            $_SERVER['MYSQL_CONCURRENCY_ROOT_PASSWORD'] ?? null,
-            getenv('MYSQL_CONCURRENCY_ROOT_PASSWORD') ?: null,
-        ], fn (mixed $secret): bool => is_string($secret) && $secret !== '');
-
-        return str_replace(array_values(array_unique($secrets)), '[REDACTED]', $diagnostic);
+        return HarnessEnvironment::sanitizeDiagnostic($diagnostic);
     }
 }

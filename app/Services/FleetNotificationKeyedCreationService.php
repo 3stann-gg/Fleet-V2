@@ -12,7 +12,8 @@ use LogicException;
 class FleetNotificationKeyedCreationService
 {
     public function __construct(
-        private FleetNotificationSchemaReadinessService $schemaReadiness
+        private FleetNotificationSchemaReadinessService $schemaReadiness,
+        private MaintenanceNotificationOccurrenceGuard $maintenanceOccurrenceGuard
     ) {}
 
     /**
@@ -32,6 +33,26 @@ class FleetNotificationKeyedCreationService
         ?string $link
     ): FleetNotification {
         $this->schemaReadiness->assertOccurrenceActivationReady();
+
+        return $this->maintenanceOccurrenceGuard->run(
+            $eventKey,
+            fn (): FleetNotification => $this->createOrUpdateWithActiveIdentity(
+                $user,
+                $title,
+                $message,
+                $eventKey,
+                $link
+            )
+        );
+    }
+
+    private function createOrUpdateWithActiveIdentity(
+        User $user,
+        string $title,
+        string $message,
+        string $eventKey,
+        ?string $link
+    ): FleetNotification {
 
         try {
             return DB::transaction(

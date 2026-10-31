@@ -2,10 +2,17 @@
 
 namespace Tests\MySqlConcurrency\Support;
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use RuntimeException;
 
 final class HarnessSafetyPolicy
 {
+    public const ACTIVE_EVENT_UNIQUE_INDEX = 'fleet_notifications_user_active_event_unique';
+
+    public const LEGACY_EVENT_UNIQUE_INDEX = 'fleet_notifications_user_id_event_key_unique';
+
+    public const NOTIFICATION_TABLE = 'fleet_notifications';
+
     private const APPLICATION_SCHEMA_GRANT_TARGET = '`fleet\_concurrency\_test`.*';
 
     private const SENTINEL_GRANT_TARGET = '`fleet_concurrency_guard_test`.`_concurrency_test_guard`';
@@ -23,6 +30,24 @@ final class HarnessSafetyPolicy
     public const ENVIRONMENT = 'mysql-concurrency-test';
 
     public const GUARD_DATABASE = 'fleet_concurrency_guard_test';
+
+    /** @var list<string> */
+    public const RUNNER_MODES = [
+        '--prepare-only',
+        '--smoke-only',
+        '--business-only',
+        '--prepare-and-smoke',
+        '--prepare-and-occurrence',
+    ];
+
+    public static function assertRunnerMode(string $mode): void
+    {
+        if (! in_array($mode, self::RUNNER_MODES, true)) {
+            throw new RuntimeException(
+                'Refusing to run. Choose an explicitly guarded MySQL concurrency mode.'
+            );
+        }
+    }
 
     /** @param array<string, mixed> $configuration */
     public static function assertConfiguration(array $configuration): void
@@ -243,6 +268,206 @@ final class HarnessSafetyPolicy
     {
         if ($exitCode !== 0) {
             throw new RuntimeException('The guarded MySQL business concurrency tests failed or were considered risky.');
+        }
+    }
+
+    public static function assertSuccessfulOccurrenceTestExitCode(int $exitCode): void
+    {
+        if ($exitCode !== 0) {
+            throw new RuntimeException('The guarded MySQL occurrence concurrency tests failed or were considered risky.');
+        }
+    }
+
+    /**
+     * @param  array<string, int|string|null>  $response
+     */
+    public static function assertExpectedStaleWinnerResponse(array $response): void
+    {
+        $connectionId = filter_var(
+            $response['connection_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        $expected = [
+            'connection_id' => $connectionId,
+            'outcome' => 'expected_stale_winner_conflict',
+            'exception' => UniqueConstraintViolationException::class,
+            'driver_code' => 1062,
+            'index_name' => self::ACTIVE_EVENT_UNIQUE_INDEX,
+        ];
+
+        if (! is_int($connectionId) || $response !== $expected) {
+            throw new RuntimeException('The occurrence worker returned an unexpected stale-winner outcome.');
+        }
+    }
+
+    /**
+     * @param  array<string, array<string, bool|int|string|null>>  $results
+     */
+    public static function assertSuccessfulOccurrenceCreationRaceResults(
+        array $results,
+        string $eventKey
+    ): void {
+        if (count($results) !== 2) {
+            throw new RuntimeException('The occurrence creation race must return exactly two worker results.');
+        }
+
+        $connectionIds = [];
+        $notificationIds = [];
+        $outcomes = [];
+
+        foreach ($results as $result) {
+            $connectionId = filter_var(
+                $result['connection_id'] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            $notificationId = filter_var(
+                $result['notification_id'] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            $outcome = $result['outcome'] ?? null;
+
+            if (
+                ! is_int($connectionId)
+                || ! is_int($notificationId)
+                || ! in_array($outcome, ['created', 'recovered'], true)
+                || ($result['event_key'] ?? null) !== $eventKey
+                || ($result['active_event_key'] ?? null) !== $eventKey
+                || ($result['status'] ?? null) !== 'Unread'
+            ) {
+                throw new RuntimeException('The occurrence creation worker returned an invalid successful result.');
+            }
+
+            $expectedEvidence = $outcome === 'created'
+                ? [true, false]
+                : [false, true];
+            $actualEvidence = [
+                $result['initial_insert_committed'] ?? null,
+                $result['active_collision_recovered'] ?? null,
+            ];
+
+            if ($actualEvidence !== $expectedEvidence) {
+                throw new RuntimeException('The occurrence creation worker returned contradictory outcome evidence.');
+            }
+
+            $connectionIds[] = $connectionId;
+            $notificationIds[] = $notificationId;
+            $outcomes[] = $outcome;
+        }
+
+        sort($outcomes);
+
+        if (
+            count(array_unique($connectionIds)) !== 2
+            || count(array_unique($notificationIds)) !== 1
+            || $outcomes !== ['created', 'recovered']
+        ) {
+            throw new RuntimeException('The occurrence creation race did not produce one creator and one collision recovery.');
+        }
+    }
+
+    /**
+     * @param  array{occurrences: bool, after_commit: bool, scheduled_recovery: bool, historical: bool}  $flags
+     */
+    public static function assertLifecycleFlags(array $flags, bool $occurrenceMode): void
+    {
+        $expected = [
+            'occurrences' => $occurrenceMode,
+            'after_commit' => false,
+            'scheduled_recovery' => false,
+            'historical' => false,
+        ];
+
+        if ($flags !== $expected) {
+            throw new RuntimeException('Notification lifecycle flags do not match the guarded test mode.');
+        }
+    }
+
+    /**
+     * @param  iterable<int, object|array<string, mixed>>  $rows
+     */
+    public static function assertNotificationIndexes(
+        iterable $rows,
+        bool $legacyExpected
+    ): void {
+        $indexes = [];
+
+        foreach ($rows as $row) {
+            $attributes = (array) $row;
+
+            foreach (
+                ['schema_name', 'table_name', 'index_name', 'non_unique', 'sequence_number', 'column_name'] as $requiredAttribute
+            ) {
+                if (! array_key_exists($requiredAttribute, $attributes)) {
+                    throw new RuntimeException("The notification index result is missing the required {$requiredAttribute} alias.");
+                }
+            }
+
+            if (
+                $attributes['schema_name'] !== self::DATABASE
+                || $attributes['table_name'] !== self::NOTIFICATION_TABLE
+                || ! is_string($attributes['index_name'])
+                || ! is_string($attributes['column_name'])
+            ) {
+                throw new RuntimeException('Notification index metadata belongs to an unexpected schema, table, or identifier.');
+            }
+
+            $sequence = filter_var(
+                $attributes['sequence_number'],
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            $nonUnique = filter_var(
+                $attributes['non_unique'],
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 0, 'max_range' => 1]]
+            );
+
+            if (! is_int($sequence) || ! is_int($nonUnique)) {
+                throw new RuntimeException('Notification index metadata has an invalid sequence or uniqueness value.');
+            }
+
+            $name = $attributes['index_name'];
+
+            if (isset($indexes[$name]['columns'][$sequence])) {
+                throw new RuntimeException("Notification index {$name} contains duplicate sequence metadata.");
+            }
+
+            if (isset($indexes[$name]['non_unique']) && $indexes[$name]['non_unique'] !== $nonUnique) {
+                throw new RuntimeException("Notification index {$name} has inconsistent uniqueness metadata.");
+            }
+
+            $indexes[$name]['non_unique'] = $nonUnique;
+            $indexes[$name]['columns'][$sequence] = $attributes['column_name'];
+        }
+
+        foreach ($indexes as &$index) {
+            ksort($index['columns']);
+            $index['columns'] = array_values($index['columns']);
+        }
+        unset($index);
+
+        $expectedUniqueIndexes = [
+            'PRIMARY' => ['id'],
+            self::ACTIVE_EVENT_UNIQUE_INDEX => ['user_id', 'active_event_key'],
+        ];
+
+        if ($legacyExpected) {
+            $expectedUniqueIndexes[self::LEGACY_EVENT_UNIQUE_INDEX] = ['user_id', 'event_key'];
+        }
+
+        $actualUniqueIndexes = collect($indexes)
+            ->filter(fn (array $index): bool => $index['non_unique'] === 0)
+            ->map(fn (array $index): array => $index['columns'])
+            ->all();
+
+        ksort($expectedUniqueIndexes);
+        ksort($actualUniqueIndexes);
+
+        if ($actualUniqueIndexes !== $expectedUniqueIndexes) {
+            throw new RuntimeException('The disposable notification unique-index contract is missing or unexpected.');
         }
     }
 

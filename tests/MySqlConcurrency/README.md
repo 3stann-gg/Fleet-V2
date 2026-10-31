@@ -59,4 +59,47 @@ Generate a new instance UUID before the next container initialization.
 
 The process runner tracks only workers it starts. On Windows it creates a new process group and uses `taskkill /T /F` for a timed-out worker PID, then verifies the direct process stopped. On other platforms workers must remain single-level because descendant cleanup is not guaranteed without a platform-specific process supervisor.
 
-`MySqlEnvironmentTest.php` contains the live environment smoke tests. The ten tests in `MaintenanceNotificationConcurrencyTest.php` remain explicit pending specifications; they are not evidence that business concurrency behavior works.
+`MySqlEnvironmentTest.php` contains the live environment smoke tests. `MaintenanceNotificationConcurrencyTest.php` contains the ten baseline business scenarios. Run either suite only through its explicit guarded mode.
+
+## Future occurrence index-transition tests
+
+The occurrence suite models the future schema in which
+`UNIQUE(user_id, event_key)` has been removed while
+`UNIQUE(user_id, active_event_key)` remains authoritative. It is intentionally
+separate from smoke and baseline business tests:
+
+```powershell
+php tests/MySqlConcurrency/bin/run.php --prepare-and-occurrence
+```
+
+This is a destructive command for the disposable `fleet_concurrency_test`
+schema only. The guarded runner acquires the instance-specific advisory lock,
+rebuilds the schema, verifies the exact baseline index contract and an empty
+notification table, drops only the exact legacy index, and verifies the exact
+active-only contract before starting the occurrence child process. The child
+enables only `FLEET_NOTIFICATION_OCCURRENCES_ENABLED`; reconciliation, scheduled
+recovery, and historical reconciliation remain disabled.
+
+MySQL index DDL commits implicitly, so the runner does not claim transaction
+rollback protection. Its `finally`-style coordinator always performs a full
+guarded disposable-schema rebuild and verifies that the legacy baseline index
+contract has been restored. A cleanup failure is reported alongside any test
+failure and must be treated as a hard failure. If the process or machine is
+interrupted before cleanup finishes, do not use `--smoke-only` or
+`--business-only`; those modes reject an active-only schema. Recover with the
+guarded baseline preparation command after confirming the endpoint, database,
+sentinel, account, privileges, and advisory-lock safeguards:
+
+```powershell
+php tests/MySqlConcurrency/bin/run.php --prepare-only
+```
+
+The occurrence scenarios persist and inspect real notification history in the
+disposable schema. Scenario 9 previously exposed a production source-authority
+coordination defect. After the maintenance occurrence authority guard was
+implemented, the guarded MySQL 8.4 test verified reconciliation completing
+before stale creation, rejection as `source_rejected` / `schedule_changed`, and
+zero unresolved obsolete notifications. Additional overlapping Maintenance
+concurrency scenarios remain pending and must not be treated as verified by
+this result. A nonzero suite result remains evidence of a production locking or
+design gap, not permission to weaken or skip an assertion.

@@ -52,9 +52,23 @@ final class HarnessEnvironment
             'MYSQL_CONCURRENCY_PASSWORD' => $values['password'],
             'MYSQL_CONCURRENCY_INSTANCE_ID' => $values['instance_id'],
             'MYSQL_CONCURRENCY_LOCK_TIMEOUT_SECONDS' => self::value('MYSQL_CONCURRENCY_LOCK_TIMEOUT_SECONDS', '5'),
+            'MYSQL_CONCURRENCY_OCCURRENCE_MODE' => '0',
             'MAIL_MAILER' => 'array',
             'QUEUE_CONNECTION' => 'sync',
+            'FLEET_NOTIFICATION_OCCURRENCES_ENABLED' => 'false',
+            'FLEET_NOTIFICATION_AFTER_COMMIT_RECONCILIATION_ENABLED' => 'false',
+            'FLEET_NOTIFICATION_SCHEDULED_RECOVERY_ENABLED' => 'false',
+            'FLEET_NOTIFICATION_HISTORICAL_RECONCILIATION_ENABLED' => 'false',
         ];
+    }
+
+    /** @return array<string, string> */
+    public static function occurrenceProcessEnvironment(): array
+    {
+        return array_replace(self::processEnvironment(), [
+            'MYSQL_CONCURRENCY_OCCURRENCE_MODE' => '1',
+            'FLEET_NOTIFICATION_OCCURRENCES_ENABLED' => 'true',
+        ]);
     }
 
     public static function inheritedValue(string $name): ?string
@@ -82,6 +96,16 @@ final class HarnessEnvironment
         );
     }
 
+    /** @return array<int, string> */
+    public static function occurrenceTestCommand(string $projectRoot): array
+    {
+        return self::testCommand(
+            $projectRoot,
+            $projectRoot.'/tests/MySqlConcurrency/NotificationOccurrenceConcurrencyTest.php',
+            $projectRoot.'/phpunit.mysql-occurrence.xml'
+        );
+    }
+
     /** @return array<string, string> */
     public static function workerEnvironment(): array
     {
@@ -93,6 +117,26 @@ final class HarnessEnvironment
         }
 
         return array_merge(self::processEnvironment(), [
+            'MYSQL_CONCURRENCY_PARENT_LOCK_NAME' => $lockName,
+            'MYSQL_CONCURRENCY_PARENT_LOCK_OWNER' => $lockOwner,
+        ]);
+    }
+
+    /** @return array<string, string> */
+    public static function occurrenceWorkerEnvironment(): array
+    {
+        if (self::inheritedValue('MYSQL_CONCURRENCY_OCCURRENCE_MODE') !== '1') {
+            throw new RuntimeException('Occurrence workers require the dedicated occurrence test mode.');
+        }
+
+        $lockName = self::inheritedValue('MYSQL_CONCURRENCY_PARENT_LOCK_NAME');
+        $lockOwner = self::inheritedValue('MYSQL_CONCURRENCY_PARENT_LOCK_OWNER');
+
+        if ($lockName === null || $lockOwner === null) {
+            throw new RuntimeException('Occurrence workers require the guarded parent lock handoff.');
+        }
+
+        return array_merge(self::occurrenceProcessEnvironment(), [
             'MYSQL_CONCURRENCY_PARENT_LOCK_NAME' => $lockName,
             'MYSQL_CONCURRENCY_PARENT_LOCK_OWNER' => $lockOwner,
         ]);
@@ -114,13 +158,51 @@ final class HarnessEnvironment
         ];
     }
 
-    /** @return array<int, string> */
-    private static function testCommand(string $projectRoot, string $testFile): array
+    /**
+     * @param  array<string, int|string|null>  $payload
+     * @return array<int, string>
+     */
+    public static function occurrenceWorkerCommand(string $projectRoot, string $action, array $payload): array
     {
+        $encodedPayload = base64_encode((string) json_encode($payload, JSON_THROW_ON_ERROR));
+
+        return [
+            PHP_BINARY,
+            $projectRoot.'/tests/MySqlConcurrency/bin/occurrence-worker.php',
+            $action,
+            $encodedPayload,
+        ];
+    }
+
+    public static function occurrenceModeRequested(): bool
+    {
+        return self::inheritedValue('MYSQL_CONCURRENCY_OCCURRENCE_MODE') === '1';
+    }
+
+    public static function sanitizeDiagnostic(string $diagnostic): string
+    {
+        $secrets = array_filter([
+            self::value('MYSQL_CONCURRENCY_PASSWORD'),
+            self::value('MYSQL_CONCURRENCY_ROOT_PASSWORD'),
+        ], fn (string $secret): bool => $secret !== '');
+
+        return str_replace(
+            array_values(array_unique($secrets)),
+            '[REDACTED]',
+            $diagnostic
+        );
+    }
+
+    /** @return array<int, string> */
+    private static function testCommand(
+        string $projectRoot,
+        string $testFile,
+        ?string $configuration = null
+    ): array {
         return [
             PHP_BINARY,
             $projectRoot.'/vendor/bin/pest',
-            '--configuration='.$projectRoot.'/phpunit.mysql-concurrency.xml',
+            '--configuration='.($configuration ?? $projectRoot.'/phpunit.mysql-concurrency.xml'),
             '--display-all-issues',
             '--fail-on-risky',
             $testFile,

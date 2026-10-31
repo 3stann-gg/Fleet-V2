@@ -5,6 +5,7 @@ use App\Models\User;
 use App\Services\FleetNotificationKeyedCreationService;
 use App\Services\FleetNotificationSchemaReadinessService;
 use App\Services\FleetNotificationService;
+use App\Services\MaintenanceNotificationOccurrenceGuard;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -472,7 +473,7 @@ it('treats an equivalently renamed legacy unique index as an activation blocker'
 it('selects the explicit active occurrence and preserves acknowledgement', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7007:2026-12-07';
+    $eventKey = 'compatibility_event:7007';
     $active = fcfNotification($user, $eventKey, ['status' => 'Read']);
     $active->forceFill(['active_event_key' => $eventKey])->save();
 
@@ -495,10 +496,10 @@ it('selects the explicit active occurrence and preserves acknowledgement', funct
 it('rejects an existing active row with a mismatched canonical key', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $activeKey = 'maintenance_due:7015:2026-12-15';
+    $activeKey = 'compatibility_event:7015';
     $notification = fcfNotification(
         $user,
-        'maintenance_due:7015:2026-12-16',
+        'compatibility_event:7015:mismatch',
         ['status' => 'Read']
     );
     $notification->forceFill(['active_event_key' => $activeKey])->save();
@@ -518,7 +519,7 @@ it('rejects an existing active row with a mismatched canonical key', function ()
 it('rejects an existing resolved row that retains an active key', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7016:2026-12-16';
+    $eventKey = 'compatibility_event:7016';
     $notification = fcfNotification($user, $eventKey, ['status' => 'Read']);
     $notification->forceFill([
         'active_event_key' => $eventKey,
@@ -542,7 +543,7 @@ it('fails closed when an insert winner changes before recovery locking', functio
     string $change
 ) {
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7017:2026-12-17';
+    $eventKey = 'compatibility_event:7017';
     $winner = fcfNotification($user, $eventKey, ['status' => 'Read']);
     $winner->forceFill(['active_event_key' => $eventKey])->save();
 
@@ -556,7 +557,7 @@ it('fails closed when an insert winner changes before recovery locking', functio
         $lookup = 0;
         $service = Mockery::mock(
             FleetNotificationKeyedCreationService::class,
-            [$readiness]
+            [$readiness, app(MaintenanceNotificationOccurrenceGuard::class)]
         )->makePartial()->shouldAllowMockingProtectedMethods();
         $service->shouldReceive('lockActiveOccurrence')
             ->twice()
@@ -600,7 +601,7 @@ it('fails closed when an insert winner changes before recovery locking', functio
 it('initializes a future active occurrence as unread in the dormant mechanism', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7013:2026-12-13';
+    $eventKey = 'compatibility_event:7013';
 
     $notification = FleetNotificationService::createForUserWhenEnabled(
         $user,
@@ -621,7 +622,7 @@ it('initializes a future active occurrence as unread in the dormant mechanism', 
 it('leaves final rollback ownership with an ambient transaction', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7018:2026-12-18';
+    $eventKey = 'compatibility_event:7018';
 
     DB::beginTransaction();
 
@@ -668,7 +669,7 @@ it('classifies only the active-key unique constraint as an expected race', funct
 it('rethrows legacy unique conflicts instead of misclassifying them', function () {
     fcfAllowOccurrenceFoundation();
     $user = fcfUser();
-    $eventKey = 'maintenance_due:7010:2026-12-10';
+    $eventKey = 'compatibility_event:7010';
     $resolved = fcfNotification($user, $eventKey);
     $resolved->forceFill([
         'resolved_at' => now(),

@@ -10,7 +10,11 @@ require $projectRoot.'/vendor/autoload.php';
 HarnessEnvironment::load($projectRoot);
 HarnessSafetyPolicy::assertConfiguration(HarnessEnvironment::values());
 
-foreach (HarnessEnvironment::processEnvironment() as $name => $value) {
+$environment = HarnessEnvironment::occurrenceModeRequested()
+    ? HarnessEnvironment::occurrenceProcessEnvironment()
+    : HarnessEnvironment::processEnvironment();
+
+foreach ($environment as $name => $value) {
     putenv("{$name}={$value}");
     $_ENV[$name] = $value;
     $_SERVER[$name] = $value;

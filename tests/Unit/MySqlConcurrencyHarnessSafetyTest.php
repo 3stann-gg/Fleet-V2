@@ -1,5 +1,9 @@
 <?php
 
+use App\Services\FleetNotificationKeyedCreationService;
+use App\Services\FleetNotificationSchemaReadinessService;
+use App\Services\MaintenanceNotificationOccurrenceGuard;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Mockery as M;
 use Symfony\Component\Process\Process;
 use Tests\MySqlConcurrency\Support\AuditFailureConstraint;
@@ -7,6 +11,57 @@ use Tests\MySqlConcurrency\Support\ConcurrentProcessRunner;
 use Tests\MySqlConcurrency\Support\HarnessEnvironment;
 use Tests\MySqlConcurrency\Support\HarnessSafetyPolicy;
 use Tests\MySqlConcurrency\Support\MySqlAdvisoryLock;
+use Tests\MySqlConcurrency\Support\OccurrenceConcurrencyWorker;
+use Tests\MySqlConcurrency\Support\OccurrenceRunCoordinator;
+
+/** @return array<int, object> */
+function notificationIndexRows(bool $legacy = true): array
+{
+    $definitions = [
+        'PRIMARY' => ['id'],
+        HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX => ['user_id', 'active_event_key'],
+    ];
+
+    if ($legacy) {
+        $definitions[HarnessSafetyPolicy::LEGACY_EVENT_UNIQUE_INDEX] = ['user_id', 'event_key'];
+    }
+
+    $rows = [];
+    foreach ($definitions as $name => $columns) {
+        foreach ($columns as $offset => $column) {
+            $rows[] = (object) [
+                'schema_name' => HarnessSafetyPolicy::DATABASE,
+                'table_name' => HarnessSafetyPolicy::NOTIFICATION_TABLE,
+                'index_name' => $name,
+                'non_unique' => 0,
+                'sequence_number' => $offset + 1,
+                'column_name' => $column,
+            ];
+        }
+    }
+
+    return $rows;
+}
+
+function harnessUniqueViolation(string $indexName): UniqueConstraintViolationException
+{
+    $previous = new PDOException(
+        "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry for key '{$indexName}'",
+        1062
+    );
+    $previous->errorInfo = [
+        '23000',
+        1062,
+        "Duplicate entry for key '{$indexName}'",
+    ];
+
+    return new UniqueConstraintViolationException(
+        'mysql_concurrency',
+        'insert into `fleet_notifications` (`user_id`, `active_event_key`) values (?, ?)',
+        [1, 'maintenance_due:1:2027-01-01'],
+        $previous
+    );
+}
 
 function safeHarnessConfiguration(array $overrides = []): array
 {
@@ -378,6 +433,405 @@ it('uses a business-specific failure message and accepts only a zero exit code',
     expect(true)->toBeTrue();
 });
 
+it('accepts only explicit guarded runner modes including occurrence preparation', function () {
+    foreach (HarnessSafetyPolicy::RUNNER_MODES as $mode) {
+        HarnessSafetyPolicy::assertRunnerMode($mode);
+    }
+
+    expect(HarnessSafetyPolicy::RUNNER_MODES)->toContain('--prepare-and-occurrence')
+        ->and(fn () => HarnessSafetyPolicy::assertRunnerMode('--occurrence-only'))
+        ->toThrow(RuntimeException::class);
+});
+
+it('uses a dedicated occurrence command and strict failure propagation', function () {
+    $command = HarnessEnvironment::occurrenceTestCommand('C:/isolated-project');
+
+    expect($command)->toContain('--configuration=C:/isolated-project/phpunit.mysql-occurrence.xml')
+        ->and($command)->toContain('--fail-on-risky')
+        ->and($command)->toContain('C:/isolated-project/tests/MySqlConcurrency/NotificationOccurrenceConcurrencyTest.php')
+        ->and(fn () => HarnessSafetyPolicy::assertSuccessfulOccurrenceTestExitCode(1))
+        ->toThrow(RuntimeException::class, 'occurrence concurrency tests failed')
+        ->and(fn () => HarnessSafetyPolicy::assertSuccessfulOccurrenceTestExitCode(2))
+        ->toThrow(RuntimeException::class, 'occurrence concurrency tests failed');
+
+    HarnessSafetyPolicy::assertSuccessfulOccurrenceTestExitCode(0);
+});
+
+it('classifies only the exact active-index stale-winner conflict', function () {
+    $service = new FleetNotificationKeyedCreationService(
+        new FleetNotificationSchemaReadinessService,
+        app(MaintenanceNotificationOccurrenceGuard::class)
+    );
+    $exception = harnessUniqueViolation(
+        FleetNotificationSchemaReadinessService::ACTIVE_EVENT_UNIQUE_INDEX
+    );
+    $response = OccurrenceConcurrencyWorker::executeCollisionAttempt(
+        fn () => throw $exception,
+        $service
+    );
+
+    expect($response)->toBe([
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ]);
+    HarnessSafetyPolicy::assertExpectedStaleWinnerResponse(array_merge(
+        ['connection_id' => 42],
+        $response
+    ));
+});
+
+it('accepts only one proven occurrence creator and one proven collision recovery', function () {
+    $eventKey = 'occurrence_generic:create:test';
+    $results = [
+        'first' => [
+            'connection_id' => 41,
+            'outcome' => 'created',
+            'notification_id' => 91,
+            'status' => 'Unread',
+            'event_key' => $eventKey,
+            'active_event_key' => $eventKey,
+            'initial_insert_committed' => true,
+            'active_collision_recovered' => false,
+        ],
+        'second' => [
+            'connection_id' => 42,
+            'outcome' => 'recovered',
+            'notification_id' => 91,
+            'status' => 'Unread',
+            'event_key' => $eventKey,
+            'active_event_key' => $eventKey,
+            'initial_insert_committed' => false,
+            'active_collision_recovered' => true,
+        ],
+    ];
+
+    HarnessSafetyPolicy::assertSuccessfulOccurrenceCreationRaceResults($results, $eventKey);
+    HarnessSafetyPolicy::assertSuccessfulOccurrenceCreationRaceResults(array_reverse($results), $eventKey);
+
+    expect(true)->toBeTrue();
+});
+
+it('classifies successful occurrence creation only from exclusive insert or collision evidence', function () {
+    expect(OccurrenceConcurrencyWorker::classifySuccessfulCreationOutcome(true, false))->toBe('created')
+        ->and(OccurrenceConcurrencyWorker::classifySuccessfulCreationOutcome(false, true))->toBe('recovered')
+        ->and(fn () => OccurrenceConcurrencyWorker::classifySuccessfulCreationOutcome(false, false))
+        ->toThrow(RuntimeException::class)
+        ->and(fn () => OccurrenceConcurrencyWorker::classifySuccessfulCreationOutcome(true, true))
+        ->toThrow(RuntimeException::class);
+});
+
+it('recognizes only successful notification inserts on the isolated worker connection', function () {
+    expect(OccurrenceConcurrencyWorker::isSuccessfulNotificationInsertQuery(
+        'mysql_concurrency',
+        'insert into `fleet_notifications` (`user_id`, `event_key`) values (?, ?)'
+    ))->toBeTrue()
+        ->and(OccurrenceConcurrencyWorker::isSuccessfulNotificationInsertQuery(
+            'mysql_concurrency_control',
+            'insert into `fleet_notifications` (`user_id`, `event_key`) values (?, ?)'
+        ))->toBeFalse()
+        ->and(OccurrenceConcurrencyWorker::isSuccessfulNotificationInsertQuery(
+            'mysql_concurrency',
+            'insert into `audit_logs` (`action`) values (?)'
+        ))->toBeFalse()
+        ->and(OccurrenceConcurrencyWorker::isSuccessfulNotificationInsertQuery(
+            'mysql_concurrency',
+            'update `fleet_notifications` set `message` = ?'
+        ))->toBeFalse();
+});
+
+it('rejects invalid occurrence creation race classifications', function (Closure $mutate) {
+    $eventKey = 'occurrence_generic:create:test';
+    $results = [
+        'first' => [
+            'connection_id' => 41,
+            'outcome' => 'created',
+            'notification_id' => 91,
+            'status' => 'Unread',
+            'event_key' => $eventKey,
+            'active_event_key' => $eventKey,
+            'initial_insert_committed' => true,
+            'active_collision_recovered' => false,
+        ],
+        'second' => [
+            'connection_id' => 42,
+            'outcome' => 'recovered',
+            'notification_id' => 91,
+            'status' => 'Unread',
+            'event_key' => $eventKey,
+            'active_event_key' => $eventKey,
+            'initial_insert_committed' => false,
+            'active_collision_recovered' => true,
+        ],
+    ];
+
+    expect(fn () => HarnessSafetyPolicy::assertSuccessfulOccurrenceCreationRaceResults(
+        $mutate($results),
+        $eventKey
+    ))->toThrow(RuntimeException::class);
+})->with([
+    'two creators' => [function (array $results): array {
+        $results['second']['outcome'] = 'created';
+        $results['second']['initial_insert_committed'] = true;
+        $results['second']['active_collision_recovered'] = false;
+
+        return $results;
+    }],
+    'two recoveries' => [function (array $results): array {
+        $results['first']['outcome'] = 'recovered';
+        $results['first']['initial_insert_committed'] = false;
+        $results['first']['active_collision_recovered'] = true;
+
+        return $results;
+    }],
+    'unknown outcome' => [function (array $results): array {
+        $results['second']['outcome'] = 'unknown';
+
+        return $results;
+    }],
+    'missing evidence' => [function (array $results): array {
+        unset($results['first']['initial_insert_committed']);
+
+        return $results;
+    }],
+    'contradictory evidence' => [function (array $results): array {
+        $results['second']['initial_insert_committed'] = true;
+
+        return $results;
+    }],
+    'same connection identity' => [function (array $results): array {
+        $results['second']['connection_id'] = $results['first']['connection_id'];
+
+        return $results;
+    }],
+    'different notification identity' => [function (array $results): array {
+        $results['second']['notification_id'] = 92;
+
+        return $results;
+    }],
+    'worker error response' => [function (array $results): array {
+        $results['second'] = [
+            'connection_id' => 42,
+            'outcome' => 'error',
+            'message' => 'worker failed',
+        ];
+
+        return $results;
+    }],
+]);
+
+it('propagates unrelated logic and unique-constraint failures from collision attempts', function () {
+    $service = new FleetNotificationKeyedCreationService(
+        new FleetNotificationSchemaReadinessService,
+        app(MaintenanceNotificationOccurrenceGuard::class)
+    );
+    $logicFailure = new LogicException('Unexpected readiness defect.');
+    $uniqueFailure = harnessUniqueViolation('cc_unrelated_unique_index');
+
+    expect(fn () => OccurrenceConcurrencyWorker::executeCollisionAttempt(
+        fn () => throw $logicFailure,
+        $service
+    ))->toThrow($logicFailure)
+        ->and(fn () => OccurrenceConcurrencyWorker::executeCollisionAttempt(
+            fn () => throw $uniqueFailure,
+            $service
+        ))->toThrow($uniqueFailure);
+});
+
+it('rejects malformed and unexpected stale-winner worker responses', function (array $response) {
+    expect(fn () => HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response))
+        ->toThrow(RuntimeException::class);
+})->with([
+    'old generic outcome' => [[
+        'connection_id' => 42,
+        'outcome' => 'failed_closed',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ]],
+    'logic exception accepted' => [[
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => LogicException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ]],
+    'wrong index' => [[
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => 'cc_unrelated_unique_index',
+    ]],
+    'missing field' => [[
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+    ]],
+    'missing connection identity' => [[
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ]],
+]);
+
+it('enforces exact lifecycle flags for baseline and occurrence child processes', function () {
+    HarnessSafetyPolicy::assertLifecycleFlags([
+        'occurrences' => false,
+        'after_commit' => false,
+        'scheduled_recovery' => false,
+        'historical' => false,
+    ], false);
+    HarnessSafetyPolicy::assertLifecycleFlags([
+        'occurrences' => true,
+        'after_commit' => false,
+        'scheduled_recovery' => false,
+        'historical' => false,
+    ], true);
+
+    expect(fn () => HarnessSafetyPolicy::assertLifecycleFlags([
+        'occurrences' => true,
+        'after_commit' => true,
+        'scheduled_recovery' => false,
+        'historical' => false,
+    ], true))->toThrow(RuntimeException::class);
+});
+
+it('accepts only the exact baseline and active-only notification index contracts', function () {
+    HarnessSafetyPolicy::assertNotificationIndexes(notificationIndexRows(), true);
+    HarnessSafetyPolicy::assertNotificationIndexes(notificationIndexRows(false), false);
+
+    expect(true)->toBeTrue();
+});
+
+it('keeps harness index constants aligned with the committed migrations', function () {
+    $projectRoot = dirname(__DIR__, 2);
+    $legacyMigration = file_get_contents($projectRoot.'/database/migrations/2026_08_23_131214_add_event_key_to_fleet_notifications_table.php');
+    $activeMigration = file_get_contents($projectRoot.'/database/migrations/2026_10_30_061626_add_active_event_key_to_fleet_notifications_table.php');
+
+    expect($legacyMigration)->toContain("'user_id',\n                'event_key'")
+        ->and(HarnessSafetyPolicy::LEGACY_EVENT_UNIQUE_INDEX)->toBe('fleet_notifications_user_id_event_key_unique')
+        ->and($activeMigration)->toContain("'fleet_notifications_user_active_event_unique'")
+        ->and($activeMigration)->toContain("'active_event_key'");
+});
+
+it('rejects missing renamed reordered and cross-schema notification indexes', function (array $rows, bool $legacyExpected) {
+    expect(fn () => HarnessSafetyPolicy::assertNotificationIndexes($rows, $legacyExpected))
+        ->toThrow(RuntimeException::class);
+})->with(function (): array {
+    $missingActive = collect(notificationIndexRows(false))
+        ->reject(fn (object $row): bool => $row->index_name === HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX)
+        ->values()->all();
+    $renamed = notificationIndexRows(false);
+    foreach ($renamed as $row) {
+        if ($row->index_name === HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX) {
+            $row->index_name = 'renamed_active_unique';
+        }
+    }
+    $reordered = notificationIndexRows(false);
+    foreach ($reordered as $row) {
+        if ($row->index_name === HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX) {
+            $row->sequence_number = $row->sequence_number === 1 ? 2 : 1;
+        }
+    }
+    $crossSchema = notificationIndexRows(false);
+    $crossSchema[0]->schema_name = 'normal_development';
+
+    return [
+        'missing active unique' => [$missingActive, false],
+        'renamed active unique' => [$renamed, false],
+        'reordered active unique' => [$reordered, false],
+        'cross schema metadata' => [$crossSchema, false],
+        'active-only passed as baseline' => [notificationIndexRows(false), true],
+    ];
+});
+
+it('preserves all occurrence execution cleanup and release outcomes', function (
+    bool $executionFails,
+    bool $cleanupFails,
+    bool $releaseFails,
+    array $expectedLabels
+) {
+    $events = [];
+
+    try {
+        (new OccurrenceRunCoordinator)->run(
+            execute: function () use (&$events, $executionFails): void {
+                $events[] = 'execute';
+
+                if ($executionFails) {
+                    throw new LogicException('execution failed');
+                }
+            },
+            cleanup: function () use (&$events, $cleanupFails): void {
+                $events[] = 'cleanup';
+
+                if ($cleanupFails) {
+                    throw new LogicException('cleanup failed');
+                }
+            },
+            release: function () use (&$events, $releaseFails): void {
+                $events[] = 'release';
+
+                if ($releaseFails) {
+                    throw new LogicException('release failed');
+                }
+            }
+        );
+
+        expect($expectedLabels)->toBe([])
+            ->and($events)->toBe(['execute', 'cleanup', 'release']);
+    } catch (RuntimeException $exception) {
+        expect($expectedLabels)->not->toBe([])
+            ->and($events)->toBe(['execute', 'cleanup', 'release']);
+
+        foreach (['Occurrence execution failed', 'Disposable schema cleanup failed', 'Advisory lock release failed'] as $label) {
+            expect(str_contains($exception->getMessage(), $label))->toBe(in_array($label, $expectedLabels, true));
+        }
+    }
+})->with([
+    'all stages succeed' => [false, false, false, []],
+    'execution fails cleanup succeeds' => [true, false, false, ['Occurrence execution failed']],
+    'execution and cleanup fail' => [true, true, false, ['Occurrence execution failed', 'Disposable schema cleanup failed']],
+    'execution and release fail' => [true, false, true, ['Occurrence execution failed', 'Advisory lock release failed']],
+    'all stages fail' => [true, true, true, ['Occurrence execution failed', 'Disposable schema cleanup failed', 'Advisory lock release failed']],
+    'successful tests cleanup fails' => [false, true, false, ['Disposable schema cleanup failed']],
+    'successful tests release fails' => [false, false, true, ['Advisory lock release failed']],
+]);
+
+it('redacts credentials while retaining all coordinated failure labels', function () {
+    $secret = 'coordinator-secret-that-must-not-leak';
+    $previous = getenv('MYSQL_CONCURRENCY_PASSWORD');
+    putenv("MYSQL_CONCURRENCY_PASSWORD={$secret}");
+    $_ENV['MYSQL_CONCURRENCY_PASSWORD'] = $secret;
+    $_SERVER['MYSQL_CONCURRENCY_PASSWORD'] = $secret;
+
+    try {
+        (new OccurrenceRunCoordinator)->run(
+            execute: fn () => throw new LogicException("execution {$secret}"),
+            cleanup: fn () => throw new LogicException("cleanup {$secret}"),
+            release: fn () => throw new LogicException("release {$secret}")
+        );
+        $this->fail('The coordinated failures were not propagated.');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())->toContain('Occurrence execution failed')
+            ->and($exception->getMessage())->toContain('Disposable schema cleanup failed')
+            ->and($exception->getMessage())->toContain('Advisory lock release failed')
+            ->and($exception->getMessage())->toContain('[REDACTED]')
+            ->and($exception->getMessage())->not->toContain($secret);
+    } finally {
+        if (is_string($previous)) {
+            putenv("MYSQL_CONCURRENCY_PASSWORD={$previous}");
+            $_ENV['MYSQL_CONCURRENCY_PASSWORD'] = $previous;
+            $_SERVER['MYSQL_CONCURRENCY_PASSWORD'] = $previous;
+        } else {
+            putenv('MYSQL_CONCURRENCY_PASSWORD');
+            unset($_ENV['MYSQL_CONCURRENCY_PASSWORD'], $_SERVER['MYSQL_CONCURRENCY_PASSWORD']);
+        }
+    }
+});
+
 it('requires primary secondary and control registrations as exact isolated clones', function () {
     $base = [
         'driver' => 'mysql',
@@ -508,6 +962,9 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
     $businessWorker = file_get_contents($projectRoot.'/tests/MySqlConcurrency/Support/BusinessConcurrencyWorker.php');
     $runner = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bin/run.php');
     $auditFailureConstraint = file_get_contents($projectRoot.'/tests/MySqlConcurrency/Support/AuditFailureConstraint.php');
+    $occurrenceConfiguration = file_get_contents($projectRoot.'/phpunit.mysql-occurrence.xml');
+    $occurrenceSpecifications = file_get_contents($projectRoot.'/tests/MySqlConcurrency/NotificationOccurrenceConcurrencyTest.php');
+    $occurrenceWorker = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bin/occurrence-worker.php');
 
     expect($normalConfiguration)->toContain('value="sqlite"')
         ->and($normalConfiguration)->toContain('value=":memory:"')
@@ -529,6 +986,15 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
         ->and($businessWorker)->toContain('}, attempts: 1);')
         ->and($runner)->toContain("'--business-only'")
         ->and($runner)->toContain("\$mode === '--business-only'")
+        ->and($runner)->toContain("'--prepare-and-occurrence'")
+        ->and($runner)->toContain('OccurrenceRunCoordinator')
+        ->and($occurrenceConfiguration)->toContain('value="true" force="true"')
+        ->and($occurrenceConfiguration)->toContain('MYSQL_CONCURRENCY_OCCURRENCE_MODE')
+        ->and(substr_count($occurrenceSpecifications, "it('"))->toBe(11)
+        ->and($occurrenceSpecifications)->not->toContain('->todo(')
+        ->and($occurrenceSpecifications)->toContain("->group('known-production-gap')")
+        ->and($occurrenceWorker)->toContain('IsolatedMySqlEnvironment::assertExternalLockOwner();')
+        ->and($occurrenceWorker)->toContain('HarnessEnvironment::occurrenceWorkerEnvironment()')
         ->and($businessSpecifications)->not->toContain('CREATE TRIGGER')
         ->and($businessSpecifications)->toContain('new AuditFailureConstraint')
         ->and($auditFailureConstraint)->toContain("->where('CONSTRAINT_SCHEMA', HarnessSafetyPolicy::DATABASE)")

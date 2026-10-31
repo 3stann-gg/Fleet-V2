@@ -597,14 +597,18 @@ class FleetNotificationService
         }
 
         if (self::occurrenceCreationEnabled()) {
-            return app(FleetNotificationKeyedCreationService::class)
-                ->createOrUpdateActive(
-                    $user,
-                    $title,
-                    $message,
-                    $eventKey,
-                    $link
-                );
+            try {
+                return app(FleetNotificationKeyedCreationService::class)
+                    ->createOrUpdateActive(
+                        $user,
+                        $title,
+                        $message,
+                        $eventKey,
+                        $link
+                    );
+            } catch (MaintenanceNotificationSourceNotAuthoritativeException) {
+                return null;
+            }
         }
 
         /*
@@ -720,14 +724,18 @@ class FleetNotificationService
         }
 
         if (self::occurrenceCreationEnabled()) {
-            return app(FleetNotificationKeyedCreationService::class)
-                ->createOrUpdateActive(
-                    $user,
-                    $title,
-                    $message,
-                    $eventKey,
-                    $link
-                );
+            try {
+                return app(FleetNotificationKeyedCreationService::class)
+                    ->createOrUpdateActive(
+                        $user,
+                        $title,
+                        $message,
+                        $eventKey,
+                        $link
+                    );
+            } catch (MaintenanceNotificationSourceNotAuthoritativeException) {
+                return null;
+            }
         }
 
         $existing =
