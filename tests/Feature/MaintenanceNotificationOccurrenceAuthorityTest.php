@@ -11,9 +11,11 @@ use App\Services\FleetNotificationService;
 use App\Services\MaintenanceAuthorityChangedException;
 use App\Services\MaintenanceNotificationAuthorityEvaluator;
 use App\Services\MaintenanceNotificationOccurrenceGuard;
+use App\Services\MaintenanceNotificationPresentation;
 use App\Services\MaintenanceNotificationSourceNotAuthoritativeException;
 use App\Services\MaintenanceScheduleResolver;
 use App\Services\MySqlDeadlockRetryService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Mockery\MockInterface;
 
@@ -183,19 +185,188 @@ it('fails closed for malformed and missing maintenance sources', function (strin
 
 it('preserves acknowledgement when updating a valid active occurrence', function () {
     enableOccurrenceAuthorityFoundation();
-    $maintenance = occurrenceAuthorityMaintenance(occurrenceAuthorityVehicle());
+    $vehicle = occurrenceAuthorityVehicle([
+        'brand' => 'Initial',
+        'model' => 'Source',
+    ]);
+    $maintenance = occurrenceAuthorityMaintenance($vehicle);
     $user = occurrenceAuthorityUser();
     $eventKey = occurrenceAuthorityKey($maintenance);
     $first = createAuthoritativeOccurrence($user, $eventKey);
     $first?->update(['status' => 'Read']);
+    $vehicle->update([
+        'brand' => 'Committed',
+        'model' => 'Authority',
+    ]);
 
-    $updated = createAuthoritativeOccurrence($user, $eventKey, 'Maintenance Overdue');
+    $updated = createAuthoritativeOccurrence(
+        $user,
+        $eventKey,
+        'Caller-supplied stale title'
+    );
 
     expect($updated?->id)->toBe($first?->id)
         ->and($updated?->status)->toBe('Read')
-        ->and($updated?->title)->toBe('Maintenance Overdue')
+        ->and($updated?->title)->toBe('Maintenance Due Soon')
+        ->and($updated?->message)->toContain('Committed Authority')
+        ->and($updated?->message)->not->toContain('Initial Source')
         ->and(FleetNotification::query()->count())->toBe(1);
 });
+
+it('uses authoritative vehicle B presentation after reassignment', function () {
+    enableOccurrenceAuthorityFoundation();
+    $vehicleA = occurrenceAuthorityVehicle([
+        'brand' => 'Vehicle A',
+        'model' => 'Stale Source',
+    ]);
+    $vehicleB = occurrenceAuthorityVehicle([
+        'brand' => 'Vehicle B',
+        'model' => 'Authoritative Source',
+    ]);
+    $maintenance = occurrenceAuthorityMaintenance($vehicleA);
+    $eventKey = occurrenceAuthorityKey($maintenance);
+    $maintenance->update(['vehicle_id' => $vehicleB->id]);
+
+    $notification = createAuthoritativeOccurrence(
+        occurrenceAuthorityUser(),
+        $eventKey,
+        'Stale caller title'
+    );
+
+    expect($notification)->toBeInstanceOf(FleetNotification::class)
+        ->and($notification?->message)->toContain('Vehicle B Authoritative Source')
+        ->and($notification?->message)->not->toContain('Vehicle A Stale Source')
+        ->and(FleetNotification::query()->count())->toBe(1);
+});
+
+it('regenerates presentation from the rediscovered source on retry', function () {
+    $vehicleA = occurrenceAuthorityVehicle([
+        'brand' => 'Vehicle A',
+        'model' => 'Rejected Source',
+    ]);
+    $vehicleB = occurrenceAuthorityVehicle([
+        'brand' => 'Vehicle B',
+        'model' => 'Retry Source',
+    ]);
+    $maintenance = occurrenceAuthorityMaintenance($vehicleB);
+    $eventKey = occurrenceAuthorityKey($maintenance);
+    $evaluator = new class(app(MaintenanceScheduleResolver::class), $vehicleA->id, $vehicleB->id, $maintenance, $vehicleB) extends MaintenanceNotificationAuthorityEvaluator
+    {
+        public int $discoveries = 0;
+
+        public function __construct(
+            MaintenanceScheduleResolver $resolver,
+            private int $vehicleAId,
+            private int $vehicleBId,
+            private Maintenance $maintenance,
+            private Vehicle $vehicleB
+        ) {
+            parent::__construct($resolver);
+        }
+
+        public function discoverVehicleId(string $eventKey): ?int
+        {
+            $this->discoveries++;
+
+            return $this->discoveries === 1
+                ? $this->vehicleAId
+                : $this->vehicleBId;
+        }
+
+        public function evaluateEventKeyForUpdate(
+            string $eventKey,
+            int $expectedVehicleId
+        ): array {
+            if ($expectedVehicleId === $this->vehicleAId) {
+                throw new MaintenanceAuthorityChangedException(
+                    'Vehicle changed during locking.'
+                );
+            }
+
+            return [
+                'event_key' => $eventKey,
+                'verified' => true,
+                'authoritative' => true,
+                'maintenance_id' => $this->maintenance->id,
+                'vehicle_id' => $this->vehicleB->id,
+                'schedule_date' => $this->maintenance->next_schedule->toDateString(),
+                'current_schedule_date' => $this->maintenance->next_schedule->toDateString(),
+                'resolution_reason' => null,
+                'locked_maintenance' => $this->maintenance,
+                'locked_vehicle' => $this->vehicleB,
+            ];
+        }
+    };
+    $deadlockRetry = Mockery::mock(MySqlDeadlockRetryService::class);
+    $deadlockRetry->shouldReceive('run')
+        ->twice()
+        ->andReturnUsing(fn (Closure $callback): mixed => $callback());
+    DB::shouldReceive('transactionLevel')->once()->andReturn(0);
+    $guard = new MaintenanceNotificationOccurrenceGuard(
+        $evaluator,
+        $deadlockRetry
+    );
+
+    $presentation = $guard->run(
+        $eventKey,
+        fn (Maintenance $lockedMaintenance, Vehicle $lockedVehicle): array => MaintenanceNotificationPresentation::fromLockedSource(
+            $lockedMaintenance,
+            $lockedVehicle
+        )
+    );
+
+    expect($evaluator->discoveries)->toBe(2)
+        ->and($presentation['message'])->toContain('Vehicle B Retry Source')
+        ->and($presentation['message'])->not->toContain('Vehicle A Rejected Source');
+});
+
+it('preserves due and overdue wording from the locked maintenance source', function (
+    string $status,
+    int $scheduleOffset,
+    string $expectedTitle,
+    string $expectedMessage
+) {
+    Carbon::setTestNow('2026-11-05 10:00:00');
+
+    try {
+        enableOccurrenceAuthorityFoundation();
+        $vehicle = occurrenceAuthorityVehicle([
+            'brand' => 'Locked',
+            'model' => 'Presentation',
+        ]);
+        $maintenance = occurrenceAuthorityMaintenance($vehicle, [
+            'status' => $status,
+            'completion_date' => $status === 'Completed'
+                ? now()->subMonth()->toDateString()
+                : null,
+            'next_schedule' => now()->addDays($scheduleOffset)->toDateString(),
+        ]);
+
+        $notification = createAuthoritativeOccurrence(
+            occurrenceAuthorityUser(),
+            occurrenceAuthorityKey($maintenance)
+        );
+
+        expect($notification?->title)->toBe($expectedTitle)
+            ->and($notification?->message)->toContain('Locked Presentation')
+            ->and($notification?->message)->toContain($expectedMessage);
+    } finally {
+        Carbon::setTestNow();
+    }
+})->with([
+    'scheduled due soon' => [
+        'Scheduled',
+        2,
+        'Maintenance Due Soon',
+        'is due in 2 days.',
+    ],
+    'completed overdue future service' => [
+        'Completed',
+        -2,
+        'Maintenance Overdue',
+        'next service after maintenance',
+    ],
+]);
 
 it('rejects obsolete authority without notification or audit side effects', function () {
     enableOccurrenceAuthorityFoundation();

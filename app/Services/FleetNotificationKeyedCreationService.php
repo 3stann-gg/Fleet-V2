@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\FleetNotification;
+use App\Models\Maintenance;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -36,13 +38,53 @@ class FleetNotificationKeyedCreationService
 
         return $this->maintenanceOccurrenceGuard->run(
             $eventKey,
-            fn (): FleetNotification => $this->createOrUpdateWithActiveIdentity(
-                $user,
-                $title,
-                $message,
-                $eventKey,
-                $link
-            )
+            function (
+                ?Maintenance $lockedMaintenance = null,
+                ?Vehicle $lockedVehicle = null
+            ) use ($user, $title, $message, $eventKey, $link): FleetNotification {
+                $presentation = $this->authoritativePresentation(
+                    $eventKey,
+                    $title,
+                    $message,
+                    $lockedMaintenance,
+                    $lockedVehicle
+                );
+
+                return $this->createOrUpdateWithActiveIdentity(
+                    $user,
+                    $presentation['title'],
+                    $presentation['message'],
+                    $eventKey,
+                    $link
+                );
+            }
+        );
+    }
+
+    /** @return array{title: string, message: string} */
+    private function authoritativePresentation(
+        string $eventKey,
+        string $title,
+        string $message,
+        ?Maintenance $lockedMaintenance,
+        ?Vehicle $lockedVehicle
+    ): array {
+        if (! str_starts_with($eventKey, 'maintenance_due:')) {
+            return [
+                'title' => $title,
+                'message' => $message,
+            ];
+        }
+
+        if (! $lockedMaintenance || ! $lockedVehicle) {
+            throw new LogicException(
+                'Maintenance notification presentation requires an authoritative locked source.'
+            );
+        }
+
+        return MaintenanceNotificationPresentation::fromLockedSource(
+            $lockedMaintenance,
+            $lockedVehicle
         );
     }
 

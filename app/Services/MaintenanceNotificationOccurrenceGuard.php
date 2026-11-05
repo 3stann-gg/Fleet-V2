@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Maintenance;
+use App\Models\Vehicle;
 use Closure;
 use Illuminate\Support\Facades\DB;
 
@@ -71,6 +73,18 @@ class MaintenanceNotificationOccurrenceGuard
             );
         }
 
-        return $notificationOperation();
+        $lockedMaintenance = $evaluation['locked_maintenance'] ?? null;
+        $lockedVehicle = $evaluation['locked_vehicle'] ?? null;
+
+        if (
+            ! $lockedMaintenance instanceof Maintenance
+            || ! $lockedVehicle instanceof Vehicle
+        ) {
+            throw new MaintenanceNotificationSourceNotAuthoritativeException(
+                'source_unverified'
+            );
+        }
+
+        return $notificationOperation($lockedMaintenance, $lockedVehicle);
     }
 }

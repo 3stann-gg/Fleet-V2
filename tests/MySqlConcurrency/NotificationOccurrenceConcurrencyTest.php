@@ -8,6 +8,8 @@ use App\Models\Vehicle;
 use App\Services\FleetNotificationKeyedCreationService;
 use App\Services\FleetNotificationSchemaReadinessService;
 use App\Services\MaintenanceNotificationReconciliationService;
+use App\Services\MaintenanceScheduleResolver;
+use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Tests\MySqlConcurrency\Support\ConcurrentProcessRunner;
@@ -15,6 +17,7 @@ use Tests\MySqlConcurrency\Support\DatabaseBarrier;
 use Tests\MySqlConcurrency\Support\HarnessEnvironment;
 use Tests\MySqlConcurrency\Support\HarnessSafetyPolicy;
 use Tests\MySqlConcurrency\Support\NotificationOccurrenceSchemaTransition;
+use Tests\MySqlConcurrency\Support\OccurrenceConcurrencyWorker;
 
 function occurrenceUser(): User
 {
@@ -75,7 +78,22 @@ function createOccurrence(User $user, string $eventKey, string $title = 'Mainten
  */
 function runOccurrenceWorkers(string $barrier, array $workers): array
 {
-    foreach (['start', 'lookup', 'collision', 'mutated', 'reconciled', 'first-locked'] as $phase) {
+    foreach ([
+        'start',
+        'lookup',
+        'collision',
+        'mutated',
+        'reconciled',
+        'first-locked',
+        'vehicle-locked',
+        'pre-authority',
+        'creator-committed',
+        'schedule-committed',
+        'post-authority',
+        'completion-committed',
+        'm1-acknowledged',
+        'reassignment-locked',
+    ] as $phase) {
         DatabaseBarrier::reset($barrier.'-'.$phase);
     }
 
@@ -97,15 +115,8 @@ function runOccurrenceWorkers(string $barrier, array $workers): array
     $results = (new ConcurrentProcessRunner(
         environmentFactory: fn (): array => HarnessEnvironment::occurrenceWorkerEnvironment()
     ))->run($commands, 25);
-    $decoded = collect($results)->mapWithKeys(fn (array $result, string $participant): array => [
-        $participant => json_decode(trim($result['output']), true, 512, JSON_THROW_ON_ERROR),
-    ]);
 
-    if ($decoded->pluck('connection_id')->unique()->count() !== $participants) {
-        throw new RuntimeException('Occurrence workers did not use distinct MySQL sessions.');
-    }
-
-    return $decoded->all();
+    return OccurrenceConcurrencyWorker::decodeWorkerResults($results, $participants);
 }
 
 beforeEach(function () {
@@ -192,16 +203,30 @@ it('preserves A1 and B1 while creating a new A2 occurrence', function () {
 });
 
 it('reuses one active row during repeated polling without resetting acknowledgement', function () {
-    $user = occurrenceUser();
-    $eventKey = occurrenceKey(occurrenceMaintenance(occurrenceVehicle()));
-    $first = createOccurrence($user, $eventKey);
-    $first->update(['status' => 'Read']);
-    $second = createOccurrence($user, $eventKey, 'Maintenance Overdue');
+    Carbon::setTestNow('2026-11-05 10:00:00');
 
-    expect($second->id)->toBe($first->id)
-        ->and($second->status)->toBe('Read')
-        ->and($second->title)->toBe('Maintenance Overdue')
-        ->and(FleetNotification::query()->where('event_key', $eventKey)->count())->toBe(1);
+    try {
+        $user = occurrenceUser();
+        $maintenance = occurrenceMaintenance(occurrenceVehicle());
+        $eventKey = occurrenceKey($maintenance);
+        $first = createOccurrence($user, $eventKey);
+        $first->update(['status' => 'Read']);
+        $second = createOccurrence($user, $eventKey, 'Maintenance Overdue');
+
+        expect($second->id)->toBe($first->id)
+            ->and($second->status)->toBe('Read')
+            ->and($second->event_key)->toBe($eventKey)
+            ->and($second->active_event_key)->toBe($eventKey)
+            ->and($second->title)->toBe('Maintenance Due Soon')
+            ->and($second->title)->not->toBe('Maintenance Overdue')
+            ->and($second->message)->toBe(
+                "Occurrence Harness maintenance {$maintenance->maintenance_number} is due in 26 days."
+            )
+            ->and(FleetNotification::query()->where('event_key', $eventKey)->count())->toBe(1)
+            ->and(FleetNotification::query()->where('active_event_key', $eventKey)->count())->toBe(1);
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 it('fails closed when the collision winner is resolved before recovery locking', function () {
@@ -423,3 +448,242 @@ it('reports exact active-only schema readiness and fails closed for transient me
         $transition->restoreResolutionReasonAfterReadinessTest();
     }
 });
+
+it('serializes occurrence authority behind a committed Vehicle presentation update', function () {
+    $user = occurrenceUser();
+    $vehicle = occurrenceVehicle();
+    $vehicle->update(['brand' => 'Before Lock']);
+    $maintenance = occurrenceMaintenance($vehicle);
+    $eventKey = occurrenceKey($maintenance);
+    $results = runOccurrenceWorkers('vehicle-lock-'.str()->uuid(), [
+        'updater' => [
+            'action' => 'update_vehicle_presentation',
+            'payload' => [
+                'vehicle_id' => $vehicle->id,
+                'brand' => 'After Commit',
+            ],
+        ],
+        'creator' => [
+            'action' => 'create_after_vehicle_presentation_update',
+            'payload' => [
+                'user_id' => $user->id,
+                'maintenance_id' => $maintenance->id,
+                'event_key' => $eventKey,
+                'committed_brand' => 'After Commit',
+            ],
+        ],
+    ]);
+    $notification = FleetNotification::query()
+        ->where('user_id', $user->id)
+        ->where('active_event_key', $eventKey)
+        ->sole();
+
+    expect($results['updater']['outcome'])->toBe('vehicle_update_committed')
+        ->and($results['creator']['outcome'])->toBe('created_after_source_revalidation')
+        ->and($results['creator']['authority_attempt_history'])->toBe([$vehicle->id])
+        ->and($results['creator']['presentation_classification'])->toBe('committed_source_presentation')
+        ->and(collect($results)->pluck('connection_id')->unique())->toHaveCount(2)
+        ->and($vehicle->fresh()->brand)->toBe('After Commit')
+        ->and($maintenance->fresh()->vehicle_id)->toBe($vehicle->id)
+        ->and($notification->event_key)->toBe($eventKey)
+        ->and($notification->active_event_key)->toBe($eventKey)
+        ->and($notification->resolved_at)->toBeNull()
+        ->and($notification->status)->toBe('Unread')
+        ->and(FleetNotification::query()->where('event_key', $eventKey)->count())->toBe(1)
+        ->and(AuditLog::query()->where('action', 'Notification Resolved')->count())->toBe(0);
+})->group('known-production-gap');
+
+it('preserves a valid occurrence before explicitly reconciling its changed schedule', function () {
+    $user = occurrenceUser();
+    $vehicle = occurrenceVehicle();
+    $maintenance = occurrenceMaintenance($vehicle, '2026-12-01');
+    $eventKeyA = occurrenceKey($maintenance);
+    $eventKeyB = occurrenceKey($maintenance, '2026-12-08');
+    $results = runOccurrenceWorkers('schedule-change-'.str()->uuid(), [
+        'creator' => [
+            'action' => 'create_read_then_signal',
+            'payload' => [
+                'user_id' => $user->id,
+                'event_key' => $eventKeyA,
+            ],
+        ],
+        'updater' => [
+            'action' => 'change_schedule_then_signal',
+            'payload' => [
+                'vehicle_id' => $vehicle->id,
+                'maintenance_id' => $maintenance->id,
+                'next_schedule' => '2026-12-08',
+            ],
+        ],
+        'reconciler' => [
+            'action' => 'reconcile_after_schedule_change',
+            'payload' => ['event_key' => $eventKeyA],
+        ],
+    ]);
+    $historical = FleetNotification::query()
+        ->where('user_id', $user->id)
+        ->where('event_key', $eventKeyA)
+        ->sole();
+    $audit = AuditLog::query()
+        ->where('action', 'Notification Resolved')
+        ->where('auditable_id', $historical->id)
+        ->sole();
+
+    expect($results['creator']['outcome'])->toBe('valid_occurrence_committed')
+        ->and($results['updater']['outcome'])->toBe('schedule_change_committed')
+        ->and($results['reconciler']['outcome'])->toBe('temporarily_valid_then_resolved')
+        ->and($results['reconciler']['resolved_count'])->toBe(1)
+        ->and(collect($results)->pluck('connection_id')->unique())->toHaveCount(3)
+        ->and($maintenance->fresh()->next_schedule?->toDateString())->toBe('2026-12-08')
+        ->and($historical->status)->toBe('Read')
+        ->and($historical->resolved_at)->not->toBeNull()
+        ->and($historical->resolution_reason)->toBe('schedule_changed')
+        ->and($historical->active_event_key)->toBeNull()
+        ->and($audit->old_values['event_key'])->toBe($eventKeyA)
+        ->and($audit->old_values['status'])->toBe('Read')
+        ->and($audit->new_values['event_key'])->toBe($eventKeyA)
+        ->and($audit->new_values['status'])->toBe('Read')
+        ->and(FleetNotification::query()->where('event_key', $eventKeyA)->whereNull('resolved_at')->count())->toBe(0)
+        ->and(FleetNotification::query()->where('event_key', $eventKeyB)->count())->toBe(0)
+        ->and(AuditLog::query()->where('action', 'Notification Resolved')->count())->toBe(1);
+});
+
+it('resolves M1 after a supported M2 completion becomes authoritative', function () {
+    $user = occurrenceUser();
+    $vehicle = occurrenceVehicle();
+    $vehicle->update([
+        'status' => 'Maintenance',
+        'readiness_status' => 'maintenance',
+    ]);
+    $m1 = occurrenceMaintenance($vehicle, '2026-12-01');
+    $m1->update([
+        'status' => 'Completed',
+        'completion_date' => '2026-10-10',
+    ]);
+    $olderHigherId = occurrenceMaintenance($vehicle, '2026-12-15');
+    $olderHigherId->update([
+        'status' => 'Completed',
+        'completion_date' => '2026-10-09',
+    ]);
+    $m2 = occurrenceMaintenance($vehicle, '2027-01-01');
+    $m2->update([
+        'status' => 'In Progress',
+        'completion_date' => null,
+    ]);
+    $eventKeyM1 = occurrenceKey($m1->fresh());
+    $eventKeyM2 = occurrenceKey($m2->fresh());
+
+    expect(app(MaintenanceScheduleResolver::class)->resolve($vehicle->fresh())['maintenance_id'])
+        ->toBe($m1->id);
+
+    $results = runOccurrenceWorkers('newer-completion-'.str()->uuid(), [
+        'creator' => [
+            'action' => 'create_m1_with_post_authority_checkpoint',
+            'payload' => [
+                'user_id' => $user->id,
+                'maintenance_id' => $m1->id,
+                'event_key' => $eventKeyM1,
+            ],
+        ],
+        'completer' => [
+            'action' => 'complete_m2_then_signal',
+            'payload' => [
+                'vehicle_id' => $vehicle->id,
+                'maintenance_id' => $m2->id,
+                'completion_date' => '2026-10-10',
+                'next_schedule' => '2027-01-01',
+            ],
+        ],
+        'reconciler' => [
+            'action' => 'reconcile_m1_create_m2',
+            'payload' => [
+                'user_id' => $user->id,
+                'maintenance_id' => $m2->id,
+                'obsolete_event_key' => $eventKeyM1,
+                'event_key' => $eventKeyM2,
+            ],
+        ],
+    ]);
+    $historicalM1 = FleetNotification::query()
+        ->where('user_id', $user->id)
+        ->where('event_key', $eventKeyM1)
+        ->sole();
+    $activeM2 = FleetNotification::query()
+        ->where('user_id', $user->id)
+        ->where('active_event_key', $eventKeyM2)
+        ->sole();
+
+    expect($results['creator']['outcome'])->toBe('m1_occurrence_committed')
+        ->and($results['completer']['outcome'])->toBe('supported_completion_committed')
+        ->and($results['reconciler']['outcome'])->toBe('superseded_completion_resolved')
+        ->and($results['reconciler']['resolved_count'])->toBe(1)
+        ->and(collect($results)->pluck('connection_id')->unique())->toHaveCount(3)
+        ->and($m2->fresh()->status)->toBe('Completed')
+        ->and(app(MaintenanceScheduleResolver::class)->resolve($vehicle->fresh())['maintenance_id'])->toBe($m2->id)
+        ->and($historicalM1->status)->toBe('Read')
+        ->and($historicalM1->resolution_reason)->toBe('superseded_by_newer_completion')
+        ->and($historicalM1->resolved_at)->not->toBeNull()
+        ->and($historicalM1->active_event_key)->toBeNull()
+        ->and($activeM2->event_key)->toBe($eventKeyM2)
+        ->and($activeM2->active_event_key)->toBe($eventKeyM2)
+        ->and($activeM2->resolved_at)->toBeNull()
+        ->and($activeM2->status)->toBe('Unread')
+        ->and(FleetNotification::query()->where('event_key', $eventKeyM1)->whereNull('resolved_at')->count())->toBe(0)
+        ->and(FleetNotification::query()->where('active_event_key', $eventKeyM2)->count())->toBe(1)
+        ->and(AuditLog::query()->where('action', 'Notification Resolved')->count())->toBe(1);
+});
+
+it('revalidates authority when Scheduled maintenance moves from Vehicle A to B', function () {
+    $user = occurrenceUser();
+    $vehicleA = occurrenceVehicle();
+    $vehicleA->update(['brand' => 'Vehicle A']);
+    $vehicleB = occurrenceVehicle();
+    $vehicleB->update(['brand' => 'Vehicle B']);
+    $maintenance = occurrenceMaintenance($vehicleA);
+    $eventKey = occurrenceKey($maintenance);
+    $results = runOccurrenceWorkers('vehicle-reassignment-'.str()->uuid(), [
+        'reassigner' => [
+            'action' => 'reassign_maintenance_vehicle',
+            'payload' => [
+                'maintenance_id' => $maintenance->id,
+                'vehicle_a_id' => $vehicleA->id,
+                'vehicle_b_id' => $vehicleB->id,
+            ],
+        ],
+        'creator' => [
+            'action' => 'create_during_reassignment',
+            'payload' => [
+                'user_id' => $user->id,
+                'maintenance_id' => $maintenance->id,
+                'event_key' => $eventKey,
+                'committed_brand' => 'Vehicle B',
+            ],
+        ],
+    ]);
+    $creator = $results['creator'];
+
+    expect($results['reassigner']['outcome'])->toBe('maintenance_reassignment_committed')
+        ->and(collect($results)->pluck('connection_id')->unique())->toHaveCount(2)
+        ->and($maintenance->fresh()->vehicle_id)->toBe($vehicleB->id)
+        ->and($creator['outcome'])->toBe('source_vehicle_retry_succeeded');
+
+    $notification = FleetNotification::query()
+        ->where('user_id', $user->id)
+        ->where('active_event_key', $eventKey)
+        ->sole();
+
+    expect($creator['authority_attempt_history'])->toBe([$vehicleA->id, $vehicleB->id])
+        ->and($creator['successful_notification_inserts'])->toBe(1)
+        ->and($creator['notification_insert_authority_histories'])->toBe([
+            [$vehicleA->id, $vehicleB->id],
+        ])
+        ->and($creator['presentation_classification'])->toBe('committed_source_presentation')
+        ->and($notification->event_key)->toBe($eventKey)
+        ->and($notification->active_event_key)->toBe($eventKey)
+        ->and($notification->status)->toBe('Unread')
+        ->and($notification->resolved_at)->toBeNull()
+        ->and(FleetNotification::query()->where('event_key', $eventKey)->count())->toBe(1)
+        ->and(FleetNotification::query()->where('active_event_key', $eventKey)->count())->toBe(1);
+
+    expect(AuditLog::query()->where('action', 'Notification Resolved')->count())->toBe(0);
+})->group('known-production-gap');

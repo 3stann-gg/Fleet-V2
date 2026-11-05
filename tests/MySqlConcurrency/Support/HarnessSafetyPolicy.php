@@ -279,16 +279,16 @@ final class HarnessSafetyPolicy
     }
 
     /**
-     * @param  array<string, int|string|null>  $response
+     * @param  array<string, mixed>  $response
      */
     public static function assertExpectedStaleWinnerResponse(array $response): void
     {
-        $connectionId = filter_var(
-            $response['connection_id'] ?? null,
-            FILTER_VALIDATE_INT,
-            ['options' => ['min_range' => 1]]
-        );
+        $connectionIdValue = $response['connection_id'] ?? null;
+        $connectionId = is_int($connectionIdValue) && $connectionIdValue > 0
+            ? $connectionIdValue
+            : null;
         $expected = [
+            'worker_action' => 'create_with_collision_barrier',
             'connection_id' => $connectionId,
             'outcome' => 'expected_stale_winner_conflict',
             'exception' => UniqueConstraintViolationException::class,
@@ -297,8 +297,87 @@ final class HarnessSafetyPolicy
         ];
 
         if (! is_int($connectionId) || $response !== $expected) {
-            throw new RuntimeException('The occurrence worker returned an unexpected stale-winner outcome.');
+            $actualWorkerAction = self::allowlistedDiagnosticValue(
+                $response['worker_action'] ?? null,
+                OccurrenceConcurrencyWorker::ACTIONS
+            );
+            $actualOutcome = self::allowlistedDiagnosticValue(
+                $response['outcome'] ?? null,
+                [
+                    'expected_stale_winner_conflict',
+                    'created',
+                    'recovered',
+                    'failed_closed',
+                    'error',
+                ]
+            );
+            $actualException = self::allowlistedDiagnosticValue(
+                $response['exception'] ?? null,
+                [
+                    UniqueConstraintViolationException::class,
+                    \LogicException::class,
+                    RuntimeException::class,
+                ]
+            );
+            $actualIndexName = self::allowlistedDiagnosticValue(
+                $response['index_name'] ?? null,
+                [
+                    self::ACTIVE_EVENT_UNIQUE_INDEX,
+                    self::LEGACY_EVENT_UNIQUE_INDEX,
+                    'cc_unrelated_unique_index',
+                ]
+            );
+            $actualDriverCode = match (true) {
+                ! is_int($response['driver_code'] ?? null) => '[non-integer]',
+                $response['driver_code'] === 1062 => '1062',
+                default => '[unexpected]',
+            };
+
+            throw new RuntimeException(
+                'The occurrence worker returned an unexpected stale-winner outcome. '.
+                'expected_worker_action=create_with_collision_barrier '.
+                "actual_worker_action={$actualWorkerAction} ".
+                'expected_outcome=expected_stale_winner_conflict '.
+                "actual_outcome={$actualOutcome} ".
+                'expected_exception='.UniqueConstraintViolationException::class.' '.
+                "actual_exception={$actualException} ".
+                'expected_driver_code=1062 '.
+                "actual_driver_code={$actualDriverCode} ".
+                'expected_index_name='.self::ACTIVE_EVENT_UNIQUE_INDEX.' '.
+                "actual_index_name={$actualIndexName} ".
+                'response_fields='.self::diagnosticResponseFields($response)
+            );
         }
+    }
+
+    /** @param list<string> $allowlist */
+    private static function allowlistedDiagnosticValue(mixed $value, array $allowlist): string
+    {
+        if (! is_string($value)) {
+            return '[non-string]';
+        }
+
+        return in_array($value, $allowlist, true)
+            ? $value
+            : '[unexpected]';
+    }
+
+    /** @param array<string, mixed> $response */
+    private static function diagnosticResponseFields(array $response): string
+    {
+        $allowlist = [
+            'worker_action',
+            'connection_id',
+            'outcome',
+            'exception',
+            'driver_code',
+            'index_name',
+        ];
+        $recognizedFields = array_values(array_intersect($allowlist, array_keys($response)));
+        $unexpectedFieldCount = count(array_diff(array_keys($response), $allowlist));
+
+        return '['.implode(',', $recognizedFields).']'.
+            ";unexpected_field_count={$unexpectedFieldCount}";
     }
 
     /**

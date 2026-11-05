@@ -14,6 +14,20 @@ use Tests\MySqlConcurrency\Support\MySqlAdvisoryLock;
 use Tests\MySqlConcurrency\Support\OccurrenceConcurrencyWorker;
 use Tests\MySqlConcurrency\Support\OccurrenceRunCoordinator;
 
+final class HarnessDiagnosticStringableFixture implements Stringable
+{
+    public bool $wasInvoked = false;
+
+    public function __construct(public readonly string $secretMarker) {}
+
+    public function __toString(): string
+    {
+        $this->wasInvoked = true;
+
+        throw new RuntimeException($this->secretMarker);
+    }
+}
+
 /** @return array<int, object> */
 function notificationIndexRows(bool $legacy = true): array
 {
@@ -457,6 +471,101 @@ it('uses a dedicated occurrence command and strict failure propagation', functio
     HarnessSafetyPolicy::assertSuccessfulOccurrenceTestExitCode(0);
 });
 
+it('accepts only the reviewed occurrence worker actions and coordination payload', function () {
+    $payload = [
+        'barrier' => 'maintenance-source-test',
+        'participant' => 'creator',
+        'participants' => 2,
+    ];
+
+    foreach (OccurrenceConcurrencyWorker::ACTIONS as $action) {
+        OccurrenceConcurrencyWorker::assertSafeActionPayload($action, $payload);
+    }
+
+    expect(OccurrenceConcurrencyWorker::ACTIONS)
+        ->toContain('update_vehicle_presentation')
+        ->toContain('change_schedule_then_signal')
+        ->toContain('complete_m2_then_signal')
+        ->toContain('reassign_maintenance_vehicle')
+        ->and(fn () => OccurrenceConcurrencyWorker::assertSafeActionPayload('unreviewed_action', $payload))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+it('rejects malformed occurrence coordination and fabricated authority history', function (array $payload) {
+    expect(fn () => OccurrenceConcurrencyWorker::assertSafeActionPayload('create', $payload))
+        ->toThrow(InvalidArgumentException::class);
+})->with([
+    'missing barrier' => [[
+        'participant' => 'creator',
+        'participants' => 2,
+    ]],
+    'empty participant' => [[
+        'barrier' => 'source-test',
+        'participant' => '',
+        'participants' => 2,
+    ]],
+    'unsafe barrier characters' => [[
+        'barrier' => 'source test;drop',
+        'participant' => 'creator',
+        'participants' => 2,
+    ]],
+    'zero participants' => [[
+        'barrier' => 'source-test',
+        'participant' => 'creator',
+        'participants' => 0,
+    ]],
+    'fabricated history' => [[
+        'barrier' => 'source-test',
+        'participant' => 'creator',
+        'participants' => 2,
+        'authority_attempt_history' => [10, 20],
+    ]],
+]);
+
+it('decodes complete occurrence worker evidence and rejects missing or reused identities', function () {
+    $valid = [
+        'first' => [
+            'exit_code' => 0,
+            'output' => json_encode([
+                'worker_action' => 'create',
+                'connection_id' => 41,
+                'outcome' => 'created',
+            ], JSON_THROW_ON_ERROR),
+            'error_output' => '',
+        ],
+        'second' => [
+            'exit_code' => 0,
+            'output' => json_encode([
+                'worker_action' => 'reconcile',
+                'connection_id' => 42,
+                'outcome' => 'reconciled',
+            ], JSON_THROW_ON_ERROR),
+            'error_output' => '',
+        ],
+    ];
+
+    expect(OccurrenceConcurrencyWorker::decodeWorkerResults($valid, 2))->toHaveKeys(['first', 'second']);
+
+    $missingOutput = $valid;
+    $missingOutput['second']['output'] = '';
+    $reusedConnection = $valid;
+    $reusedConnection['second']['output'] = json_encode([
+        'worker_action' => 'reconcile',
+        'connection_id' => 41,
+    ], JSON_THROW_ON_ERROR);
+    $missingAction = $valid;
+    $missingAction['second']['output'] = json_encode([
+        'connection_id' => 42,
+    ], JSON_THROW_ON_ERROR);
+
+    expect(fn () => OccurrenceConcurrencyWorker::decodeWorkerResults($missingOutput, 2))
+        ->toThrow(RuntimeException::class, 'returned no output')
+        ->and(fn () => OccurrenceConcurrencyWorker::decodeWorkerResults($reusedConnection, 2))
+        ->toThrow(RuntimeException::class, 'distinct MySQL sessions')
+        ->and(fn () => OccurrenceConcurrencyWorker::decodeWorkerResults($missingAction, 2))
+        ->toThrow(RuntimeException::class, 'incomplete evidence');
+});
+
 it('classifies only the exact active-index stale-winner conflict', function () {
     $service = new FleetNotificationKeyedCreationService(
         new FleetNotificationSchemaReadinessService,
@@ -477,7 +586,10 @@ it('classifies only the exact active-index stale-winner conflict', function () {
         'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
     ]);
     HarnessSafetyPolicy::assertExpectedStaleWinnerResponse(array_merge(
-        ['connection_id' => 42],
+        [
+            'worker_action' => 'create_with_collision_barrier',
+            'connection_id' => 42,
+        ],
         $response
     ));
 });
@@ -639,42 +751,282 @@ it('propagates unrelated logic and unique-constraint failures from collision att
         ))->toThrow($uniqueFailure);
 });
 
-it('rejects malformed and unexpected stale-winner worker responses', function (array $response) {
-    expect(fn () => HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response))
+it('rejects malformed and unexpected stale-winner worker responses', function (Closure $mutate) {
+    $response = [
+        'worker_action' => 'create_with_collision_barrier',
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ];
+
+    expect(fn () => HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($mutate($response)))
         ->toThrow(RuntimeException::class);
 })->with([
-    'old generic outcome' => [[
+    'missing worker action' => [function (array $response): array {
+        unset($response['worker_action']);
+
+        return $response;
+    }],
+    'incorrect worker action' => [function (array $response): array {
+        $response['worker_action'] = 'create';
+
+        return $response;
+    }],
+    'missing required field' => [function (array $response): array {
+        unset($response['exception']);
+
+        return $response;
+    }],
+    'unexpected extra field' => [function (array $response): array {
+        $response['unexpected'] = 'value';
+
+        return $response;
+    }],
+    'wrong outcome' => [function (array $response): array {
+        $response['outcome'] = 'failed_closed';
+
+        return $response;
+    }],
+    'wrong exception class' => [function (array $response): array {
+        $response['exception'] = LogicException::class;
+
+        return $response;
+    }],
+    'wrong driver code' => [function (array $response): array {
+        $response['driver_code'] = 1213;
+
+        return $response;
+    }],
+    'wrong index' => [function (array $response): array {
+        $response['index_name'] = 'cc_unrelated_unique_index';
+
+        return $response;
+    }],
+    'missing connection identity' => [function (array $response): array {
+        unset($response['connection_id']);
+
+        return $response;
+    }],
+    'zero connection identity' => [function (array $response): array {
+        $response['connection_id'] = 0;
+
+        return $response;
+    }],
+    'negative connection identity' => [function (array $response): array {
+        $response['connection_id'] = -1;
+
+        return $response;
+    }],
+    'string connection identity' => [function (array $response): array {
+        $response['connection_id'] = '42';
+
+        return $response;
+    }],
+    'malformed response values' => [function (array $response): array {
+        $response['worker_action'] = ['create_with_collision_barrier'];
+        $response['outcome'] = null;
+
+        return $response;
+    }],
+    'contradictory classification' => [function (array $response): array {
+        $response['outcome'] = 'created';
+
+        return $response;
+    }],
+]);
+
+it('reports only allowlisted stale-winner diagnostics', function () {
+    $response = [
+        'worker_action' => 'DB_PASSWORD=do-not-expose',
+        'connection_id' => 42,
+        'outcome' => 'API_TOKEN=do-not-expose',
+        'exception' => 'SecretException-do-not-expose',
+        'driver_code' => 'SECRET-CODE-do-not-expose',
+        'index_name' => 'secret_index_do_not_expose',
+        'credentials_do_not_expose' => 'secret-value-do-not-expose',
+    ];
+
+    try {
+        HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+        $this->fail('The malformed stale-winner response was accepted.');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())
+            ->toContain('expected_worker_action=create_with_collision_barrier')
+            ->toContain('actual_worker_action=[unexpected]')
+            ->toContain('expected_outcome=expected_stale_winner_conflict')
+            ->toContain('actual_outcome=[unexpected]')
+            ->toContain('expected_exception='.UniqueConstraintViolationException::class)
+            ->toContain('actual_exception=[unexpected]')
+            ->toContain('expected_driver_code=1062')
+            ->toContain('actual_driver_code=[non-integer]')
+            ->toContain('expected_index_name='.HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX)
+            ->toContain('actual_index_name=[unexpected]')
+            ->toContain('response_fields=[worker_action,connection_id,outcome,exception,driver_code,index_name];unexpected_field_count=1')
+            ->not->toContain('do-not-expose')
+            ->not->toContain('secret-value')
+            ->not->toContain('credentials_do_not_expose');
+    }
+});
+
+it('uses only finite diagnostic tokens for invalid scalar and compound values', function () {
+    $baseResponse = [
+        'worker_action' => 'create_with_collision_barrier',
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ];
+
+    foreach ([null, false, 123, 12.5, ['unsafe']] as $value) {
+        $response = $baseResponse;
+        $response['worker_action'] = $value;
+
+        try {
+            HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+            $this->fail('The malformed stale-winner response was accepted.');
+        } catch (RuntimeException $exception) {
+            expect($exception->getMessage())
+                ->toContain('actual_worker_action=[non-string]');
+        }
+
+    }
+
+    foreach ([null, false, '1062', 12.5, ['unsafe']] as $value) {
+        $response = $baseResponse;
+        $response['driver_code'] = $value;
+
+        try {
+            HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+            $this->fail('The malformed stale-winner response was accepted.');
+        } catch (RuntimeException $exception) {
+            expect($exception->getMessage())
+                ->toContain('actual_driver_code=[non-integer]');
+        }
+    }
+});
+
+it('redacts named and anonymous objects from stale-winner diagnostics', function () {
+    $baseResponse = [
+        'worker_action' => 'create_with_collision_barrier',
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ];
+    $secretMarker = 'AH1-OBJECT-SECRET-MARKER';
+    $namedObject = new stdClass;
+    $namedObject->secretMarker = $secretMarker;
+    $anonymousObject = new class($secretMarker)
+    {
+        public function __construct(public readonly string $secretMarker) {}
+    };
+
+    foreach ([$namedObject, $anonymousObject] as $object) {
+        foreach (['worker_action', 'outcome', 'exception', 'index_name', 'driver_code'] as $field) {
+            $response = $baseResponse;
+            $response[$field] = $object;
+
+            try {
+                HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+                $this->fail('The malformed stale-winner response was accepted.');
+            } catch (RuntimeException $exception) {
+                $expectedToken = $field === 'driver_code' ? '[non-integer]' : '[non-string]';
+
+                expect($exception->getMessage())
+                    ->toContain($expectedToken)
+                    ->toContain('unexpected stale-winner outcome')
+                    ->not->toContain($secretMarker)
+                    ->not->toContain('stdClass')
+                    ->not->toContain('class@anonymous');
+            }
+        }
+    }
+});
+
+it('does not stringify secret-bearing objects while diagnosing stale-winner responses', function () {
+    $baseResponse = [
+        'worker_action' => 'create_with_collision_barrier',
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+    ];
+    $secretMarker = 'AH1-STRINGABLE-SECRET-MARKER';
+
+    foreach (['worker_action', 'connection_id', 'outcome', 'exception', 'index_name', 'driver_code'] as $field) {
+        $stringable = new HarnessDiagnosticStringableFixture($secretMarker);
+        $response = $baseResponse;
+        $response[$field] = $stringable;
+
+        try {
+            HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+            $this->fail('The malformed stale-winner response was accepted.');
+        } catch (RuntimeException $exception) {
+            expect($stringable->wasInvoked)->toBeFalse()
+                ->and($exception->getMessage())
+                ->toContain('unexpected stale-winner outcome')
+                ->not->toContain($secretMarker)
+                ->not->toContain(HarnessDiagnosticStringableFixture::class);
+        }
+    }
+});
+
+it('does not inspect nested objects or disclose unexpected field names', function () {
+    $secretMarker = 'AH1-NESTED-OBJECT-SECRET-MARKER';
+    $stringable = new HarnessDiagnosticStringableFixture($secretMarker);
+    $unexpectedField = 'credentials_with_internal_name';
+    $response = [
+        'worker_action' => 'create_with_collision_barrier',
+        'connection_id' => 42,
+        'outcome' => 'expected_stale_winner_conflict',
+        'exception' => UniqueConstraintViolationException::class,
+        'driver_code' => 1062,
+        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
+        $unexpectedField => ['nested' => $stringable],
+    ];
+
+    try {
+        HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+        $this->fail('The malformed stale-winner response was accepted.');
+    } catch (RuntimeException $exception) {
+        expect($stringable->wasInvoked)->toBeFalse()
+            ->and($exception->getMessage())
+            ->toContain('unexpected_field_count=1')
+            ->not->toContain($unexpectedField)
+            ->not->toContain($secretMarker)
+            ->not->toContain(HarnessDiagnosticStringableFixture::class)
+            ->not->toContain('nested');
+    }
+});
+
+it('reports known stale-winner mismatch values without exposing raw response data', function () {
+    $response = [
+        'worker_action' => 'create',
         'connection_id' => 42,
         'outcome' => 'failed_closed',
-        'exception' => UniqueConstraintViolationException::class,
-        'driver_code' => 1062,
-        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
-    ]],
-    'logic exception accepted' => [[
-        'connection_id' => 42,
-        'outcome' => 'expected_stale_winner_conflict',
         'exception' => LogicException::class,
-        'driver_code' => 1062,
-        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
-    ]],
-    'wrong index' => [[
-        'connection_id' => 42,
-        'outcome' => 'expected_stale_winner_conflict',
-        'exception' => UniqueConstraintViolationException::class,
-        'driver_code' => 1062,
+        'driver_code' => 1213,
         'index_name' => 'cc_unrelated_unique_index',
-    ]],
-    'missing field' => [[
-        'connection_id' => 42,
-        'outcome' => 'expected_stale_winner_conflict',
-    ]],
-    'missing connection identity' => [[
-        'outcome' => 'expected_stale_winner_conflict',
-        'exception' => UniqueConstraintViolationException::class,
-        'driver_code' => 1062,
-        'index_name' => HarnessSafetyPolicy::ACTIVE_EVENT_UNIQUE_INDEX,
-    ]],
-]);
+    ];
+
+    try {
+        HarnessSafetyPolicy::assertExpectedStaleWinnerResponse($response);
+        $this->fail('The contradictory stale-winner response was accepted.');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())
+            ->toContain('actual_worker_action=create')
+            ->toContain('actual_outcome=failed_closed')
+            ->toContain('actual_exception='.LogicException::class)
+            ->toContain('actual_driver_code=[unexpected]')
+            ->toContain('actual_index_name=cc_unrelated_unique_index')
+            ->toContain('unexpected_field_count=0');
+    }
+});
 
 it('enforces exact lifecycle flags for baseline and occurrence child processes', function () {
     HarnessSafetyPolicy::assertLifecycleFlags([
@@ -965,6 +1317,8 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
     $occurrenceConfiguration = file_get_contents($projectRoot.'/phpunit.mysql-occurrence.xml');
     $occurrenceSpecifications = file_get_contents($projectRoot.'/tests/MySqlConcurrency/NotificationOccurrenceConcurrencyTest.php');
     $occurrenceWorker = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bin/occurrence-worker.php');
+    $occurrenceWorkerService = file_get_contents($projectRoot.'/tests/MySqlConcurrency/Support/OccurrenceConcurrencyWorker.php');
+    $authorityInstrumentation = file_get_contents($projectRoot.'/tests/MySqlConcurrency/Support/BarrierMaintenanceNotificationAuthorityEvaluator.php');
 
     expect($normalConfiguration)->toContain('value="sqlite"')
         ->and($normalConfiguration)->toContain('value=":memory:"')
@@ -990,11 +1344,19 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
         ->and($runner)->toContain('OccurrenceRunCoordinator')
         ->and($occurrenceConfiguration)->toContain('value="true" force="true"')
         ->and($occurrenceConfiguration)->toContain('MYSQL_CONCURRENCY_OCCURRENCE_MODE')
-        ->and(substr_count($occurrenceSpecifications, "it('"))->toBe(11)
+        ->and(substr_count($occurrenceSpecifications, "it('"))->toBe(15)
         ->and($occurrenceSpecifications)->not->toContain('->todo(')
         ->and($occurrenceSpecifications)->toContain("->group('known-production-gap')")
+        ->and($occurrenceSpecifications)->toContain("->and(\$creator['outcome'])->toBe('source_vehicle_retry_succeeded');")
+        ->and($occurrenceSpecifications)->not->toContain("->and(\$creator['outcome'])->toBeIn([")
+        ->and($occurrenceSpecifications)->toContain("\$creator['notification_insert_authority_histories']")
         ->and($occurrenceWorker)->toContain('IsolatedMySqlEnvironment::assertExternalLockOwner();')
         ->and($occurrenceWorker)->toContain('HarnessEnvironment::occurrenceWorkerEnvironment()')
+        ->and($occurrenceWorkerService)->toContain('BarrierMaintenanceNotificationAuthorityEvaluator')
+        ->and($authorityInstrumentation)->toContain('parent::evaluateEventKeyForUpdate')
+        ->and($authorityInstrumentation)->toContain('DatabaseBarrier::arriveAndWait')
+        ->and($occurrenceWorkerService)->not->toContain('app()->bind')
+        ->and($occurrenceWorkerService)->not->toContain('app()->instance')
         ->and($businessSpecifications)->not->toContain('CREATE TRIGGER')
         ->and($businessSpecifications)->toContain('new AuditFailureConstraint')
         ->and($auditFailureConstraint)->toContain("->where('CONSTRAINT_SCHEMA', HarnessSafetyPolicy::DATABASE)")

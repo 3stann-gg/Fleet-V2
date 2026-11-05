@@ -41,7 +41,9 @@ class MaintenanceNotificationAuthorityEvaluator
      *     vehicle_id: int|null,
      *     schedule_date: string|null,
      *     current_schedule_date: string|null,
-     *     resolution_reason: string|null
+     *     resolution_reason: string|null,
+     *     locked_maintenance: Maintenance|null,
+     *     locked_vehicle: Vehicle|null
      * }
      */
     public function evaluateEventKeyForUpdate(string $eventKey, int $expectedVehicleId): array
@@ -49,7 +51,10 @@ class MaintenanceNotificationAuthorityEvaluator
         $identity = $this->parseEventKey($eventKey);
 
         if ($identity === null) {
-            return $this->unverifiedEvaluation($eventKey);
+            return $this->withLockedSource(
+                $this->unverifiedEvaluation($eventKey),
+                null
+            );
         }
 
         $maintenance = $this->loadMaintenanceForUpdate(
@@ -58,10 +63,16 @@ class MaintenanceNotificationAuthorityEvaluator
         );
 
         if (! $maintenance instanceof Maintenance || ! $maintenance->vehicle) {
-            return $this->unverifiedEvaluation($eventKey, $identity);
+            return $this->withLockedSource(
+                $this->unverifiedEvaluation($eventKey, $identity),
+                null
+            );
         }
 
-        return $this->evaluateMaintenance($eventKey, $identity, $maintenance);
+        return $this->withLockedSource(
+            $this->evaluateMaintenance($eventKey, $identity, $maintenance),
+            $maintenance
+        );
     }
 
     /**
@@ -367,5 +378,19 @@ class MaintenanceNotificationAuthorityEvaluator
             'current_schedule_date' => null,
             'resolution_reason' => null,
         ];
+    }
+
+    /**
+     * @param  array<string, bool|int|string|null>  $evaluation
+     * @return array<string, bool|int|string|Maintenance|Vehicle|null>
+     */
+    private function withLockedSource(
+        array $evaluation,
+        ?Maintenance $maintenance
+    ): array {
+        return array_merge($evaluation, [
+            'locked_maintenance' => $maintenance,
+            'locked_vehicle' => $maintenance?->vehicle,
+        ]);
     }
 }
