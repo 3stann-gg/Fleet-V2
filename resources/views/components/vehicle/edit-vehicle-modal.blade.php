@@ -85,6 +85,21 @@
           </div>
 
           <div class="form-group">
+            <label for="editVehicleCondition">Vehicle Condition</label>
+            <select id="editVehicleCondition" name="vehicle_condition">
+              <option value="">Not Recorded</option>
+              @foreach(\App\Models\Vehicle::CONDITION_LABELS as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
+              @endforeach
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="editVehicleAcquisitionDate">Acquisition Date</label>
+            <input type="date" id="editVehicleAcquisitionDate" name="acquisition_date" />
+          </div>
+
+          <div class="form-group">
             <label for="editVehicleLtoCategory">LTO Vehicle Category</label>
             <select id="editVehicleLtoCategory" name="lto_vehicle_category">
               <option value="">Not Recorded</option>

@@ -111,6 +111,8 @@ function p51VehiclePayload(string $vehicleType): array
     $payload = [
         'plate_number' => fake()->unique()->bothify('TYPE-####'),
         'vehicle_type' => $vehicleType,
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'brand' => 'Canonical',
         'model' => 'Type',
         'capacity' => 4,

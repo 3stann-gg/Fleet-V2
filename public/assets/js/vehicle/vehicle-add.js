@@ -214,6 +214,8 @@ async function initVehicleAdd() {
 
     const alwaysRequiredFields = [
         "vehicleType",
+        "vehicleCondition",
+        "vehicleAcquisitionDate",
         "vehicleBrand",
         "vehicleModel",
         "vehicleCapacity",
@@ -320,6 +322,8 @@ async function initVehicleAdd() {
             plate_number:
                 document.getElementById("vehiclePlate")?.value.trim() || "",
             vehicle_type: document.getElementById("vehicleType")?.value || "",
+            vehicle_condition:
+                document.getElementById("vehicleCondition")?.value || "",
             lto_vehicle_category:
                 document.getElementById("vehicleLtoCategory")?.value || null,
             transmission_type:
@@ -330,6 +334,8 @@ async function initVehicleAdd() {
             model: document.getElementById("vehicleModel")?.value.trim() || "",
             purchase_date:
                 document.getElementById("vehiclePurchaseDate")?.value || null,
+            acquisition_date:
+                document.getElementById("vehicleAcquisitionDate")?.value || "",
             insurance_expiry:
                 document.getElementById("vehicleInsuranceExpiry")?.value ||
                 null,

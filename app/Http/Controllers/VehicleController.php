@@ -116,6 +116,9 @@ class VehicleController extends Controller
                 'id' => $vehicle->id,
                 'plate_number' => $vehicle->plate_number,
                 'vehicle_type' => $vehicle->vehicle_type,
+                'vehicle_condition' => $vehicle->vehicle_condition,
+                'vehicle_condition_label' => $vehicle->vehicle_condition_label,
+                'acquisition_date' => $vehicle->acquisition_date?->format('Y-m-d'),
                 'lto_vehicle_category' => $vehicle->lto_vehicle_category,
                 'required_dl_code' => $vehicle->required_dl_code,
                 'department' => $vehicle->department,
@@ -283,6 +286,10 @@ class VehicleController extends Controller
                     'required',
                     Rule::in(Vehicle::TYPE_OPTIONS),
                 ],
+                'vehicle_condition' => [
+                    'required',
+                    Rule::in(array_keys(Vehicle::CONDITION_LABELS)),
+                ],
                 'lto_vehicle_category' => [
                     'nullable',
                     Rule::in(Vehicle::LTO_VEHICLE_CATEGORIES),
@@ -304,6 +311,7 @@ class VehicleController extends Controller
                 'brand' => 'required',
                 'model' => 'required',
                 'purchase_date' => 'nullable|date',
+                'acquisition_date' => 'required|date',
                 'insurance_expiry' => 'nullable|date',
                 'capacity' => 'required|integer',
                 'powertrain_type' => [
@@ -625,6 +633,11 @@ class VehicleController extends Controller
                         'required',
                         Rule::in(Vehicle::TYPE_OPTIONS),
                     ],
+                    'vehicle_condition' => [
+                        'sometimes',
+                        'nullable',
+                        Rule::in(array_keys(Vehicle::CONDITION_LABELS)),
+                    ],
                     'lto_vehicle_category' => [
                         'nullable',
                         Rule::in(Vehicle::LTO_VEHICLE_CATEGORIES),
@@ -661,6 +674,11 @@ class VehicleController extends Controller
                         'max:255',
                     ],
                     'purchase_date' => [
+                        'sometimes',
+                        'nullable',
+                        'date',
+                    ],
+                    'acquisition_date' => [
                         'sometimes',
                         'nullable',
                         'date',
@@ -804,6 +822,54 @@ class VehicleController extends Controller
                     ],
                 ]
             );
+
+            $submittedFields = $request->all();
+            $conditionSubmitted = array_key_exists('vehicle_condition', $submittedFields);
+            $acquisitionDateSubmitted = array_key_exists('acquisition_date', $submittedFields);
+
+            $validator->after(function ($validator) use (
+                $request,
+                $vehicle,
+                $conditionSubmitted,
+                $acquisitionDateSubmitted,
+            ): void {
+                if (! $conditionSubmitted && ! $acquisitionDateSubmitted) {
+                    return;
+                }
+
+                $finalCondition = $conditionSubmitted
+                    ? $request->input('vehicle_condition')
+                    : $vehicle->vehicle_condition;
+                $finalAcquisitionDate = $acquisitionDateSubmitted
+                    ? $request->input('acquisition_date')
+                    : $vehicle->acquisition_date;
+                $hasCondition = filled($finalCondition);
+                $hasAcquisitionDate = filled($finalAcquisitionDate);
+                $hadCompletePair = filled($vehicle->vehicle_condition)
+                    && $vehicle->acquisition_date !== null;
+
+                if ($hadCompletePair && ! $hasCondition && ! $hasAcquisitionDate) {
+                    $message = 'Recorded vehicle acquisition information cannot be cleared.';
+                    $validator->errors()->add('vehicle_condition', $message);
+                    $validator->errors()->add('acquisition_date', $message);
+
+                    return;
+                }
+
+                if (! $hasCondition && $hasAcquisitionDate) {
+                    $validator->errors()->add(
+                        'vehicle_condition',
+                        'Vehicle condition is required when an acquisition date is recorded.'
+                    );
+                }
+
+                if ($hasCondition && ! $hasAcquisitionDate) {
+                    $validator->errors()->add(
+                        'acquisition_date',
+                        'Acquisition date is required when a vehicle condition is recorded.'
+                    );
+                }
+            });
 
             if ($validator->fails()) {
                 return response()->json([
@@ -1537,6 +1603,10 @@ class VehicleController extends Controller
 
             'vehicle_type' => $vehicle->vehicle_type,
 
+            'vehicle_condition' => $vehicle->vehicle_condition,
+
+            'acquisition_date' => $vehicle->acquisition_date?->format('Y-m-d'),
+
             'lto_vehicle_category' => $vehicle->lto_vehicle_category,
 
             'department' => $vehicle->department,
@@ -1544,6 +1614,8 @@ class VehicleController extends Controller
             'brand' => $vehicle->brand,
 
             'model' => $vehicle->model,
+
+            'purchase_date' => $vehicle->purchase_date?->format('Y-m-d'),
 
             'capacity' => $vehicle->capacity,
 

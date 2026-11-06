@@ -19,6 +19,8 @@ function priority4Vehicle(array $attributes = []): Vehicle
     return Vehicle::query()->create(array_merge([
         'plate_number' => fake()->unique()->bothify('P4-####'),
         'vehicle_type' => 'Service Vehicle',
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'department' => 'Logistics',
         'brand' => 'Test',
         'model' => 'Vehicle',
@@ -257,6 +259,8 @@ it('accepts valid manual battery health and rejects invalid values', function ()
     $payload = [
         'plate_number' => 'P4-BATTERY',
         'vehicle_type' => 'Service Vehicle',
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'department' => 'Logistics',
         'brand' => 'Test',
         'model' => 'EV',

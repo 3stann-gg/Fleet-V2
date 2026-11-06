@@ -104,6 +104,10 @@ function formatVehicleViewDate(date) {
     });
 }
 
+function formatVehicleAcquisitionDate(date) {
+    return date ? formatVehicleViewDate(date) : "Not Recorded";
+}
+
 function openVehicleDetailsModal(modal) {
     if (!modal.classList.contains("show")) {
         modal.dataset.previousBodyOverflow = document.body.style.overflow;
@@ -323,6 +327,18 @@ function populateViewVehicleModal(modal, vehicle) {
         modal,
         "viewPurchaseDate",
         formatVehicleViewDate(vehicle.purchase_date),
+    );
+    setViewVehicleText(
+        modal,
+        "viewVehicleCondition",
+        vehicle.vehicle_condition_label,
+        "Not Recorded",
+    );
+    setViewVehicleText(
+        modal,
+        "viewAcquisitionDate",
+        formatVehicleAcquisitionDate(vehicle.acquisition_date),
+        "Not Recorded",
     );
     setViewVehicleText(
         modal,

@@ -96,6 +96,8 @@ function applyVehicleEditRbac() {
     const managerFields = [
         "editVehiclePlate",
         "editVehicleType",
+        "editVehicleCondition",
+        "editVehicleAcquisitionDate",
         "editVehicleDepartment",
         "editVehicleCapacity",
         "editVehicleDriver",
@@ -281,6 +283,14 @@ function populateEditVehicleModal(vehicle) {
     setEditVehicleFieldValue("editVehicleId", vehicle.id);
     setEditVehicleFieldValue("editVehiclePlate", vehicle.plate_number);
     setEditVehicleSelectValue("editVehicleType", vehicle.vehicle_type);
+    setEditVehicleSelectValue(
+        "editVehicleCondition",
+        vehicle.vehicle_condition || "",
+    );
+    setEditVehicleFieldValue(
+        "editVehicleAcquisitionDate",
+        String(vehicle.acquisition_date || "").slice(0, 10),
+    );
     setEditVehicleSelectValue(
         "editVehicleLtoCategory",
         vehicle.lto_vehicle_category || "",
@@ -592,6 +602,10 @@ async function initEditVehicleModal() {
                     "",
                 vehicle_type:
                     document.getElementById("editVehicleType")?.value || "",
+                vehicle_condition:
+                    document.getElementById("editVehicleCondition")?.value || null,
+                acquisition_date:
+                    document.getElementById("editVehicleAcquisitionDate")?.value || null,
                 lto_vehicle_category:
                     document.getElementById("editVehicleLtoCategory")?.value || null,
                 transmission_type:

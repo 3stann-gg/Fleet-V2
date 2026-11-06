@@ -7,6 +7,8 @@ function validVehiclePayload(string $powertrainType): array
     $payload = [
         'plate_number' => 'TEST-'.strtoupper(str_replace('_', '-', $powertrainType)),
         'vehicle_type' => 'Service Vehicle',
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'brand' => 'Test Brand',
         'model' => 'Test Model',
         'capacity' => 4,

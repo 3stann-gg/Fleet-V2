@@ -19,6 +19,8 @@ function phase5C1VehiclePayload(array $overrides = []): array
     return array_merge([
         'plate_number' => fake()->unique()->bothify('5C1-####'),
         'vehicle_type' => 'Service Vehicle',
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'lto_vehicle_category' => 'M1',
         'department' => 'Facilities',
         'brand' => 'Lifecycle',
