@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetNotification;
+use App\Models\User;
 use App\Services\FleetNotificationCheckService;
 use App\Services\FleetNotificationService;
 use Illuminate\Http\Request;
@@ -37,69 +38,42 @@ class FleetNotificationController extends Controller
         |--------------------------------------------------------------------------
         */
         $notifications =
+            collect();
+
+        $activeNotifications =
             FleetNotification::query()
                 ->where(
                     'user_id',
                     $user->id
                 )
-                ->latest('id')
-                ->limit(50)
-                ->get()
-
-                /*
-                |--------------------------------------------------------------------------
-                | RBAC filter
-                |--------------------------------------------------------------------------
-                |
-                | Protects against stale notifications that were created before
-                | RBAC notification filtering was added.
-                |--------------------------------------------------------------------------
-                */
-                ->filter(
-                    function ($notification) use ($user) {
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Module RBAC
-                        |--------------------------------------------------------------------------
-                        */
-                        if (
-                            !FleetNotificationService
-                                ::userCanAccessLink(
-                                    $user,
-                                    $notification->link
-                                )
-                        ) {
-                            return false;
-                        }
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Driver - owned notifications only
-                        |--------------------------------------------------------------------------
-                        */
-                        if (
-                            $user->hasRole(
-                                'driver'
-                            )
-                        ) {
-                            return FleetNotificationService
-                                ::driverOwnsNotification(
-                                    $user,
-                                    $notification
-                                );
-                        }
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Other Roles
-                        |--------------------------------------------------------------------------
-                        */
-                        return true;
-                    }
+                ->whereNull(
+                    'resolved_at'
                 )
+                ->lazyByIdDesc(
+                    50,
+                    'id'
+                );
 
-                ->take(30)
-                ->values();
+        foreach (
+            $activeNotifications as $notification
+        ) {
+            if (
+                ! $this->userCanAccessNotification(
+                    $user,
+                    $notification
+                )
+            ) {
+                continue;
+            }
+
+            $notifications->push(
+                $notification
+            );
+
+            if ($notifications->count() === 30) {
+                break;
+            }
+        }
 
         return response()->json([
             'notifications' =>
@@ -239,78 +213,88 @@ class FleetNotificationController extends Controller
         | Fetch own unread notifications
         |--------------------------------------------------------------------------
         */
-        $notifications =
-            FleetNotification::query()
-                ->where(
-                    'user_id',
-                    $user->id
-                )
-                ->where(
-                    'status',
-                    'Unread'
-                )
-                ->get();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Only update notifications that remain accessible
-        |--------------------------------------------------------------------------
-        */
-        $accessibleIds =
-            $notifications
-                ->filter(
-                    function ($notification) use ($user) {
-                        if (
-                            !FleetNotificationService
-                                ::userCanAccessLink(
-                                    $user,
-                                    $notification->link
-                                )
-                        ) {
-                            return false;
-                        }
-
-                        if (
-                            $user->hasRole(
-                                'driver'
-                            )
-                        ) {
-                            return FleetNotificationService
-                                ::driverOwnsNotification(
+        FleetNotification::query()
+            ->where(
+                'user_id',
+                $user->id
+            )
+            ->where(
+                'status',
+                'Unread'
+            )
+            ->whereNull(
+                'resolved_at'
+            )
+            ->chunkById(
+                100,
+                function ($notifications) use ($user) {
+                    $accessibleIds =
+                        $notifications
+                            ->filter(
+                                fn ($notification) => $this->userCanAccessNotification(
                                     $user,
                                     $notification
-                                );
-                        }
+                                )
+                            )
+                            ->pluck('id');
 
-                        return true;
+                    if ($accessibleIds->isEmpty()) {
+                        return;
                     }
-                )
-                ->pluck('id');
 
-        if (
-            $accessibleIds->isNotEmpty()
-        ) {
-            FleetNotification::query()
-                ->where(
-                    'user_id',
-                    $user->id
-                )
-                ->whereIn(
-                    'id',
-                    $accessibleIds
-                )
-                ->update([
-                    'status' =>
-                        'Read',
-                ]);
-        }
+                    FleetNotification::query()
+                        ->where(
+                            'user_id',
+                            $user->id
+                        )
+                        ->where(
+                            'status',
+                            'Unread'
+                        )
+                        ->whereNull(
+                            'resolved_at'
+                        )
+                        ->whereIn(
+                            'id',
+                            $accessibleIds
+                        )
+                        ->update([
+                            'status' => 'Read',
+                        ]);
+                }
+            );
 
         return response()->json([
-            'success' =>
-                true,
+            'success' => true,
 
-            'message' =>
-                'All notifications marked as read.',
+            'message' => 'All notifications marked as read.',
         ]);
+    }
+
+    private function userCanAccessNotification(
+        User $user,
+        FleetNotification $notification
+    ): bool {
+        if (
+            ! FleetNotificationService::userCanAccessLink(
+                $user,
+                $notification->link
+            )
+        ) {
+            return false;
+        }
+
+        if (
+            $user->hasRole(
+                'driver'
+            )
+        ) {
+            return FleetNotificationService::driverOwnsNotification(
+                $user,
+                $notification
+            );
+        }
+
+        return true;
     }
 }

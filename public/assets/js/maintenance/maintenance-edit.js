@@ -533,6 +533,12 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
                 ? String(maintenance.completion_date).substring(0, 10)
                 : "",
         );
+        setValue(
+            "editMaintenanceNextSchedule",
+            maintenance.next_schedule
+                ? String(maintenance.next_schedule).substring(0, 10)
+                : "",
+        );
         setEditMaintenanceScheduledDateMinimum();
         setEditMaintenanceCompletionDateMinimum();
         setValue("editMaintenanceCost", maintenance.cost);
@@ -660,6 +666,7 @@ async function updateMaintenanceRecord(form, maintenanceId) {
         technician: getValue("editMaintenanceTechnician").trim(),
         maintenance_date: getValue("editMaintenanceScheduledDate"),
         completion_date: getValue("editMaintenanceCompletionDate") || null,
+        next_schedule: getValue("editMaintenanceNextSchedule") || null,
         cost: getValue("editMaintenanceCost") || null,
         priority: getValue("editMaintenancePriority"),
         odometer: getValue("editMaintenanceOdometer") || null,

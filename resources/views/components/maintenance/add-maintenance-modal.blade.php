@@ -119,14 +119,14 @@
           </div>
 
           <div class="form-section-heading">
-            <h3>Schedule &amp; Completion</h3>
-            <p>Set the planned service date and record completion when applicable.</p>
+            <h3>Current Maintenance Schedule &amp; Completion</h3>
+            <p>Set the date for this maintenance record and record completion when applicable.</p>
           </div>
 
           <!-- Scheduled Date -->
           <div class="form-group">
             <label for="maintenanceScheduledDate">
-              Scheduled Date *
+              Current Maintenance Date *
             </label>
 
             <input
@@ -146,6 +146,18 @@
               type="date"
               id="maintenanceCompletionDate"
             />
+          </div>
+
+          <div class="form-group">
+            <label for="maintenanceNextSchedule">
+              Next Service Due
+            </label>
+
+            <input
+              type="date"
+              id="maintenanceNextSchedule"
+            />
+            <small class="form-hint">Optional. When supplied, this date must follow the current maintenance date and completion date, when recorded.</small>
           </div>
 
           <div class="form-section-heading">

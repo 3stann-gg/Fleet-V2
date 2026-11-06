@@ -22,6 +22,7 @@ class FleetNotification extends Model
 
     protected $casts = [
         'created_at' => 'datetime',
+        'resolved_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

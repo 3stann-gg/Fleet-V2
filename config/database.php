@@ -64,6 +64,23 @@ return [
             ]) : [],
         ],
 
+        'mysql_concurrency' => [
+            'driver' => 'mysql',
+            'host' => env('MYSQL_CONCURRENCY_HOST', ''),
+            'port' => env('MYSQL_CONCURRENCY_PORT', ''),
+            'database' => env('MYSQL_CONCURRENCY_DATABASE', ''),
+            'username' => env('MYSQL_CONCURRENCY_USERNAME', ''),
+            'password' => env('MYSQL_CONCURRENCY_PASSWORD', ''),
+            'unix_socket' => '',
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => 'InnoDB',
+            'options' => [],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
