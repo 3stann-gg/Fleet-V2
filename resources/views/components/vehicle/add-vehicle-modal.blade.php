@@ -86,6 +86,16 @@
           </div>
 
           <div class="form-group">
+            <label for="vehicleCondition">Vehicle Condition <span class="required" aria-hidden="true">*</span></label>
+            <select id="vehicleCondition" name="vehicle_condition" required>
+              <option value="">Select Vehicle Condition</option>
+              @foreach(\App\Models\Vehicle::CONDITION_LABELS as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
+              @endforeach
+            </select>
+          </div>
+
+          <div class="form-group">
             <label for="vehicleLtoCategory">LTO Vehicle Category</label>
             <select id="vehicleLtoCategory" name="lto_vehicle_category">
               <option value="">Not Recorded</option>
@@ -290,6 +300,11 @@
           <div class="form-group">
             <label for="vehiclePurchaseDate">Purchase Date</label>
             <input type="date" id="vehiclePurchaseDate" />
+          </div>
+
+          <div class="form-group">
+            <label for="vehicleAcquisitionDate">Acquisition Date <span class="required" aria-hidden="true">*</span></label>
+            <input type="date" id="vehicleAcquisitionDate" name="acquisition_date" required />
           </div>
 
           <div class="form-group">

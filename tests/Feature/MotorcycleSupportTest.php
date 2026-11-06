@@ -16,6 +16,8 @@ function motorcycleVehiclePayload(array $attributes = []): array
     return array_merge([
         'plate_number' => fake()->unique()->bothify('MC-####'),
         'vehicle_type' => 'Motorcycle',
+        'vehicle_condition' => 'brand_new',
+        'acquisition_date' => now()->toDateString(),
         'department' => 'Logistics',
         'brand' => 'Honda',
         'model' => 'Click',

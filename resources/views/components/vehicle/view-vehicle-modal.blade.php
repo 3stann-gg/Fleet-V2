@@ -111,6 +111,16 @@
         </div>
 
         <div class="view-vehicle-detail-item">
+          <label>Vehicle Condition</label>
+          <p id="viewVehicleCondition"></p>
+        </div>
+
+        <div class="view-vehicle-detail-item">
+          <label>Acquisition Date</label>
+          <p id="viewAcquisitionDate"></p>
+        </div>
+
+        <div class="view-vehicle-detail-item">
           <label>Purchase Date</label>
           <p id="viewPurchaseDate"></p>
         </div>

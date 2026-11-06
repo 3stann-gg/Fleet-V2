@@ -40,6 +40,11 @@ class Vehicle extends Model
         'Motorcycle',
     ];
 
+    public const CONDITION_LABELS = [
+        'brand_new' => 'Brand-new',
+        'second_hand' => 'Second-hand',
+    ];
+
     public const MOTORCYCLE_POWERTRAIN_TYPES = [
         'gasoline',
         'electric',
@@ -120,6 +125,7 @@ class Vehicle extends Model
     ];
 
     protected $appends = [
+        'vehicle_condition_label',
         'powertrain_label',
         'readiness_label',
         'fuel_level_percent',
@@ -129,11 +135,13 @@ class Vehicle extends Model
     protected $fillable = [
         'plate_number',
         'vehicle_type',
+        'vehicle_condition',
         'lto_vehicle_category',
         'department',
         'brand',
         'model',
         'purchase_date',
+        'acquisition_date',
         'insurance_expiry',
         'capacity',
         'fuel_type',
@@ -164,6 +172,7 @@ class Vehicle extends Model
 
     protected $casts = [
         'purchase_date' => 'date',
+        'acquisition_date' => 'date:Y-m-d',
         'insurance_expiry' => 'date',
         'tank_capacity' => 'decimal:2',
         'current_fuel' => 'decimal:2',
@@ -185,6 +194,12 @@ class Vehicle extends Model
     public function isMotorcycle(): bool
     {
         return $this->vehicle_type === 'Motorcycle';
+    }
+
+    public function getVehicleConditionLabelAttribute(): string
+    {
+        return self::CONDITION_LABELS[$this->vehicle_condition]
+            ?? 'Not Recorded';
     }
 
     public function getRequiredDlCodeAttribute(): ?string
