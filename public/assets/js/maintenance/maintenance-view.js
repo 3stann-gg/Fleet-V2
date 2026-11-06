@@ -219,12 +219,47 @@ async function openViewMaintenanceModal(row) {
                 : null,
             "Not scheduled",
         );
+        const recurrenceEnabled = maintenance.recurrence_frequency !== null;
         setText(
             "viewMaintenanceNextSchedule",
             maintenance.next_schedule
                 ? formatMaintenanceViewDate(maintenance.next_schedule)
                 : null,
-            "Not scheduled",
+            recurrenceEnabled ? "Not yet calculated" : "Not recorded",
+        );
+        setText(
+            "viewMaintenanceSchedulingMode",
+            recurrenceEnabled ? "Recurring" : "Manual / Not configured",
+        );
+        setText(
+            "viewMaintenanceRecurrenceFrequency",
+            recurrenceEnabled
+                ? maintenance.recurrence_frequency === "weekly"
+                    ? "Weekly"
+                    : "Monthly"
+                : "Not applicable",
+        );
+        setText(
+            "viewMaintenanceRecurrenceInterval",
+            recurrenceEnabled
+                ? maintenance.recurrence_frequency === "weekly"
+                    ? "Every 1 week"
+                    : "Every 1 month"
+                : "Not applicable",
+        );
+        setText(
+            "viewMaintenancePreserveMonthEnd",
+            recurrenceEnabled && maintenance.recurrence_frequency === "monthly"
+                ? maintenance.recurrence_preserve_month_end
+                    ? "Preserved"
+                    : "Not preserved"
+                : "Not applicable",
+        );
+        setText(
+            "viewMaintenanceRecurrenceBasis",
+            recurrenceEnabled
+                ? "Actual completion date (calculation begins in the next phase)"
+                : "Manual scheduling",
         );
         setText(
             "viewMaintenanceBasis",

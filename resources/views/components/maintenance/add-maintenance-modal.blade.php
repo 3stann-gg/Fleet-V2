@@ -160,6 +160,55 @@
             <small class="form-hint">Optional. When supplied, this date must follow the current maintenance date and completion date, when recorded.</small>
           </div>
 
+          <div
+            id="maintenanceRecurrenceSection"
+            class="form-group"
+            hidden
+          >
+            <label for="maintenanceRecurrenceEnabled">
+              <input
+                type="checkbox"
+                id="maintenanceRecurrenceEnabled"
+              />
+              Enable Recurring Maintenance
+            </label>
+            <small class="form-hint">Configuration only. Automatic next-service calculation from the actual completion date will be added in the next phase.</small>
+          </div>
+
+          <div
+            id="maintenanceRecurrenceOptions"
+            class="form-group"
+            hidden
+          >
+            <label for="maintenanceRecurrenceFrequency">
+              Recurrence Frequency *
+            </label>
+            <select id="maintenanceRecurrenceFrequency">
+              <option value="">Select Frequency</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <small
+              id="maintenanceRecurrenceInterval"
+              class="form-hint"
+            >Select a frequency.</small>
+          </div>
+
+          <div
+            id="maintenancePreserveMonthEndGroup"
+            class="form-group"
+            hidden
+          >
+            <label for="maintenancePreserveMonthEnd">
+              <input
+                type="checkbox"
+                id="maintenancePreserveMonthEnd"
+              />
+              Preserve Month End
+            </label>
+            <small class="form-hint">The future calculated service date will use the final day of the target month.</small>
+          </div>
+
           <div class="form-section-heading">
             <h3>Cost, Priority &amp; Status</h3>
             <p>Record the approved cost and current maintenance state.</p>

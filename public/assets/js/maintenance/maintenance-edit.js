@@ -83,6 +83,79 @@ async function getEditMaintenanceSettings() {
     }
 }
 
+let editMaintenanceRecurrenceLocked = false;
+
+function updateMaintenanceEditRecurrenceControls() {
+    const requestType = document.getElementById("editMaintenanceRequestType");
+    const serviceType = document.getElementById("editMaintenanceServiceType");
+    const section = document.getElementById(
+        "editMaintenanceRecurrenceSection",
+    );
+    const enabled = document.getElementById(
+        "editMaintenanceRecurrenceEnabled",
+    );
+    const options = document.getElementById(
+        "editMaintenanceRecurrenceOptions",
+    );
+    const frequency = document.getElementById(
+        "editMaintenanceRecurrenceFrequency",
+    );
+    const interval = document.getElementById(
+        "editMaintenanceRecurrenceInterval",
+    );
+    const monthEndGroup = document.getElementById(
+        "editMaintenancePreserveMonthEndGroup",
+    );
+    const preserveMonthEnd = document.getElementById(
+        "editMaintenancePreserveMonthEnd",
+    );
+    const nextSchedule = document.getElementById(
+        "editMaintenanceNextSchedule",
+    );
+    const eligible =
+        requestType?.value === "Normal" &&
+        serviceType?.value === "Preventive Maintenance";
+    const recurrenceEnabled = enabled?.checked === true;
+
+    if (section) {
+        section.hidden = !eligible && !recurrenceEnabled;
+    }
+    if (enabled) {
+        enabled.disabled = editMaintenanceRecurrenceLocked;
+    }
+    if (options) {
+        options.hidden = !recurrenceEnabled;
+    }
+    if (frequency) {
+        frequency.required = recurrenceEnabled && !editMaintenanceRecurrenceLocked;
+        frequency.disabled = !recurrenceEnabled || editMaintenanceRecurrenceLocked;
+    }
+
+    const selectedFrequency = recurrenceEnabled ? frequency?.value : "";
+    if (interval) {
+        interval.textContent =
+            selectedFrequency === "weekly"
+                ? "Every 1 week"
+                : selectedFrequency === "monthly"
+                  ? "Every 1 month"
+                  : "Select a frequency.";
+    }
+
+    const monthly = selectedFrequency === "monthly";
+    if (monthEndGroup) {
+        monthEndGroup.hidden = !monthly;
+    }
+    if (preserveMonthEnd) {
+        preserveMonthEnd.disabled = !monthly || editMaintenanceRecurrenceLocked;
+        if (!monthly) {
+            preserveMonthEnd.checked = false;
+        }
+    }
+    if (nextSchedule) {
+        nextSchedule.disabled = recurrenceEnabled && !editMaintenanceRecurrenceLocked;
+    }
+}
+
 function applyEditMaintenanceSettings(settings) {
     const requestType = document.getElementById("editMaintenanceRequestType");
     const priority = document.getElementById("editMaintenancePriority");
@@ -264,6 +337,7 @@ function applyEditMaintenanceSettings(settings) {
     if (mark) {
         mark.hidden = !required;
     }
+    updateMaintenanceEditRecurrenceControls();
 }
 
 function getEditMaintenanceLocalDate() {
@@ -539,6 +613,29 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
                 ? String(maintenance.next_schedule).substring(0, 10)
                 : "",
         );
+        const recurrenceEnabled = maintenance.recurrence_frequency !== null;
+        const recurrenceEnabledInput = document.getElementById(
+            "editMaintenanceRecurrenceEnabled",
+        );
+        const recurrenceFrequency = document.getElementById(
+            "editMaintenanceRecurrenceFrequency",
+        );
+        const preserveMonthEnd = document.getElementById(
+            "editMaintenancePreserveMonthEnd",
+        );
+        if (recurrenceEnabledInput) {
+            recurrenceEnabledInput.checked = recurrenceEnabled;
+        }
+        if (recurrenceFrequency) {
+            recurrenceFrequency.value = maintenance.recurrence_frequency || "";
+        }
+        if (preserveMonthEnd) {
+            preserveMonthEnd.checked =
+                maintenance.recurrence_preserve_month_end === true;
+        }
+        editMaintenanceRecurrenceLocked = ["Completed", "Cancelled"].includes(
+            maintenance.status,
+        );
         setEditMaintenanceScheduledDateMinimum();
         setEditMaintenanceCompletionDateMinimum();
         setValue("editMaintenanceCost", maintenance.cost);
@@ -549,6 +646,7 @@ async function populateEditMaintenanceForm(row, maintenanceData = null) {
         setValue("editMaintenancePriority", maintenance.priority);
         setValue("editMaintenanceStatus", maintenance.status);
         applyEditMaintenanceSettings(editMaintenanceSettings);
+        updateMaintenanceEditRecurrenceControls();
         /*
         |--------------------------------------------------------------------------
         | Restore actual saved priority
@@ -675,6 +773,25 @@ async function updateMaintenanceRecord(form, maintenanceId) {
         notes: getValue("editMaintenanceNotes").trim() || null,
     };
 
+    if (!editMaintenanceRecurrenceLocked) {
+        const recurrenceEnabled =
+            document.getElementById("editMaintenanceRecurrenceEnabled")
+                ?.checked === true;
+        const recurrenceFrequency = getValue(
+            "editMaintenanceRecurrenceFrequency",
+        );
+        payload.recurrence_enabled = recurrenceEnabled;
+        payload.recurrence_frequency = recurrenceEnabled
+            ? recurrenceFrequency || null
+            : null;
+        payload.recurrence_interval = recurrenceEnabled ? 1 : null;
+        payload.recurrence_preserve_month_end =
+            recurrenceEnabled && recurrenceFrequency === "monthly"
+                ? document.getElementById("editMaintenancePreserveMonthEnd")
+                      ?.checked === true
+                : false;
+    }
+
     const response = await fetch(`/maintenance/${maintenanceId}`, {
         method: "PUT",
         headers: {
@@ -729,6 +846,7 @@ async function initMaintenanceEdit() {
         .getElementById("editMaintenanceServiceType")
         ?.addEventListener("change", () => {
             syncEditMaintenanceCostFromServiceType();
+            updateMaintenanceEditRecurrenceControls();
         });
     
     document
@@ -736,6 +854,37 @@ async function initMaintenanceEdit() {
         ?.addEventListener("change", () => {
             applyEditMaintenanceSettings(editMaintenanceSettings);
         });
+
+    document
+        .getElementById("editMaintenanceRecurrenceEnabled")
+        ?.addEventListener("change", async (event) => {
+            const checkbox = event.currentTarget;
+            const nextSchedule = document.getElementById(
+                "editMaintenanceNextSchedule",
+            );
+
+            if (checkbox.checked && nextSchedule?.value) {
+                const confirmed = await window.showFleetConfirm({
+                    title: "Clear Manual Next Service Due?",
+                    message:
+                        "Recurring maintenance cannot coexist with a manual Next Service Due date. Clear the manual date and enable recurrence?",
+                    confirmLabel: "Clear Date",
+                    confirmIcon: "ph ph-calendar-x",
+                    tone: "primary",
+                });
+
+                if (!confirmed) {
+                    checkbox.checked = false;
+                } else {
+                    nextSchedule.value = "";
+                }
+            }
+
+            updateMaintenanceEditRecurrenceControls();
+        });
+    document
+        .getElementById("editMaintenanceRecurrenceFrequency")
+        ?.addEventListener("change", updateMaintenanceEditRecurrenceControls);
 
     document
         .getElementById("editMaintenanceScheduledDate")

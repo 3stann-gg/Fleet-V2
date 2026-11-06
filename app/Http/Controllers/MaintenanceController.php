@@ -16,11 +16,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator as ValidationValidator;
 
 class MaintenanceController extends Controller
 {
     use AuthorizesRequests;
+
+    private const RECURRENCE_FIELDS = [
+        'recurrence_enabled',
+        'recurrence_frequency',
+        'recurrence_interval',
+        'recurrence_preserve_month_end',
+    ];
 
     public function __construct(
         private MaintenanceClassificationService $maintenanceClassificationService,
@@ -94,6 +102,314 @@ class MaintenanceController extends Controller
                 );
             }
         });
+    }
+
+    private function recurrenceConfigurationWasSubmitted(Request $request): bool
+    {
+        return collect(self::RECURRENCE_FIELDS)
+            ->contains(fn (string $field): bool => $request->exists($field));
+    }
+
+    private function addRecurrenceConfigurationValidation(
+        ValidationValidator $validator,
+        Request $request,
+        ?Maintenance $maintenance = null,
+        bool $isLifecycleTransition = false,
+    ): void {
+        if ($isLifecycleTransition) {
+            return;
+        }
+
+        $configurationWasSubmitted =
+            $this->recurrenceConfigurationWasSubmitted($request);
+
+        $validator->after(function (ValidationValidator $validator) use (
+            $request,
+            $maintenance,
+            $configurationWasSubmitted,
+        ): void {
+            if ($configurationWasSubmitted && ! $request->exists('recurrence_enabled')) {
+                $validator->errors()->add(
+                    'recurrence_enabled',
+                    'Specify whether recurring maintenance is enabled.'
+                );
+
+                return;
+            }
+
+            if (
+                $validator->errors()->has('recurrence_enabled') ||
+                $validator->errors()->has('recurrence_frequency') ||
+                $validator->errors()->has('recurrence_interval') ||
+                $validator->errors()->has('recurrence_preserve_month_end') ||
+                $validator->errors()->has('next_schedule')
+            ) {
+                return;
+            }
+
+            if (! $configurationWasSubmitted) {
+                if (
+                    $maintenance?->recurrence_frequency !== null &&
+                    $request->exists('maintenance_type') &&
+                    $request->input('maintenance_type') !== 'Preventive Maintenance'
+                ) {
+                    $validator->errors()->add(
+                        'maintenance_type',
+                        'Disable recurring maintenance before selecting a different service type.'
+                    );
+                }
+
+            } elseif (! $request->boolean('recurrence_enabled')) {
+                if ($request->filled('recurrence_frequency')) {
+                    $validator->errors()->add(
+                        'recurrence_frequency',
+                        'The recurrence frequency must be empty when recurring maintenance is disabled.'
+                    );
+                }
+
+                if ($request->filled('recurrence_interval')) {
+                    $validator->errors()->add(
+                        'recurrence_interval',
+                        'The recurrence interval must be empty when recurring maintenance is disabled.'
+                    );
+                }
+
+                if ($request->boolean('recurrence_preserve_month_end')) {
+                    $validator->errors()->add(
+                        'recurrence_preserve_month_end',
+                        'Month-end preservation must be disabled when recurring maintenance is disabled.'
+                    );
+                }
+            } else {
+                if (! $request->filled('recurrence_frequency')) {
+                    $validator->errors()->add(
+                        'recurrence_frequency',
+                        'Select a recurrence frequency.'
+                    );
+                }
+
+                if (! $request->filled('recurrence_interval')) {
+                    $validator->errors()->add(
+                        'recurrence_interval',
+                        'The recurrence interval is required.'
+                    );
+                }
+
+                if (! $request->exists('recurrence_preserve_month_end')) {
+                    $validator->errors()->add(
+                        'recurrence_preserve_month_end',
+                        'Specify whether month-end preservation is enabled.'
+                    );
+                }
+
+                if (
+                    $request->input('recurrence_frequency') === 'weekly' &&
+                    $request->boolean('recurrence_preserve_month_end')
+                ) {
+                    $validator->errors()->add(
+                        'recurrence_preserve_month_end',
+                        'Month-end preservation is available only for monthly recurrence.'
+                    );
+                }
+            }
+
+            if (
+                $maintenance &&
+                in_array($maintenance->status, ['Completed', 'Cancelled'], true) &&
+                $configurationWasSubmitted &&
+                $this->recurrenceConfigurationDiffersFromRequest($maintenance, $request)
+            ) {
+                $validator->errors()->add(
+                    'recurrence_enabled',
+                    'Recurrence configuration is read-only for completed or cancelled maintenance.'
+                );
+            }
+
+            $effectiveFrequency = $configurationWasSubmitted
+                ? ($request->boolean('recurrence_enabled')
+                    ? $request->input('recurrence_frequency')
+                    : null)
+                : $maintenance?->recurrence_frequency;
+
+            if ($effectiveFrequency === null) {
+                return;
+            }
+
+            $effectiveRequestType = $maintenance
+                ? $maintenance->request_type
+                : $request->input('request_type');
+
+            if ($effectiveRequestType !== 'Normal') {
+                $validator->errors()->add(
+                    'recurrence_enabled',
+                    'Recurring maintenance is available only for Normal requests.'
+                );
+            }
+
+            if ($request->input('maintenance_type', $maintenance?->maintenance_type) !== 'Preventive Maintenance') {
+                $validator->errors()->add(
+                    'maintenance_type',
+                    'Recurring maintenance is available only for Preventive Maintenance.'
+                );
+            }
+
+            if (! $request->exists('next_schedule')) {
+                if (
+                    $maintenance?->recurrence_frequency === null &&
+                    $maintenance?->next_schedule !== null
+                ) {
+                    $validator->errors()->add(
+                        'next_schedule',
+                        'Clear the manual Next Service Due date before enabling recurring maintenance.'
+                    );
+                }
+
+                return;
+            }
+
+            $storedNextSchedule = $maintenance?->next_schedule?->toDateString();
+            $requestedNextSchedule = $request->filled('next_schedule')
+                ? Carbon::parse((string) $request->input('next_schedule'))->toDateString()
+                : null;
+            $nextScheduleChanged = $requestedNextSchedule !== $storedNextSchedule;
+
+            if ($nextScheduleChanged && $requestedNextSchedule !== null) {
+                $validator->errors()->add(
+                    'next_schedule',
+                    'Recurring maintenance cannot use a manually changed Next Service Due date.'
+                );
+            }
+
+            if (
+                $nextScheduleChanged &&
+                $requestedNextSchedule === null &&
+                $maintenance?->recurrence_frequency !== null
+            ) {
+                $validator->errors()->add(
+                    'next_schedule',
+                    'The saved Next Service Due date cannot be cleared while recurring maintenance remains enabled.'
+                );
+            }
+        });
+    }
+
+    private function normalizeRecurrenceConfiguration(
+        array $validated,
+        Request $request,
+    ): array {
+        if (! $this->recurrenceConfigurationWasSubmitted($request)) {
+            return $validated;
+        }
+
+        $enabled = $request->boolean('recurrence_enabled');
+        unset($validated['recurrence_enabled']);
+
+        $validated['recurrence_frequency'] = $enabled
+            ? (string) $validated['recurrence_frequency']
+            : null;
+        $validated['recurrence_interval'] = $enabled
+            ? (int) $validated['recurrence_interval']
+            : null;
+        $validated['recurrence_preserve_month_end'] = $enabled
+            ? (bool) $validated['recurrence_preserve_month_end']
+            : false;
+
+        return $validated;
+    }
+
+    private function recurrenceConfigurationDiffersFromRequest(
+        Maintenance $maintenance,
+        Request $request,
+    ): bool {
+        $enabled = $request->boolean('recurrence_enabled');
+
+        return $maintenance->recurrence_frequency !== (
+            $enabled ? (string) $request->input('recurrence_frequency') : null
+        ) || $maintenance->recurrence_interval !== (
+            $enabled ? (int) $request->input('recurrence_interval') : null
+        ) || $maintenance->recurrence_preserve_month_end !== (
+            $enabled ? $request->boolean('recurrence_preserve_month_end') : false
+        );
+    }
+
+    private function assertLockedRecurrenceConfigurationIsAllowed(
+        Maintenance $maintenance,
+        array $validated,
+    ): void {
+        $configurationWasSubmitted =
+            array_key_exists('recurrence_frequency', $validated);
+
+        $configurationDiffers =
+            $configurationWasSubmitted && (
+                $maintenance->recurrence_frequency !== $validated['recurrence_frequency'] ||
+                $maintenance->recurrence_interval !== $validated['recurrence_interval'] ||
+                $maintenance->recurrence_preserve_month_end !== $validated['recurrence_preserve_month_end']
+            );
+
+        if (in_array($maintenance->status, ['Completed', 'Cancelled'], true)) {
+            if ($configurationDiffers) {
+                throw ValidationException::withMessages([
+                    'recurrence_enabled' => 'Recurrence configuration is read-only for completed or cancelled maintenance.',
+                ]);
+            }
+        }
+
+        $effectiveFrequency = $configurationWasSubmitted
+            ? $validated['recurrence_frequency']
+            : $maintenance->recurrence_frequency;
+
+        if ($effectiveFrequency === null) {
+            return;
+        }
+
+        if ($maintenance->request_type !== 'Normal') {
+            throw ValidationException::withMessages([
+                'recurrence_enabled' => 'Recurring maintenance is available only for Normal requests.',
+            ]);
+        }
+
+        if (($validated['maintenance_type'] ?? $maintenance->maintenance_type) !== 'Preventive Maintenance') {
+            throw ValidationException::withMessages([
+                'maintenance_type' => 'Recurring maintenance is available only for Preventive Maintenance.',
+            ]);
+        }
+
+        if (! array_key_exists('next_schedule', $validated)) {
+            if (
+                $configurationWasSubmitted &&
+                $maintenance->recurrence_frequency === null &&
+                $maintenance->next_schedule !== null
+            ) {
+                throw ValidationException::withMessages([
+                    'next_schedule' => 'Clear the manual Next Service Due date before enabling recurring maintenance.',
+                ]);
+            }
+
+            return;
+        }
+
+        $storedNextSchedule = $maintenance->next_schedule?->toDateString();
+        $requestedNextSchedule = $validated['next_schedule'] === null ||
+            $validated['next_schedule'] === ''
+                ? null
+                : Carbon::parse((string) $validated['next_schedule'])->toDateString();
+        $nextScheduleChanged = $requestedNextSchedule !== $storedNextSchedule;
+
+        if ($nextScheduleChanged && $requestedNextSchedule !== null) {
+            throw ValidationException::withMessages([
+                'next_schedule' => 'Recurring maintenance cannot use a manually changed Next Service Due date.',
+            ]);
+        }
+
+        if (
+            $nextScheduleChanged &&
+            $requestedNextSchedule === null &&
+            $maintenance->recurrence_frequency !== null
+        ) {
+            throw ValidationException::withMessages([
+                'next_schedule' => 'The saved Next Service Due date cannot be cleared while recurring maintenance remains enabled.',
+            ]);
+        }
     }
 
     private function startVehicleMaintenance(Vehicle $vehicle): void
@@ -674,6 +990,25 @@ class MaintenanceController extends Controller
                     'nullable',
                     'date',
                 ],
+                'recurrence_enabled' => [
+                    'sometimes',
+                    'boolean',
+                ],
+                'recurrence_frequency' => [
+                    'sometimes',
+                    'nullable',
+                    Rule::in(['weekly', 'monthly']),
+                ],
+                'recurrence_interval' => [
+                    'sometimes',
+                    'nullable',
+                    'integer',
+                    Rule::in([1]),
+                ],
+                'recurrence_preserve_month_end' => [
+                    'sometimes',
+                    'boolean',
+                ],
                 'technician' => [
                     'required',
                     'string',
@@ -713,6 +1048,7 @@ class MaintenanceController extends Controller
         );
 
         $this->addNextScheduleChronologyValidation($validator, $request);
+        $this->addRecurrenceConfigurationValidation($validator, $request);
 
         if ($validator->fails()) {
             return response()->json([
@@ -727,8 +1063,12 @@ class MaintenanceController extends Controller
                 $validator,
                 $maintenanceSettings,
                 $initialStatus,
+                $request,
             ) {
-                $validated = $validator->validated();
+                $validated = $this->normalizeRecurrenceConfiguration(
+                    $validator->validated(),
+                    $request,
+                );
                 $validated['status'] = $initialStatus;
 
                 $validated['maintenance_number'] =
@@ -815,6 +1155,12 @@ class MaintenanceController extends Controller
                 'maintenance' => $result,
             ], 201);
 
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please check the maintenance information.',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -954,6 +1300,29 @@ class MaintenanceController extends Controller
                     'nullable',
                     'date',
                 ],
+                'recurrence_enabled' => [
+                    Rule::excludeIf($isLifecycleTransition),
+                    'sometimes',
+                    'boolean',
+                ],
+                'recurrence_frequency' => [
+                    Rule::excludeIf($isLifecycleTransition),
+                    'sometimes',
+                    'nullable',
+                    Rule::in(['weekly', 'monthly']),
+                ],
+                'recurrence_interval' => [
+                    Rule::excludeIf($isLifecycleTransition),
+                    'sometimes',
+                    'nullable',
+                    'integer',
+                    Rule::in([1]),
+                ],
+                'recurrence_preserve_month_end' => [
+                    Rule::excludeIf($isLifecycleTransition),
+                    'sometimes',
+                    'boolean',
+                ],
                 'technician' => [
                     Rule::excludeIf($isLifecycleTransition),
                     'required',
@@ -1025,6 +1394,12 @@ class MaintenanceController extends Controller
             $maintenance,
             $isLifecycleTransition,
         );
+        $this->addRecurrenceConfigurationValidation(
+            $validator,
+            $request,
+            $maintenance,
+            $isLifecycleTransition,
+        );
 
         if ($validator->fails()) {
             return response()->json([
@@ -1035,7 +1410,10 @@ class MaintenanceController extends Controller
         }
 
         try {
-            $validatedInput = $validator->validated();
+            $validatedInput = $this->normalizeRecurrenceConfiguration(
+                $validator->validated(),
+                $request,
+            );
 
             for ($sourceAttempt = 1; $sourceAttempt <= 3; $sourceAttempt++) {
                 try {
@@ -1077,6 +1455,11 @@ class MaintenanceController extends Controller
                             $this->getMaintenanceAuditValues(
                                 $maintenance
                             );
+
+                        $this->assertLockedRecurrenceConfigurationIsAllowed(
+                            $maintenance,
+                            $validatedInput,
+                        );
 
                         $previousNextSchedule =
                             $maintenance->next_schedule
@@ -1354,6 +1737,12 @@ class MaintenanceController extends Controller
                 'maintenance' => $updatedMaintenance,
             ]);
 
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please check the maintenance information.',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -1686,6 +2075,12 @@ class MaintenanceController extends Controller
                         $maintenance->next_schedule
                     )->format('Y-m-d')
                     : null,
+
+            'recurrence_frequency' => $maintenance->recurrence_frequency,
+
+            'recurrence_interval' => $maintenance->recurrence_interval,
+
+            'recurrence_preserve_month_end' => $maintenance->recurrence_preserve_month_end,
 
             'technician' => $maintenance->technician,
 
