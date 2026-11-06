@@ -165,6 +165,55 @@
             <small class="form-hint">Optional. A newly supplied or changed date must follow the current maintenance date and completion date, when recorded.</small>
           </div>
 
+          <div
+            id="editMaintenanceRecurrenceSection"
+            class="form-group"
+            hidden
+          >
+            <label for="editMaintenanceRecurrenceEnabled">
+              <input
+                type="checkbox"
+                id="editMaintenanceRecurrenceEnabled"
+              />
+              Enable Recurring Maintenance
+            </label>
+            <small class="form-hint">Configuration only. Automatic next-service calculation from the actual completion date will be added in the next phase.</small>
+          </div>
+
+          <div
+            id="editMaintenanceRecurrenceOptions"
+            class="form-group"
+            hidden
+          >
+            <label for="editMaintenanceRecurrenceFrequency">
+              Recurrence Frequency *
+            </label>
+            <select id="editMaintenanceRecurrenceFrequency">
+              <option value="">Select Frequency</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <small
+              id="editMaintenanceRecurrenceInterval"
+              class="form-hint"
+            >Select a frequency.</small>
+          </div>
+
+          <div
+            id="editMaintenancePreserveMonthEndGroup"
+            class="form-group"
+            hidden
+          >
+            <label for="editMaintenancePreserveMonthEnd">
+              <input
+                type="checkbox"
+                id="editMaintenancePreserveMonthEnd"
+              />
+              Preserve Month End
+            </label>
+            <small class="form-hint">The future calculated service date will use the final day of the target month.</small>
+          </div>
+
           <div class="form-section-heading">
             <h3>Cost, Priority &amp; Status</h3>
             <p>Maintain the approved cost and current maintenance state.</p>

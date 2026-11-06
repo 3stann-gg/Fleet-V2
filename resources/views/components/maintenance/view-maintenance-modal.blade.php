@@ -127,6 +127,31 @@
           <label>Next Service Due</label>
           <p id="viewMaintenanceNextSchedule"></p>
         </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Scheduling Mode</label>
+          <p id="viewMaintenanceSchedulingMode"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Recurrence Frequency</label>
+          <p id="viewMaintenanceRecurrenceFrequency"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Recurrence Interval</label>
+          <p id="viewMaintenanceRecurrenceInterval"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Preserve Month End</label>
+          <p id="viewMaintenancePreserveMonthEnd"></p>
+        </div>
+
+        <div class="view-maintenance-detail-item">
+          <label>Calculation Basis</label>
+          <p id="viewMaintenanceRecurrenceBasis"></p>
+        </div>
       </div>
 
       <div class="detail-section-heading detail-section-heading--standalone">
