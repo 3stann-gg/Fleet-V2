@@ -90,10 +90,14 @@ final class HarnessEnvironment
     /** @return array<int, string> */
     public static function businessTestCommand(string $projectRoot): array
     {
-        return self::testCommand(
+        $command = self::testCommand(
             $projectRoot,
             $projectRoot.'/tests/MySqlConcurrency/MaintenanceNotificationConcurrencyTest.php'
         );
+
+        $command[] = $projectRoot.'/tests/MySqlConcurrency/PreventiveMaintenanceCompletionConcurrencyTest.php';
+
+        return $command;
     }
 
     /** @return array<int, string> */

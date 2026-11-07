@@ -7,6 +7,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Mockery as M;
 use Symfony\Component\Process\Process;
 use Tests\MySqlConcurrency\Support\AuditFailureConstraint;
+use Tests\MySqlConcurrency\Support\BusinessConcurrencyWorker;
 use Tests\MySqlConcurrency\Support\ConcurrentProcessRunner;
 use Tests\MySqlConcurrency\Support\HarnessEnvironment;
 use Tests\MySqlConcurrency\Support\HarnessSafetyPolicy;
@@ -344,12 +345,83 @@ it('builds a diagnostic smoke command that fails on risky tests', function () {
 it('keeps guarded business scenarios separate from smoke tests', function () {
     $smokeCommand = HarnessEnvironment::smokeTestCommand('C:/isolated-project');
     $businessCommand = HarnessEnvironment::businessTestCommand('C:/isolated-project');
+    $occurrenceCommand = HarnessEnvironment::occurrenceTestCommand('C:/isolated-project');
+    $notificationSuite = 'C:/isolated-project/tests/MySqlConcurrency/MaintenanceNotificationConcurrencyTest.php';
+    $completionSuite = 'C:/isolated-project/tests/MySqlConcurrency/PreventiveMaintenanceCompletionConcurrencyTest.php';
 
     expect($businessCommand)->toContain('--display-all-issues')
         ->and($businessCommand)->toContain('--fail-on-risky')
-        ->and($businessCommand)->toContain('C:/isolated-project/tests/MySqlConcurrency/MaintenanceNotificationConcurrencyTest.php')
+        ->and(collect($businessCommand)->filter(
+            fn (string $argument): bool => $argument === $notificationSuite
+        ))->toHaveCount(1)
+        ->and(collect($businessCommand)->filter(
+            fn (string $argument): bool => $argument === $completionSuite
+        ))->toHaveCount(1)
         ->and($businessCommand)->not->toContain('C:/isolated-project/tests/MySqlConcurrency/MySqlEnvironmentTest.php')
-        ->and($smokeCommand)->not->toContain('C:/isolated-project/tests/MySqlConcurrency/MaintenanceNotificationConcurrencyTest.php');
+        ->and($smokeCommand)->not->toContain($notificationSuite)
+        ->and($smokeCommand)->not->toContain($completionSuite)
+        ->and($occurrenceCommand)->not->toContain($notificationSuite)
+        ->and($occurrenceCommand)->not->toContain($completionSuite)
+        ->and($occurrenceCommand)->toContain('C:/isolated-project/tests/MySqlConcurrency/NotificationOccurrenceConcurrencyTest.php');
+});
+
+it('allowlists only reviewed maintenance completion worker actions', function () {
+    expect(BusinessConcurrencyWorker::ACTIONS)
+        ->toContain('complete_maintenance', 'update_maintenance')
+        ->not->toContain('arbitrary_sql', 'invoke_method')
+        ->and(fn () => (new BusinessConcurrencyWorker)->run('arbitrary_sql', []))
+        ->toThrow(InvalidArgumentException::class, 'Unknown concurrency worker action');
+});
+
+it('classifies only exact reviewed maintenance validation responses', function () {
+    $validationMessage = 'Please check the maintenance information.';
+    $recurrenceConflict = [
+        'success' => false,
+        'message' => $validationMessage,
+        'errors' => [
+            'next_schedule' => [
+                'The saved Next Service Due date conflicts with the date calculated from the completion date.',
+            ],
+        ],
+    ];
+    $staleEdit = [
+        'success' => false,
+        'message' => $validationMessage,
+        'errors' => [
+            'next_schedule' => [
+                'The saved Next Service Due date cannot be cleared while recurring maintenance remains enabled.',
+            ],
+        ],
+    ];
+
+    expect(BusinessConcurrencyWorker::classifyMaintenanceResponse(
+        'completion',
+        422,
+        $recurrenceConflict
+    ))->toBe('recurrence_conflict_rejected')
+        ->and(BusinessConcurrencyWorker::classifyMaintenanceResponse(
+            'generic_update',
+            422,
+            $staleEdit
+        ))->toBe('stale_edit_rejected')
+        ->and(BusinessConcurrencyWorker::classifyMaintenanceResponse(
+            'completion',
+            422,
+            $staleEdit
+        ))->toBe('unexpected_response')
+        ->and(BusinessConcurrencyWorker::classifyMaintenanceResponse(
+            'generic_update',
+            422,
+            $recurrenceConflict
+        ))->toBe('unexpected_response')
+        ->and(BusinessConcurrencyWorker::classifyMaintenanceResponse(
+            'completion',
+            422,
+            [
+                'message' => $validationMessage,
+                'errors' => ['next_schedule' => ['Unrelated next schedule error.']],
+            ]
+        ))->toBe('unexpected_response');
 });
 
 it('encodes worker payloads without putting database credentials in commands', function () {
@@ -1310,6 +1382,7 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
     $concurrencyTestCase = file_get_contents($projectRoot.'/tests/MySqlConcurrency/TestCase.php');
     $concurrencyBootstrap = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bootstrap.php');
     $businessSpecifications = file_get_contents($projectRoot.'/tests/MySqlConcurrency/MaintenanceNotificationConcurrencyTest.php');
+    $completionSpecifications = file_get_contents($projectRoot.'/tests/MySqlConcurrency/PreventiveMaintenanceCompletionConcurrencyTest.php');
     $worker = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bin/worker.php');
     $businessWorker = file_get_contents($projectRoot.'/tests/MySqlConcurrency/Support/BusinessConcurrencyWorker.php');
     $runner = file_get_contents($projectRoot.'/tests/MySqlConcurrency/bin/run.php');
@@ -1333,6 +1406,10 @@ it('keeps normal SQLite configuration isolated and business concurrency executio
         ->and(substr_count($businessSpecifications, "it('"))->toBe(10)
         ->and($businessSpecifications)->not->toContain('->todo(')
         ->and(substr_count($businessSpecifications, "->group('known-production-race')"))->toBe(3)
+        ->and(substr_count($completionSpecifications, "it('"))->toBe(3)
+        ->and($businessWorker)->toContain('"/maintenance/{$maintenanceId}/transition"')
+        ->and($completionSpecifications)->toContain("MaintenanceController::class.'@transition'")
+        ->and($completionSpecifications)->not->toContain('->todo(')
         ->and($worker)->toContain('IsolatedMySqlEnvironment::assertExternalLockOwner();')
         ->and($worker)->toContain('IsolatedMySqlEnvironment::assertSafe();')
         ->and(strpos($businessWorker, "\$this->wait(\$payload, 'start');", strpos($businessWorker, 'private function oppositeVehicleReassignment')))

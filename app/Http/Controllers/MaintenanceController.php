@@ -10,7 +10,9 @@ use App\Services\FleetNotificationService;
 use App\Services\MaintenanceAuthorityChangedException;
 use App\Services\MaintenanceClassificationService;
 use App\Services\MySqlDeadlockRetryService;
+use App\Services\PreventiveMaintenanceRecurrenceCalculator;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,8 +34,85 @@ class MaintenanceController extends Controller
 
     public function __construct(
         private MaintenanceClassificationService $maintenanceClassificationService,
-        private MySqlDeadlockRetryService $deadlockRetryService
+        private MySqlDeadlockRetryService $deadlockRetryService,
+        private PreventiveMaintenanceRecurrenceCalculator $preventiveMaintenanceRecurrenceCalculator,
     ) {}
+
+    private function calculateCompletedRecurringNextSchedule(
+        Maintenance $maintenance,
+        string $completionDate,
+    ): ?string {
+        $frequency = $maintenance->recurrence_frequency;
+        $interval = $maintenance->recurrence_interval;
+        $preserveMonthEnd = $maintenance->recurrence_preserve_month_end;
+        $isManualConfiguration = $frequency === null &&
+            $interval === null &&
+            ! $preserveMonthEnd;
+
+        if ($isManualConfiguration) {
+            return null;
+        }
+
+        if ($maintenance->request_type !== 'Normal') {
+            throw ValidationException::withMessages([
+                'recurrence_frequency' => 'Recurring maintenance is available only for Normal requests.',
+            ]);
+        }
+
+        if ($maintenance->maintenance_type !== 'Preventive Maintenance') {
+            throw ValidationException::withMessages([
+                'recurrence_frequency' => 'Recurring maintenance is available only for Preventive Maintenance.',
+            ]);
+        }
+
+        if (! in_array($frequency, [
+            PreventiveMaintenanceRecurrenceCalculator::FREQUENCY_WEEKLY,
+            PreventiveMaintenanceRecurrenceCalculator::FREQUENCY_MONTHLY,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'recurrence_frequency' => 'The saved recurrence frequency must be weekly or monthly before maintenance can be completed.',
+            ]);
+        }
+
+        if ($interval !== 1) {
+            throw ValidationException::withMessages([
+                'recurrence_interval' => 'The saved recurrence interval must be exactly 1 before maintenance can be completed.',
+            ]);
+        }
+
+        if (
+            $frequency === PreventiveMaintenanceRecurrenceCalculator::FREQUENCY_WEEKLY &&
+            $preserveMonthEnd
+        ) {
+            throw ValidationException::withMessages([
+                'recurrence_preserve_month_end' => 'Month-end preservation is available only for monthly recurrence.',
+            ]);
+        }
+
+        $calculatedNextSchedule = $this->preventiveMaintenanceRecurrenceCalculator
+            ->calculateNextDueDate(
+                CarbonImmutable::parse(
+                    $completionDate,
+                    (string) config('app.timezone'),
+                ),
+                $frequency,
+                $interval,
+                $preserveMonthEnd,
+            )
+            ->toDateString();
+        $existingNextSchedule = $maintenance->next_schedule?->toDateString();
+
+        if (
+            $existingNextSchedule !== null &&
+            $existingNextSchedule !== $calculatedNextSchedule
+        ) {
+            throw ValidationException::withMessages([
+                'next_schedule' => 'The saved Next Service Due date conflicts with the date calculated from the completion date.',
+            ]);
+        }
+
+        return $calculatedNextSchedule;
+    }
 
     private function addNextScheduleChronologyValidation(
         ValidationValidator $validator,
@@ -614,11 +693,12 @@ class MaintenanceController extends Controller
             $nextSchedule
         )->startOfDay();
 
-        $days =
+        $days = (int) round(
             $today->diffInDays(
                 $schedule,
                 false
-            );
+            )
+        );
 
         return [
             'days' => $days,
@@ -1633,12 +1713,23 @@ class MaintenanceController extends Controller
                             */
                             $completionVehicle = $newVehicle;
 
-                            $this->releaseVehicleFromMaintenance($completionVehicle);
-
                             if (empty($validated['completion_date'])) {
                                 $validated['completion_date'] =
                                     now()->toDateString();
                             }
+
+                            $calculatedNextSchedule =
+                                $this->calculateCompletedRecurringNextSchedule(
+                                    $maintenance,
+                                    (string) $validated['completion_date'],
+                                );
+
+                            if ($calculatedNextSchedule !== null) {
+                                $validated['next_schedule'] =
+                                    $calculatedNextSchedule;
+                            }
+
+                            $this->releaseVehicleFromMaintenance($completionVehicle);
                         }
                         /*
                         |--------------------------------------------------------------------------

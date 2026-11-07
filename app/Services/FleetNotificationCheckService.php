@@ -372,11 +372,12 @@ class FleetNotificationCheckService
             Carbon::parse(
                 $maintenance->next_schedule
             )->startOfDay();
-        $days =
+        $days = (int) round(
             $today->diffInDays(
                 $nextSchedule,
                 false
-            );
+            )
+        );
 
         if ($days > $warningDays) {
             return;

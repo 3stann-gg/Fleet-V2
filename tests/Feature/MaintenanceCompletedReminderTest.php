@@ -206,7 +206,7 @@ it('retains existing active maintenance reminder behavior', function (string $st
 
     $notification = FleetNotification::query()->sole();
     expect($notification->event_key)->toBe(completedReminderEventKey($maintenance))
-        ->and($notification->message)->toContain("maintenance {$maintenance->maintenance_number} is due in 1 days.")
+        ->and($notification->message)->toContain("maintenance {$maintenance->maintenance_number} is due in 1 day.")
         ->and($notification->message)->not->toContain('next service after maintenance');
 })->with(['Scheduled', 'In Progress']);
 
