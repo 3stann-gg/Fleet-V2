@@ -28,6 +28,11 @@ class DashboardController extends Controller
 
         $role = $user->role;
         $department = $user->department;
+        $canSeeDriverVehicleRatio = $user->hasRole(
+            'fleet_manager',
+            'dispatcher',
+            'it_admin'
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -63,6 +68,9 @@ class DashboardController extends Controller
                 ),
 
             'canSeeFleetStatus' => true,
+
+            'canSeeDriverVehicleRatio' =>
+                $canSeeDriverVehicleRatio,
 
             'canOpenVehicles' =>
                 $user->canViewModule('vehicles'),
@@ -288,6 +296,30 @@ class DashboardController extends Controller
                 ->whereIn('priority', ['emergency', 'Emergency'])
                 ->whereIn('status', ['Pending', 'Approved', 'Scheduled'])
                 ->count();
+
+        $driverVehicleRatioData = [];
+
+        if ($canSeeDriverVehicleRatio) {
+            $activeDrivers = Driver::query()
+                ->whereNull('archived_at')
+                ->whereIn('status', ['Available', 'On Duty'])
+                ->count();
+
+            $activeVehicles = Vehicle::query()
+                ->whereNull('archived_at')
+                ->whereIn('status', ['Available', 'On Trip', 'Maintenance'])
+                ->count();
+
+            $driversPerVehicle = $activeVehicles > 0
+                ? round($activeDrivers / $activeVehicles, 2)
+                : null;
+
+            $driverVehicleRatioData = compact(
+                'activeDrivers',
+                'activeVehicles',
+                'driversPerVehicle'
+            );
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -791,7 +823,7 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
 
-        return compact(
+        return array_merge(compact(
             'readyVehicles',
             'vehiclesNeedingAttention',
             'emergencyRequests',
@@ -814,7 +846,7 @@ class DashboardController extends Controller
             'weeklyActivityMax',
             'recentActivity',
             'dashboardPermissions'
-        );
+        ), $driverVehicleRatioData);
     }
 
     public function index(Request $request)
@@ -1019,7 +1051,7 @@ class DashboardController extends Controller
                 })
                 ->values();
 
-        return response()->json([
+        $responseData = [
             'ready_vehicles' =>
                 $data['readyVehicles'] ?? 0,
 
@@ -1086,7 +1118,15 @@ class DashboardController extends Controller
                 collect(
                     $data['dashboardMapDispatches'] ?? []
                 )->values(),
-        ]);
+        ];
+
+        if ($data['dashboardPermissions']['canSeeDriverVehicleRatio'] ?? false) {
+            $responseData['active_drivers'] = $data['activeDrivers'];
+            $responseData['active_vehicles'] = $data['activeVehicles'];
+            $responseData['drivers_per_vehicle'] = $data['driversPerVehicle'];
+        }
+
+        return response()->json($responseData);
     }
 
 }
