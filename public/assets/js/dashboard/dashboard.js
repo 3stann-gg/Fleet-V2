@@ -562,6 +562,25 @@ async function applyDashboardLiveData(data) {
         "dashboardDriversOnDuty",
         Number(data.drivers_on_duty || 0).toLocaleString(),
     );
+    const driversPerVehicle = Number(data.drivers_per_vehicle);
+    const driverVehicleRatio =
+        data.drivers_per_vehicle === null ||
+        data.drivers_per_vehicle === undefined ||
+        !Number.isFinite(driversPerVehicle)
+            ? "N/A"
+            : `${driversPerVehicle.toFixed(2)} : 1`;
+    setDashboardLiveText(
+        "dashboardDriverVehicleRatio",
+        driverVehicleRatio,
+    );
+    setDashboardLiveText(
+        "dashboardActiveDrivers",
+        Number(data.active_drivers || 0).toLocaleString(),
+    );
+    setDashboardLiveText(
+        "dashboardActiveVehicles",
+        Number(data.active_vehicles || 0).toLocaleString(),
+    );
     setDashboardLiveText(
         "dashboardFailedPreTripChecks",
         Number(data.failed_pre_trip_checks || 0).toLocaleString(),

@@ -177,6 +177,30 @@
                     </article>
                 @endif
 
+                @if($dashboardPermissions['canSeeDriverVehicleRatio'] ?? false)
+                    <article class="stat-card dashboard-kpi">
+                        <div class="stat-icon info" aria-hidden="true">
+                            <i class="ph-fill ph-users-three"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="kpi-label">Driver / Vehicle Ratio</span>
+                            <h2 class="kpi-value" id="dashboardDriverVehicleRatio">
+                                {{ $driversPerVehicle === null ? 'N/A' : number_format($driversPerVehicle, 2) . ' : 1' }}
+                            </h2>
+                            <div class="kpi-meta">
+                                <span class="kpi-trend kpi-trend--steady">
+                                    Active Drivers:
+                                    <span id="dashboardActiveDrivers">{{ number_format($activeDrivers) }}</span>
+                                </span>
+                                <span class="kpi-support">
+                                    Active Vehicles:
+                                    <span id="dashboardActiveVehicles">{{ number_format($activeVehicles) }}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </article>
+                @endif
+
                 @if($dashboardPermissions['canOpenVehicles'] ?? false)
                     <a
                         href="{{ route('fleet') }}"
