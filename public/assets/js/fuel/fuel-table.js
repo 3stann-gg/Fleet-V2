@@ -34,12 +34,18 @@ async function loadFuelRecords() {
         if (typeof updateFuelStatistics === "function") {
             updateFuelStatistics(fuelLogs, data.efficiencySummary || null);
         }
+        if (typeof updateFuelPeriodComparison === "function") {
+            updateFuelPeriodComparison(data.periodComparison || null);
+        }
         if (typeof refreshFuelBulkState === "function") {
             refreshFuelBulkState();
         }
         return fuelLogs;
     } catch (error) {
         console.error("FUEL LOAD ERROR:", error);
+        if (typeof updateFuelPeriodComparison === "function") {
+            updateFuelPeriodComparison(null, true);
+        }
 
         return [];
     }

@@ -106,3 +106,57 @@ function initFuelStatistics() {
   if (tableBody.dataset.fuelStatisticsInitialized === "true") return;
   tableBody.dataset.fuelStatisticsInitialized = "true";
 }
+
+function updateFuelPeriodComparison(comparison, failed = false) {
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  const formatNumber = (value, unit = "") => {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+      return "N/A";
+    }
+    return Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + unit;
+  };
+  const formatChange = (value, direction) => {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+      return "N/A — Unavailable";
+    }
+    if (Number(value) === 0 && direction !== "Stable") {
+      return `${direction === "Increase" || direction === "Improving" ? "+" : "−"}<0.01% — ${direction}`;
+    }
+    return `${Number(value) > 0 ? "+" : ""}${formatNumber(value, "%")} — ${direction}`;
+  };
+
+  setText("fuelComparisonStatus", failed
+    ? "Unable to load comparison. It will retry with the next fuel refresh."
+    : comparison ? `Complete calendar days • ${comparison.timezone}` : "Comparison unavailable.");
+
+  for (const [key, label] of [["previous", "Previous"], ["current", "Current"]]) {
+    const period = comparison?.[key];
+    setText(`fuelComparison${label}Dates`, period ? `${period.start_date} through ${period.end_date} (inclusive)` : "N/A");
+    setText(`fuelComparison${label}Cost`, period ? `₱${formatNumber(period.fuel_cost)}` : "N/A");
+    setText(`fuelComparison${label}Efficiency`, formatNumber(period?.estimated_efficiency_km_per_liter, " km/L"));
+    setText(`fuelComparison${label}Context`, period
+      ? `${period.record_count} transactions; ${period.valid_interval_count} valid intervals. ${period.expense_reason || ""} ${period.efficiency_reason || ""}`.trim()
+      : "");
+  }
+
+  const changes = comparison?.changes;
+  setText("fuelComparisonCostChange", formatChange(changes?.fuel_cost_percent, changes?.cost_direction));
+  setText("fuelComparisonEfficiencyChange", formatChange(changes?.estimated_efficiency_percent, changes?.efficiency_direction));
+  setText("fuelComparisonReasons", [changes?.cost_reason, changes?.efficiency_reason].filter(Boolean).join(" "));
+  if (comparison) {
+    setText("fuelComparisonScope", comparison.scope === "own_records"
+      ? "Based on your authorized fuel records and authorized historical intervals."
+      : "Based on authorized fleet fuel records.");
+  }
+  const advisory = document.getElementById("fuelComparisonAdvisory");
+  if (advisory) {
+    advisory.textContent = comparison?.advisory || "";
+    advisory.hidden = !comparison?.advisory;
+  }
+}

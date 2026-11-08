@@ -122,6 +122,72 @@
               </p>
             </div>
 
+            <section class="card fuel-period-comparison" aria-labelledby="fuelPeriodComparisonHeading">
+              <div class="card-header">
+                <div>
+                  <h3 id="fuelPeriodComparisonHeading">Fuel Increase Monitoring</h3>
+                  <p class="card-subtitle" id="fuelComparisonScope">{{ ($fuelPermissions['isDriver'] ?? false) ? 'Based on your authorized fuel records.' : 'Based on authorized fleet fuel records.' }}</p>
+                </div>
+              </div>
+              <div class="fuel-comparison-body">
+                <p class="fuel-comparison-status" id="fuelComparisonStatus" role="status" aria-live="polite">Loading comparison...</p>
+                <div class="fuel-comparison-grid">
+                  <article class="fuel-comparison-card" aria-labelledby="fuelComparisonPreviousHeading">
+                    <header class="fuel-comparison-card-heading">
+                      <h4 id="fuelComparisonPreviousHeading">Previous Period</h4>
+                      <p class="fuel-comparison-dates" id="fuelComparisonPreviousDates">Loading dates...</p>
+                    </header>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Recorded fuel expense</span>
+                      <strong class="fuel-comparison-value" id="fuelComparisonPreviousCost">N/A</strong>
+                    </div>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Estimated Fuel Efficiency</span>
+                      <strong class="fuel-comparison-value" id="fuelComparisonPreviousEfficiency">N/A</strong>
+                    </div>
+                    <p class="fuel-comparison-context" id="fuelComparisonPreviousContext"></p>
+                  </article>
+                  <article class="fuel-comparison-card" aria-labelledby="fuelComparisonCurrentHeading">
+                    <header class="fuel-comparison-card-heading">
+                      <h4 id="fuelComparisonCurrentHeading">Current Period</h4>
+                      <p class="fuel-comparison-dates" id="fuelComparisonCurrentDates">Loading dates...</p>
+                    </header>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Recorded fuel expense</span>
+                      <strong class="fuel-comparison-value" id="fuelComparisonCurrentCost">N/A</strong>
+                    </div>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Estimated Fuel Efficiency</span>
+                      <strong class="fuel-comparison-value" id="fuelComparisonCurrentEfficiency">N/A</strong>
+                    </div>
+                    <p class="fuel-comparison-context" id="fuelComparisonCurrentContext"></p>
+                  </article>
+                  <article class="fuel-comparison-card fuel-comparison-card--changes" aria-labelledby="fuelComparisonChangesHeading">
+                    <header class="fuel-comparison-card-heading">
+                      <h4 id="fuelComparisonChangesHeading">Changes</h4>
+                      <p class="fuel-comparison-dates">Current compared with previous period</p>
+                    </header>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Fuel Expense Change</span>
+                      <strong class="fuel-comparison-value fuel-comparison-value--change" id="fuelComparisonCostChange">N/A</strong>
+                      <p class="fuel-comparison-help">Change in recorded refueling expenses.</p>
+                    </div>
+                    <div class="fuel-comparison-metric">
+                      <span class="fuel-comparison-label">Estimated Efficiency Change</span>
+                      <strong class="fuel-comparison-value fuel-comparison-value--change" id="fuelComparisonEfficiencyChange">N/A</strong>
+                      <p class="fuel-comparison-help">Lower estimated km/L means declining efficiency.</p>
+                    </div>
+                    <p class="fuel-comparison-context" id="fuelComparisonReasons"></p>
+                  </article>
+                </div>
+                <p class="fuel-comparison-advisory" id="fuelComparisonAdvisory" role="note" hidden></p>
+                <div class="fuel-comparison-methodology" role="note" aria-label="Comparison methodology">
+                  <p>Compares two complete 30-day calendar periods, excluding today. Table search, filters, and pagination do not change these periods.</p>
+                  <p>Each odometer interval belongs to its ending fuel transaction, even if it starts before the period. Refueled liters are not exact measured consumption; hybrid distance may include electric driving.</p>
+                </div>
+              </div>
+            </section>
+
             <div class="toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
