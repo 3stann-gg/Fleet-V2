@@ -9,6 +9,8 @@ use App\Models\FleetSetting;
 use App\Services\FleetNotificationService;
 use App\Services\AuditLogService;
 use App\Services\FuelEfficiencyService;
+use App\Services\FuelPeriodComparisonService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -125,11 +127,13 @@ class FuelLogController extends Controller
         );
     }
 
-    public function index(Request $request)
+    public function index(Request $request, FuelPeriodComparisonService $periodComparisonService)
     {
         $this->authorize('viewAny', FuelLog::class);
 
         $user = $request->user();
+        $asOf = CarbonImmutable::now(config('app.timezone'))->startOfDay();
+        $driverId = null;
 
         $fuelSettings =
             $this->getFuelSettings();
@@ -182,11 +186,16 @@ class FuelLogController extends Controller
                 return $fuelLog;
             });
 
-        $analysis = $this->fuelEfficiencyService->analyze($fuelLogs);
+        $analysis = $this->fuelEfficiencyService->analyzeWithComparisonContext($fuelLogs, $driverId);
 
         return response()->json([
             'fuelLogs' => $analysis['fuelLogs'],
             'efficiencySummary' => $analysis['summary'],
+            'periodComparison' => $periodComparisonService->compare(
+                $analysis['comparisonRecords'],
+                $asOf,
+                $user->hasRole('driver') ? 'own_records' : 'fleet'
+            ),
 
             'settings' => [
                 'high_cost_alert' =>

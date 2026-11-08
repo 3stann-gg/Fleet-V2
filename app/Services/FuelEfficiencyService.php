@@ -18,10 +18,26 @@ class FuelEfficiencyService
      */
     public function analyze(Collection $fuelLogs): array
     {
+        $analysis = $this->analyzeWithComparisonContext($fuelLogs);
+
+        return ['fuelLogs' => $analysis['fuelLogs'], 'summary' => $analysis['summary']];
+    }
+
+    /**
+     * Comparison records are separate from legacy response attributes. A restricted
+     * interval requires an owned accepted anchor with no intervening foreign row.
+     * Foreign context may invalidate an interval but never supplies its distance.
+     *
+     * @param  Collection<int, FuelLog>  $fuelLogs
+     * @return array{fuelLogs: Collection<int, FuelLog>, summary: array<string, float|int|null>, comparisonRecords: Collection<int, array{date: string, cost: string, fuel_amount: string, distance_km: float|null}>}
+     */
+    public function analyzeWithComparisonContext(Collection $fuelLogs, ?int $driverId = null): array
+    {
         if ($fuelLogs->isEmpty()) {
             return [
                 'fuelLogs' => $fuelLogs,
                 'summary' => $this->emptySummary(),
+                'comparisonRecords' => collect(),
             ];
         }
 
@@ -37,6 +53,7 @@ class FuelEfficiencyService
             ->get([
                 'id',
                 'vehicle_id',
+                'driver_id',
                 'fuel_amount',
                 'odometer',
                 'date',
@@ -44,7 +61,7 @@ class FuelEfficiencyService
                 'created_at',
             ]);
 
-        $metrics = $this->buildMetrics($history);
+        [$metrics, $comparisonDistances] = $this->buildMetrics($history, $driverId);
 
         $fuelLogs->each(function (FuelLog $fuelLog) use ($metrics): void {
             $this->applyMetrics($fuelLog, $metrics->get($fuelLog->id, $this->unavailableMetrics()));
@@ -53,6 +70,14 @@ class FuelEfficiencyService
         return [
             'fuelLogs' => $fuelLogs,
             'summary' => $this->summarize($fuelLogs),
+            'comparisonRecords' => $fuelLogs
+                ->filter(fn (FuelLog $log): bool => $driverId === null || (int) $log->driver_id === $driverId)
+                ->map(fn (FuelLog $log): array => [
+                    'date' => $log->date?->format('Y-m-d') ?? '',
+                    'cost' => (string) $log->cost,
+                    'fuel_amount' => (string) $log->fuel_amount,
+                    'distance_km' => $comparisonDistances->get($log->id),
+                ])->values(),
         ];
     }
 
@@ -100,17 +125,24 @@ class FuelEfficiencyService
 
     /**
      * @param  Collection<int, FuelLog>  $history
-     * @return Collection<int, array<string, float|int|string|null>>
+     * @return array{0: Collection<int, array<string, float|int|string|null>>, 1: Collection<int, float>}
      */
-    private function buildMetrics(Collection $history): Collection
+    private function buildMetrics(Collection $history, ?int $driverId): array
     {
         $metrics = collect();
+        $comparisonDistances = collect();
 
         foreach ($history->groupBy('vehicle_id') as $vehicleLogs) {
             $previousOdometer = null;
             $previousValidEfficiency = null;
+            $authorizedContext = false;
 
             foreach ($this->chronologically($vehicleLogs) as $fuelLog) {
+                $owned = $driverId === null || (int) $fuelLog->driver_id === $driverId;
+                if (! $owned) {
+                    $authorizedContext = false;
+                }
+
                 $vehicle = $fuelLog->vehicle;
 
                 if (! $vehicle || ! $vehicle->supportsLiquidFuel()) {
@@ -133,6 +165,7 @@ class FuelEfficiencyService
                 if ($previousOdometer === null) {
                     $metrics->put($fuelLog->id, $this->unavailableMetrics('No previous valid same-vehicle fuel log.'));
                     $previousOdometer = $odometer;
+                    $authorizedContext = $owned;
 
                     continue;
                 }
@@ -145,6 +178,8 @@ class FuelEfficiencyService
 
                 $distance = $odometer - $previousOdometer;
                 $previousOdometer = $odometer;
+                $authorizedInterval = $owned && $authorizedContext;
+                $authorizedContext = $owned;
 
                 if ($distance <= 0) {
                     $metrics->put($fuelLog->id, $this->unavailableMetrics('No positive distance since the previous valid same-vehicle fuel log.'));
@@ -153,6 +188,9 @@ class FuelEfficiencyService
                 }
 
                 $efficiency = $distance / $liters;
+                if ($authorizedInterval) {
+                    $comparisonDistances->put($fuelLog->id, round($distance, 2));
+                }
                 $trend = $this->trend($efficiency, $previousValidEfficiency);
 
                 $metrics->put($fuelLog->id, [
@@ -168,7 +206,7 @@ class FuelEfficiencyService
             }
         }
 
-        return $metrics;
+        return [$metrics, $comparisonDistances];
     }
 
     private function trend(float $efficiency, ?float $previousEfficiency): string

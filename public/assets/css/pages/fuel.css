@@ -97,6 +97,141 @@
   font-weight: var(--font-semibold);
 }
 
+/* Period comparison uses its own layout rather than the centered KPI system. */
+.fuel-page .fuel-period-comparison {
+  margin-bottom: var(--section-gap);
+}
+
+.fuel-period-comparison .fuel-comparison-status {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.fuel-period-comparison .fuel-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.fuel-period-comparison .fuel-comparison-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.fuel-period-comparison .fuel-comparison-card-heading {
+  margin-bottom: var(--space-5);
+}
+
+.fuel-period-comparison .fuel-comparison-card-heading h4 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.fuel-period-comparison .fuel-comparison-dates,
+.fuel-period-comparison .fuel-comparison-help,
+.fuel-period-comparison .fuel-comparison-context {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.fuel-period-comparison .fuel-comparison-metric + .fuel-comparison-metric {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.fuel-period-comparison .fuel-comparison-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-medium);
+  line-height: var(--line-height-snug);
+}
+
+.fuel-period-comparison .fuel-comparison-value {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-text);
+  font-size: clamp(1.25rem, 1.7vw, 1.625rem);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-snug);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.fuel-period-comparison .fuel-comparison-value--change {
+  font-size: var(--font-size-xl);
+}
+
+.fuel-period-comparison .fuel-comparison-help {
+  margin-top: var(--space-2);
+}
+
+.fuel-period-comparison .fuel-comparison-context:not(:empty) {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.fuel-period-comparison .fuel-comparison-advisory {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.fuel-period-comparison .fuel-comparison-methodology {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-body);
+}
+
+.fuel-period-comparison .fuel-comparison-methodology p {
+  margin: 0;
+}
+
+.fuel-period-comparison .fuel-comparison-methodology p + p {
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .fuel-page .fuel-period-comparison,
+  .fuel-period-comparison .fuel-comparison-card {
+    padding: var(--space-4);
+  }
+
+  .fuel-period-comparison .fuel-comparison-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Vehicle name formatting*/
 .fuel-vehicle {
     display: inline-flex;
