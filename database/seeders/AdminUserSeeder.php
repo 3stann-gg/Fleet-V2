@@ -24,7 +24,7 @@ class AdminUserSeeder extends Seeder
             'email' => 'himsfleet@gmail.com',
             'password' => Hash::make($adminSeedPassword),
             'role' => 'fleet_manager',
-            'status' => true,
+            'status' => 'active',
         ]);
     }
 }
