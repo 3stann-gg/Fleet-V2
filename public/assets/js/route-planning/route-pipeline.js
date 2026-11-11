@@ -1701,61 +1701,48 @@ async function renderRoutePlanningOverview() {
  * Order:
  * Origin → Stop 1 → Stop 2 → ... → Destination
  */
-async function geocodeRouteRecord(record) {
+async function geocodeRouteRecord(record, options = {}) {
     if (!record || !record.origin || !record.destination) {
         throw new Error("Origin and destination are required.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Origin
-    |--------------------------------------------------------------------------
-    |
-    | Route Planning intentionally geocodes the saved origin text again.
-    |
-    | Do NOT use:
-    |   record.originLatitude
-    |   record.originLongitude
-    |
-    | The RoutePlan coordinates may be old, approximate, or based on a
-    | previous coordinate source. The location name/address is treated
-    | as the authoritative routing input.
-    |
-    |--------------------------------------------------------------------------
-    */
-    const origin = await geocodeRouteLocation(record.origin);
-    /*
-    |--------------------------------------------------------------------------
-    | Stops
-    |--------------------------------------------------------------------------
-    |
-    | Stops are also geocoded from their location text.
-    | This keeps the same behavior as origin/destination.
-    |
-    |--------------------------------------------------------------------------
-    */
+    const savedCoordinate = (latitude, longitude, displayName) => {
+        const values = [latitude, longitude];
+        if (values.some((value) =>
+            !["number", "string"].includes(typeof value) || String(value).trim() === ""
+        )) {
+            return null;
+        }
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+        return Number.isFinite(lat) && Number.isFinite(lng) &&
+            Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+            ? { lat, lng, displayName }
+            : null;
+    };
+    const useSaved = options.usePersistedCoordinates === true;
+    const origin = (useSaved && savedCoordinate(
+        record.originLatitude, record.originLongitude, record.origin,
+    )) || await geocodeRouteLocation(record.origin);
     const stops = Array.isArray(record.stops)
         ? record.stops.map((stop) => String(stop || "").trim()).filter(Boolean)
         : [];
     const stopCoordinates = [];
     for (let index = 0; index < stops.length; index++) {
         const location = stops[index];
-        const coordinate = await geocodeRouteLocation(location);
+        const saved = useSaved ? record.stopCoordinates?.[index] : null;
+        const matches = saved && String(saved.location || "").trim() === location;
+        const coordinate = (matches && savedCoordinate(
+            saved.latitude, saved.longitude, location,
+        )) || await geocodeRouteLocation(location);
         stopCoordinates.push({
+            ...(matches && saved.id != null ? { id: saved.id } : {}),
             location,
             coordinate,
         });
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Destination
-    |--------------------------------------------------------------------------
-    |
-    | Again, intentionally use the destination name/address and geocode it.
-    | Do NOT reuse saved RoutePlan destination coordinates.
-    |
-    |--------------------------------------------------------------------------
-    */
-    const destination = await geocodeRouteLocation(record.destination);
+    const destination = (useSaved && savedCoordinate(
+        record.destinationLatitude, record.destinationLongitude, record.destination,
+    )) || await geocodeRouteLocation(record.destination);
     return {
         origin,
         stops: stopCoordinates,
@@ -2114,7 +2101,7 @@ async function calculateRouteWithOsrm(record, options = {}) {
     }
     const requestToken = ++routeRoutingRequestToken;
     try {
-        const routeCoordinates = await geocodeRouteRecord(record);
+        const routeCoordinates = await geocodeRouteRecord(record, options);
         if (requestToken !== routeRoutingRequestToken) {
             return null;
         }
@@ -2136,10 +2123,12 @@ async function calculateRouteWithOsrm(record, options = {}) {
             drawRouteOnLeaflet(route, routeCoordinates, record);
         }
         return {
+            provider: "OSRM",
             distanceKm:
                 distanceKm !== null ? Number(distanceKm.toFixed(2)) : null,
             durationMinutes,
             instructions: [],
+            geometry: route.geometry,
             route,
             routeCoordinates,
         };
@@ -2427,9 +2416,10 @@ async function updateRouteMapPanel(record) {
     |--------------------------------------------------------------------------
     */
     try {
-        const routeResult = await calculateRouteWithTraffic(record, {
+        const routeResult = await calculateRouteWithOsrm(record, {
             draw: true,
             silent: true,
+            usePersistedCoordinates: true,
         });
         if (viewToken !== routeMapViewToken) {
             return;

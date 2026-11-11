@@ -339,6 +339,7 @@ function normalizeRouteApiRecord(raw, index = 0) {
         String(stop.location || "").trim(),
     );
     const stopCoordinates = orderedStops.map((stop) => ({
+        ...(stop.id != null ? { id: stop.id } : {}),
         location: String(stop.location || "").trim(),
         latitude:
             stop.latitude === null ||
@@ -577,6 +578,7 @@ function normalizeRouteRecord(raw, index = 0) {
             : [],
         stopCoordinates: Array.isArray(raw.stopCoordinates)
             ? raw.stopCoordinates.map((stop) => ({
+                  ...(stop?.id != null ? { id: stop.id } : {}),
                   location: String(stop?.location || "").trim(),
                   latitude:
                       stop?.latitude === null ||

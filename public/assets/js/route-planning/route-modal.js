@@ -1329,7 +1329,7 @@ function applyPendingRouteOptimization({
 
         summary.innerHTML = `
             <strong>
-                Optimization Applied
+                ${result.fallback ? "Route Stop Order Applied" : "Optimization Applied"}
             </strong>
 
             <p>

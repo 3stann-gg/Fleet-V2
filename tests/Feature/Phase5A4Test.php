@@ -31,7 +31,7 @@ const context = vm.createContext({
     window: {FleetRBAC:{hasPermission:()=>true}, showToast(){}},
     fetch: () => { throw Error('Unexpected network access in isolated test'); },
 });
-for (const name of ['route-store.js','route-pipeline.js','route-modal.js']) {
+for (const name of ['route-store.js','route-pipeline.js','route-modal.js','route-export.js']) {
     vm.runInContext(fs.readFileSync(process.argv[1] + '/' + name, 'utf8'), context);
 }
 const stops = [
@@ -43,6 +43,8 @@ const coordinates = {origin:{lat:14.6,lng:121},stops,destination:{lat:14.7,lng:1
 const geometry = {type:'LineString',coordinates:[[121,14.6],[121.1,14.7]]};
 let fallbackCalls = 0;
 context.initRouteLeafletMap = async () => ({});
+const actualGeocodeRouteRecord = context.geocodeRouteRecord;
+const actualRequestOsrmRoute = context.requestOsrmRoute;
 context.geocodeRouteRecord = async () => coordinates;
 context.drawRouteOnLeaflet = () => {};
 context.requestOsrmRoute = async () => { fallbackCalls++; return {distance:12000,duration:900,geometry}; };
@@ -315,6 +317,8 @@ for (const scenario of cases) {
     const route = await context.runRouteOptimization({showSuccessToast:true});
     assert.equal(route.provider, scenario.provider);
     assert.equal(context.applyPendingRouteOptimization({showToast:true}), true);
+    assert.match(nodes.routeOptimizeSummary.innerHTML, scenario.provider === 'OSRM' ? /Route Stop Order Applied/ : /Optimization Applied/);
+    if (scenario.provider === 'OSRM') assert.doesNotMatch(nodes.routeOptimizeSummary.innerHTML, /Optimization Applied/);
     assert.deepEqual(notifications, [
         {message:'Route ready. Review the result, then apply the stop order.',type:'success',pending:true,applied:false,stops:originalOrder},
         {message:'Route stop order applied.',type:'success',pending:false,applied:true,stops:scenario.order.map(stop=>stop.location)},
@@ -377,5 +381,205 @@ JS);
         'pairedSave' => true,
         'reopenedOrder' => true,
         'changedLabelsRejected' => true,
+    ]);
+});
+
+it('replays saved routes in persisted order without geocoding or optimizing them again', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+context.geocodeRouteRecord = actualGeocodeRouteRecord;
+context.requestOsrmRoute = actualRequestOsrmRoute;
+context.geocodeRouteLocation = async () => { throw Error('Saved coordinates must not be geocoded again'); };
+let tomTomCalls = 0;
+context.requestTomTomRoute = async () => { tomTomCalls++; return traffic([]); };
+context.loadRoutePlanningVehicleLocation = async () => {};
+const savedStops = [
+    {id:303,stop_order:1,location:'Third stop',latitude:14.63,longitude:121.03},
+    {id:301,stop_order:2,location:'Repeated stop',latitude:14.61,longitude:121.01},
+    {id:302,stop_order:3,location:'Repeated stop',latitude:14.62,longitude:121.02},
+    {id:304,stop_order:4,location:'Coordinate alias',latitude:14.61,longitude:121.01},
+];
+const raw = {id:99,origin:'Saved origin',origin_latitude:14.6,origin_longitude:121,destination:'Saved destination',destination_latitude:14.7,destination_longitude:121.1,stops:[...savedStops].reverse(),optimization_strategy:'TomTom Traffic-Aware Optimized',optimization_score:85,estimated_distance:10,estimated_time:12};
+const original = JSON.stringify(raw);
+const record = context.normalizeRouteRecord(context.cloneRouteRecord(context.normalizeRouteApiRecord(raw)));
+const before = JSON.stringify(record);
+const expected = [[121,14.6],...savedStops.map(s=>[s.longitude,s.latitude]),[121.1,14.7]];
+const requests = [], drawn = [];
+context.fetch = async url => {
+    assert.match(url, /^https:\/\/router\.project-osrm\.org\/route\/v1\/driving\//);
+    assert.doesNotMatch(url, /\/trip\//);
+    const pairs = new URL(url).pathname.split('/').at(-1).split(';').map(pair=>pair.split(',').map(Number));
+    assert.deepEqual(pairs, expected);
+    requests.push(url);
+    return {ok:true,json:async()=>({code:'Ok',routes:[{distance:12000,duration:900,geometry:{type:'LineString',coordinates:pairs}}]})};
+};
+context.drawRouteOnLeaflet = (route, points) => {
+    assert.deepEqual(plain(route.geometry.coordinates), expected);
+    assert.deepEqual(plain(points.stops.map(s=>({id:s.id,location:s.location,latitude:s.coordinate.lat,longitude:s.coordinate.lng}))), savedStops.map(({stop_order,...s})=>s));
+    drawn.push(plain(points));
+};
+for (let i=0;i<2;i++) {
+    await context.updateRouteMapPanel(record);
+    const replay = context.window.getCurrentRoutePlanningMapRoute();
+    assert.deepEqual(plain(replay.geometry.coordinates), expected);
+    assert.equal(replay.optimizationProof, undefined);
+}
+assert.equal(tomTomCalls, 0);
+assert.equal(requests.length, 2);
+assert.equal(drawn.length, 2);
+assert.equal(JSON.stringify(record), before);
+assert.equal(JSON.stringify(raw), original);
+process.stdout.write(JSON.stringify({savedOrder:true,stopIdsPreserved:true,duplicateLabelsAndCoordinates:true,noReoptimization:true,sourceUnchanged:true}));
+JS);
+
+    expect($result)->toBe([
+        'savedOrder' => true,
+        'stopIdsPreserved' => true,
+        'duplicateLabelsAndCoordinates' => true,
+        'noReoptimization' => true,
+        'sourceUnchanged' => true,
+    ]);
+});
+
+it('uses positional saved coordinates and only geocodes missing or invalid replay coordinates', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+context.geocodeRouteRecord = actualGeocodeRouteRecord;
+const calls = [];
+context.geocodeRouteLocation = async label => { calls.push(label); return {lat:10,lng:20,displayName:label}; };
+const record = {origin:'O',originLatitude:'0',originLongitude:0,destination:'D',destinationLatitude:90,destinationLongitude:-180,stops:['Same','Same'],stopCoordinates:[{id:1,location:'Same',latitude:14,longitude:121},{id:2,location:'Same',latitude:15,longitude:122}]};
+const good = await context.geocodeRouteRecord(record,{usePersistedCoordinates:true});
+assert.deepEqual(calls, []);
+assert.deepEqual(plain(good.origin), {lat:0,lng:0,displayName:'O'});
+assert.deepEqual(plain(good.destination), {lat:90,lng:-180,displayName:'D'});
+assert.deepEqual(plain(good.stops.map(s=>[s.id,s.coordinate.lat,s.coordinate.lng])), [[1,14,121],[2,15,122]]);
+const invalid = [null,undefined,'',' ',false,true,{},NaN,Infinity,91,-91];
+for (const value of invalid) {
+    calls.length = 0;
+    const source = {...record,stopCoordinates:[record.stopCoordinates[0],{...record.stopCoordinates[1],latitude:value}]};
+    const resolved = await context.geocodeRouteRecord(source,{usePersistedCoordinates:true});
+    assert.deepEqual(calls, ['Same']);
+    assert.equal(resolved.stops[0].coordinate.lat, 14);
+    assert.equal(resolved.stops[1].id, 2);
+    assert.equal(resolved.stops[1].coordinate.lat, 10);
+}
+calls.length = 0;
+await context.geocodeRouteRecord({...record,originLatitude:null,destinationLongitude:181,stopCoordinates:[{location:'Wrong',latitude:1,longitude:2}]},{usePersistedCoordinates:true});
+assert.deepEqual(calls, ['O','Same','Same','D']);
+calls.length = 0;
+await context.geocodeRouteRecord(record);
+assert.deepEqual(calls, ['O','Same','Same','D'], 'Explicit optimization keeps its existing fresh geocoding behavior');
+process.stdout.write(JSON.stringify({positionalPairing:true,invalidCases:invalid.length,legacyFallback:true,explicitOptimizationUnchanged:true}));
+JS);
+
+    expect($result)->toBe([
+        'positionalPairing' => true,
+        'invalidCases' => 11,
+        'legacyFallback' => true,
+        'explicitOptimizationUnchanged' => true,
+    ]);
+});
+
+it('renders an escaped ordered print report after detaching the opener and releases print state', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+const notices = [], timers = [], events = {}, order = [];
+context.showToast = (message,type) => notices.push({message,type});
+context.setTimeout = (callback,delay) => timers.push({callback,delay});
+const row = {routeNumber:'SYNTHETIC-1',origin:'<script>bad</script>',destination:'D',stops:['C','A','A alias'],vehicle:'Synthetic vehicle',driver:'Synthetic driver',priority:'normal',estimatedDistance:10,estimatedTravelTime:'12 min',optimizationStrategy:'OSRM Route — Existing Stop Order (Fallback)',optimizationScore:85,status:'Draft'};
+const model = {rows:[row],stats:{total:1,ready:0,highPriority:0,avgDistance:10,vehicles:1},filterSummary:[],generatedDate:'2026-11-11',generatedTime:'10:00'};
+context.getRouteOutputModel = () => model;
+let html = '', popupCount = 0, opener = {application:true};
+const win = {
+    get opener(){return opener;},set opener(value){opener=value;order.push('detach');},
+    document:{readyState:'loading',open(){assert.equal(opener,null);order.push('open');},write(value){html=value;order.push('write');},close(){order.push('document-close');}},
+    focus(){order.push('focus');},print(){order.push('print');},close(){order.push('close');},addEventListener(event,callback){events[event]=callback;},
+};
+context.window.open = (url,target,features) => {
+    popupCount++;
+    assert.equal(url,'');assert.equal(target,'_blank');assert.doesNotMatch(features,/noopener|noreferrer/);
+    return win;
+};
+context.printRoutes();
+assert.deepEqual(order, ['detach','open','write','document-close']);
+assert.match(html, /&lt;script&gt;bad&lt;\/script&gt;/);
+assert.doesNotMatch(html, /<script>/);
+assert.match(html, /C; A; A alias/);
+assert.match(html, /OSRM Route — Existing Stop Order \(Fallback\)/);
+assert.match(html, /name="referrer" content="no-referrer"/);
+assert.match(html, /Route Assessment Score/);
+context.printRoutes();assert.equal(popupCount,1,'Busy print must not open a second popup');
+win.onload();assert.equal(order.at(-1),'print');
+assert.equal(timers[0].delay,1500);
+events.afterprint();assert.equal(order.at(-1),'close');
+assert.equal(vm.runInContext('routeExportBusy',context),false);
+timers[0].callback();assert.equal(vm.runInContext('routeExportBusy',context),false);
+assert.deepEqual(notices,[]);
+process.stdout.write(JSON.stringify({openerDetachedBeforeWrite:true,orderedEscapedContents:true,printInvoked:true,cleanup:true}));
+JS);
+
+    expect($result)->toBe([
+        'openerDetachedBeforeWrite' => true,
+        'orderedEscapedContents' => true,
+        'printInvoked' => true,
+        'cleanup' => true,
+    ]);
+});
+
+it('handles blocked print popups and refuses to render when opener isolation fails', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+const notices=[];
+context.showToast=(message,type)=>notices.push({message,type});
+context.getRouteOutputModel=()=>({rows:[{}]});
+for (const open of [()=>null,()=>{throw Error('Blocked');}]) {
+    context.window.open=open;context.printRoutes();
+    assert.deepEqual(notices.pop(),{message:'Unable to open the print report.',type:'error'});
+    assert.equal(vm.runInContext('routeExportBusy',context),false);
+}
+let closed=0,writes=0;
+const win={get opener(){return {};},set opener(value){},document:{open(){writes++;},write(){writes++;}},close(){closed++;}};
+context.window.open=()=>win;
+context.printRoutes();
+assert.equal(writes,0);assert.equal(closed,1);
+assert.deepEqual(notices.pop(),{message:'Unable to print routes.',type:'error'});
+assert.equal(vm.runInContext('routeExportBusy',context),false);
+context.getRouteOutputModel=()=>({rows:[]});
+context.window.open=()=>{throw Error('Empty report must not open');};
+context.printRoutes();
+assert.deepEqual(notices.pop(),{message:'No routes available to print.',type:'warning'});
+process.stdout.write(JSON.stringify({blockedPopup:true,isolationFailClosed:true,emptyReport:true}));
+JS);
+
+    expect($result)->toBe([
+        'blockedPopup' => true,
+        'isolationFailClosed' => true,
+        'emptyReport' => true,
+    ]);
+});
+
+it('preserves Excel stop ordering and the existing PDF summary export contract', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+const row={routeNumber:'SYNTHETIC-1',origin:'O',destination:'D',stops:['C','A','B'],vehicle:'V',driver:'Driver',priority:'normal',estimatedDistance:10,estimatedTravelTime:'12 min',optimizationStrategy:'OSRM Route — Existing Stop Order (Fallback)',optimizationScore:85,status:'Draft'};
+context.getRouteOutputModel=()=>({rows:[row],stats:{total:1,ready:0,highPriority:0,avgDistance:10,avgMinutes:12,vehicles:1},filterSummary:[],generatedDate:'2026-11-11',generatedTime:'10:00'});
+const sheets={},files=[];
+context.window.XLSX={utils:{book_new:()=>({}),aoa_to_sheet:rows=>({rows:plain(rows)}),book_append_sheet:(book,sheet,name)=>sheets[name]=sheet.rows},writeFile:(book,name)=>files.push(name)};
+context.exportRoutesToExcel();
+assert.deepEqual(sheets['Route Data'][1].slice(0,4),['SYNTHETIC-1','O','D','C; A; B']);
+assert.equal(sheets['Route Data'][0][12],'Route Assessment Score');
+assert.equal(sheets['Route Data'][1][12],85);
+assert.equal(sheets['Route Data'][1][11],row.optimizationStrategy);
+assert.match(sheets.Summary.find(r=>r[0]==='Route Assessment Score')[1], /not a percentage saved/);
+assert.match(files[0],/\.xlsx$/);
+let pdfTable;
+context.window.jspdf={jsPDF:function(){return {setFontSize(){},setTextColor(){},text(){},autoTable:table=>{pdfTable=plain(table);},save:name=>files.push(name)};}};
+context.exportRoutesToPdf();
+assert.deepEqual(pdfTable.head[0],['Route No.','Origin','Destination','Vehicle','Driver','Priority','Distance','Time','Strategy','Status','Departure']);
+assert.equal(pdfTable.body[0][0],'SYNTHETIC-1');
+assert.equal(pdfTable.body[0][8],row.optimizationStrategy);
+assert.match(files[1],/\.pdf$/);
+process.stdout.write(JSON.stringify({excelOrdering:true,scoreContract:true,pdfSummaryUnchanged:true}));
+JS);
+
+    expect($result)->toBe([
+        'excelOrdering' => true,
+        'scoreContract' => true,
+        'pdfSummaryUnchanged' => true,
     ]);
 });

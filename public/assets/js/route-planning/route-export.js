@@ -153,6 +153,7 @@ function buildRoutePrintHtml(model) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="referrer" content="no-referrer" />
   <title>Route Planning Report</title>
   <style>
     @page { size: A4 landscape; margin: 12mm; }
@@ -209,7 +210,7 @@ function printRoutes() {
 
   let win;
   try {
-    win = window.open("", "_blank", "noopener,noreferrer,width=1100,height=760");
+    win = window.open("", "_blank", "width=1100,height=760");
   } catch (error) {
     console.error(error);
     showRouteExportToast("Unable to open the print report.", "error");
@@ -222,6 +223,10 @@ function printRoutes() {
 
   routeExportBusy = true;
   try {
+    win.opener = null;
+    if (win.opener !== null) {
+      throw new Error("Unable to isolate the print report window.");
+    }
     win.document.open();
     win.document.write(buildRoutePrintHtml(model));
     win.document.close();
@@ -251,6 +256,11 @@ function printRoutes() {
   } catch (error) {
     console.error(error);
     showRouteExportToast("Unable to print routes.", "error");
+    try {
+      win.close();
+    } catch {
+      /* ignore */
+    }
     routeExportBusy = false;
   }
 }
