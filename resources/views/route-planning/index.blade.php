@@ -323,8 +323,9 @@
                   <li><span>Optimization Strategy</span><strong id="optSummaryStrategy">—</strong></li>
                   <li><span>Recommended Vehicle</span><strong id="optSummaryVehicle">—</strong></li>
                   <li><span>Recommended Driver</span><strong id="optSummaryDriver">—</strong></li>
-                  <li><span>Optimization Score</span><strong id="optSummaryScore">—</strong></li>
+                  <li><span>Route Assessment Score</span><strong id="optSummaryScore">—</strong></li>
                 </ul>
+                <p>Application-defined score out of 100 based on traffic and routing availability, with waypoint metadata considered where available. It is not a percentage saved, AI confidence, or a guarantee of the best route.</p>
               </div>
             </div>
 
@@ -733,12 +734,14 @@
                   <input type="text" id="routeEstimatedTime" readonly placeholder="Run optimization" />
                 </div>
                 <div class="form-group">
-                  <label for="routeOptStrategy">Optimization Strategy</label>
+                  <label for="routeOptStrategy" id="routeStrategyLabel">Optimization Strategy</label>
                   <input type="text" id="routeOptStrategy" readonly />
+                  <p id="routeStrategyPresentation" aria-labelledby="routeStrategyLabel" hidden></p>
                 </div>
                 <div class="form-group">
-                  <label for="routeOptScore">Optimization Score</label>
-                  <input type="text" id="routeOptScore" readonly />
+                  <label for="routeOptScore">Route Assessment Score</label>
+                  <input type="text" id="routeOptScore" aria-describedby="routeAssessmentExplanation" readonly />
+                  <p id="routeAssessmentExplanation">Application-defined score out of 100 based on traffic and routing availability, with waypoint metadata considered where available. It is not a percentage saved, AI confidence, or a guarantee of the best route.</p>
                 </div>
                 <div class="form-section-heading">
                   <h3>Additional Information</h3>
@@ -808,7 +811,8 @@
               <div><label>Distance</label><p id="viewRouteDistance"></p></div>
               <div><label>Travel Time</label><p id="viewRouteTime"></p></div>
               <div><label>Strategy</label><p id="viewRouteStrategy"></p></div>
-              <div><label>Score</label><p id="viewRouteScore"></p></div>
+              <div><label>Route Assessment Score</label><p id="viewRouteScore"></p></div>
+              <p class="route-detail-full">Application-defined score out of 100 based on traffic and routing availability, with waypoint metadata considered where available. It is not a percentage saved, AI confidence, or a guarantee of the best route.</p>
               <div class="detail-section-heading"><h3>Additional Information</h3></div>
               <div><label>Purpose</label><p id="viewRoutePurpose"></p></div>
               <div><label>Created</label><p id="viewRouteCreated"></p></div>

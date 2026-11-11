@@ -15,6 +15,12 @@ const ROUTE_API_BASE = "/route-planning";
 const HIMS_FLEET_ROUTE_TEMPLATES_KEY = "himsFleetRouteTemplates";
 const ROUTE_TEMPLATES_MAX = 30;
 
+function formatRouteStrategyLabel(strategy) {
+    return strategy === "OSRM Optimized Waypoints (Fallback)"
+        ? "OSRM Route (Legacy Fallback; stop-order optimization unverified)"
+        : strategy;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Route Planning Options

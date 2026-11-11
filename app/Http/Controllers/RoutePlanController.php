@@ -1354,7 +1354,9 @@ class RoutePlanController extends Controller
             $lastCoordinate = $validated['coordinates'][array_key_last($validated['coordinates'])];
             $proofCoordinates = $this->optimizedProofCoordinates(
                 $validated['coordinates'],
-                $result['optimized_waypoints'] ?? []
+                array_key_exists('optimized_waypoints', $result)
+                    ? $result['optimized_waypoints']
+                    : []
             );
             $stopCount = max(count($validated['coordinates']) - 2, 0);
             $optimizationStrategy = match (true) {
@@ -1908,39 +1910,50 @@ class RoutePlanController extends Controller
 
     /**
      * @param  list<array{latitude: numeric-string|float|int, longitude: numeric-string|float|int}>  $coordinates
-     * @param  list<array<string, mixed>>  $optimizedWaypoints
      * @return list<array{latitude: numeric-string|float|int, longitude: numeric-string|float|int}>
      */
-    private function optimizedProofCoordinates(array $coordinates, array $optimizedWaypoints): array
+    private function optimizedProofCoordinates(array $coordinates, mixed $optimizedWaypoints): array
     {
-        if (count($coordinates) < 4) {
-            return $coordinates;
+        if (! is_array($optimizedWaypoints) || ! array_is_list($optimizedWaypoints)) {
+            throw new \RuntimeException('TomTom returned an invalid waypoint permutation.');
         }
 
         $stops = array_slice($coordinates, 1, -1);
+        $stopCount = count($stops);
 
-        if (count($optimizedWaypoints) !== count($stops)) {
+        if ($stopCount < 2 && $optimizedWaypoints === []) {
             return $coordinates;
         }
 
-        $orderedWaypoints = collect($optimizedWaypoints)
-            ->map(fn (array $waypoint): array => [
-                'provided_index' => (int) ($waypoint['providedIndex'] ?? -1),
-                'optimized_index' => (int) ($waypoint['optimizedIndex'] ?? -1),
-            ])
-            ->filter(fn (array $waypoint): bool => isset($stops[$waypoint['provided_index']]))
-            ->sortBy('optimized_index')
-            ->values();
-
-        if ($orderedWaypoints->count() !== count($stops)) {
-            return $coordinates;
+        if (count($optimizedWaypoints) !== $stopCount) {
+            throw new \RuntimeException('TomTom returned an invalid waypoint permutation.');
         }
+
+        $providedIndexes = [];
+        $orderedStops = [];
+
+        foreach ($optimizedWaypoints as $waypoint) {
+            $providedIndex = is_array($waypoint) ? ($waypoint['providedIndex'] ?? null) : null;
+            $optimizedIndex = is_array($waypoint) ? ($waypoint['optimizedIndex'] ?? null) : null;
+
+            if (
+                ! is_int($providedIndex) || ! is_int($optimizedIndex) ||
+                $providedIndex < 0 || $providedIndex >= $stopCount ||
+                $optimizedIndex < 0 || $optimizedIndex >= $stopCount ||
+                isset($providedIndexes[$providedIndex]) || isset($orderedStops[$optimizedIndex])
+            ) {
+                throw new \RuntimeException('TomTom returned an invalid waypoint permutation.');
+            }
+
+            $providedIndexes[$providedIndex] = true;
+            $orderedStops[$optimizedIndex] = $stops[$providedIndex];
+        }
+
+        ksort($orderedStops);
 
         return [
             $coordinates[0],
-            ...$orderedWaypoints
-                ->map(fn (array $waypoint): array => $stops[$waypoint['provided_index']])
-                ->all(),
+            ...array_values($orderedStops),
             $coordinates[array_key_last($coordinates)],
         ];
     }

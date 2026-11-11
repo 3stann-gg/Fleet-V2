@@ -139,7 +139,7 @@ function buildRoutePrintHtml(model) {
         <td>${escapeRouteExportHtml(r.priorityLabel || getRoutePriorityLabel(r.priority))}</td>
         <td>${escapeRouteExportHtml(formatRouteExportDistance(r.estimatedDistance))}</td>
         <td>${escapeRouteExportHtml(r.estimatedTravelTime)}</td>
-        <td>${escapeRouteExportHtml(r.optimizationStrategy)}</td>
+        <td>${escapeRouteExportHtml(formatRouteStrategyLabel(r.optimizationStrategy))}</td>
         <td>${escapeRouteExportHtml(r.optimizationScore)}</td>
         <td>${escapeRouteExportHtml(r.status)}</td>
         <td>${escapeRouteExportHtml(
@@ -176,6 +176,7 @@ function buildRoutePrintHtml(model) {
   <h3>Route Planning</h3>
   <p class="meta">Generated Date: ${escapeRouteExportHtml(model.generatedDate)}</p>
   <p class="meta">Generated Time: ${escapeRouteExportHtml(model.generatedTime)}</p>
+  <p class="meta">Application-defined score out of 100 based on traffic and routing availability, with waypoint metadata considered where available. It is not a percentage saved, AI confidence, or a guarantee of the best route.</p>
   ${filters || '<p class="meta">Applied Filters: None</p>'}
   <div class="summary">
     <span><strong>Total Planned:</strong> ${stats.total}</span>
@@ -189,7 +190,7 @@ function buildRoutePrintHtml(model) {
       <tr>
         <th>Route No.</th><th>Origin</th><th>Destination</th><th>Stops</th>
         <th>Vehicle</th><th>Driver</th><th>Priority</th><th>Distance</th>
-        <th>Est. Time</th><th>Strategy</th><th>Score</th><th>Status</th><th>Departure</th>
+        <th>Est. Time</th><th>Strategy</th><th>Route Assessment Score</th><th>Status</th><th>Departure</th>
       </tr>
     </thead>
     <tbody>${body}</tbody>
@@ -342,7 +343,7 @@ function exportRoutesToPdf() {
         r.priorityLabel || getRoutePriorityLabel(r.priority),
         formatRouteExportDistance(r.estimatedDistance),
         r.estimatedTravelTime,
-        r.optimizationStrategy,
+        formatRouteStrategyLabel(r.optimizationStrategy),
         r.status,
         (r.departureDate || "") + " " + (r.departureTime || ""),
       ]),
@@ -402,6 +403,7 @@ function exportRoutesToExcel() {
       ["Average Estimated Distance (km)", Number(s.avgDistance.toFixed(1))],
       ["Average Estimated Time (min)", Math.round(s.avgMinutes)],
       ["Assigned Vehicles", s.vehicles],
+      ["Route Assessment Score", "Application-defined score out of 100 based on traffic and routing availability, with waypoint metadata considered where available. It is not a percentage saved, AI confidence, or a guarantee of the best route."],
       [],
       ["Applied Filters"],
       ...((model.filterSummary || []).length
@@ -423,7 +425,7 @@ function exportRoutesToExcel() {
             "Distance (km)",
             "Estimated Time",
             "Optimization Strategy",
-            "Optimization Score",
+            "Route Assessment Score",
             "Status",
             "Departure Date",
             "Departure Time",
@@ -441,7 +443,7 @@ function exportRoutesToExcel() {
             r.purpose,
             Number(r.estimatedDistance) || 0,
             r.estimatedTravelTime,
-            r.optimizationStrategy,
+            formatRouteStrategyLabel(r.optimizationStrategy),
             r.optimizationScore,
             r.status,
             r.departureDate,

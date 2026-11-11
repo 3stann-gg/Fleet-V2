@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\DriverVehicleQualification;
@@ -9,6 +10,11 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\TomTomRoutingService;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
+
+beforeEach(function () {
+    Http::preventStrayRequests();
+});
 
 function p53User(): User
 {
@@ -433,7 +439,12 @@ it('rejects a valid server proof when submitted stops use a different order', fu
     $routePlan = p53Route($reservation);
     $user = p53User();
     $tomTom = Mockery::mock(TomTomRoutingService::class);
-    $tomTom->shouldReceive('calculateRoute')->once()->andReturn(p53TomTomResult());
+    $tomTom->shouldReceive('calculateRoute')->once()->andReturn(array_replace(p53TomTomResult(), [
+        'optimized_waypoints' => [
+            ['providedIndex' => 0, 'optimizedIndex' => 0],
+            ['providedIndex' => 1, 'optimizedIndex' => 1],
+        ],
+    ]));
     $this->app->instance(TomTomRoutingService::class, $tomTom);
     $stopOne = ['latitude' => 14.6010, 'longitude' => 120.9900];
     $stopTwo = ['latitude' => 14.6050, 'longitude' => 121.0100];
@@ -541,3 +552,116 @@ it('preserves draft planning and non-emergency route lifecycle behavior', functi
         ->assertSuccessful()
         ->assertJsonPath('routePlan.status', 'Planned');
 });
+
+it('preserves a valid waypoint permutation through proof save and reopen', function (array $mapping, array $order, bool $repeatedLabels, bool $repeatedCoordinates) {
+    $reservation = p53Reservation();
+    $routePlan = p53Route($reservation);
+    $user = p53User();
+    $stops = [];
+    foreach (array_keys($order) as $index) {
+        $stops[] = [
+            'location' => $repeatedLabels ? 'Repeated synthetic stop' : 'Synthetic stop '.$index,
+            'latitude' => $repeatedCoordinates ? 14.601 : round(14.601 + $index / 1000, 6),
+            'longitude' => $repeatedCoordinates ? 121.001 : round(121.001 + $index / 1000, 6),
+        ];
+    }
+    $coordinates = [
+        ['latitude' => 14.5995, 'longitude' => 120.9842],
+        ...array_map(fn (array $stop): array => array_intersect_key($stop, array_flip(['latitude', 'longitude'])), $stops),
+        ['latitude' => 14.6091, 'longitude' => 121.0223],
+    ];
+    $tomTom = Mockery::mock(TomTomRoutingService::class);
+    $tomTom->shouldReceive('calculateRoute')->once()->with($coordinates, null)->andReturn(array_replace(p53TomTomResult(), [
+        'optimized_waypoints' => $mapping,
+    ]));
+    $this->app->instance(TomTomRoutingService::class, $tomTom);
+
+    $response = $this->actingAs($user)->postJson(route('route-planning.traffic-route'), [
+        'reservation_id' => $reservation->id,
+        'coordinates' => $coordinates,
+    ])->assertSuccessful();
+
+    $orderedStops = array_map(fn (int $index): array => $stops[$index], $order);
+    $proof = json_decode(Crypt::decryptString($response->json('optimization_proof')), true, flags: JSON_THROW_ON_ERROR);
+    expect($proof['coordinates'])->toBe([
+        $coordinates[0],
+        ...array_map(fn (int $index): array => $coordinates[$index + 1], $order),
+        $coordinates[array_key_last($coordinates)],
+    ])->and($routePlan->fresh()->status)->toBe('Planned')
+        ->and($routePlan->stops()->count())->toBe(0);
+
+    $this->postJson(route('route-planning.transition', $routePlan), p53UpdatePayload([
+        'optimization_proof' => $response->json('optimization_proof'),
+        'optimization_strategy' => $proof['optimization_strategy'],
+        'stops' => $orderedStops,
+    ]))->assertSuccessful()->assertJsonPath('routePlan.status', 'Ready For Dispatch');
+
+    $reopened = $this->getJson(route('route-planning.show', $routePlan))->assertSuccessful();
+    $persisted = $routePlan->fresh()->stops->map(fn ($stop): array => [
+        'location' => $stop->location,
+        'latitude' => (float) $stop->latitude,
+        'longitude' => (float) $stop->longitude,
+    ])->all();
+    expect($persisted)->toBe($orderedStops)
+        ->and($routePlan->fresh()->stops->pluck('stop_order')->all())->toBe($order === [] ? [] : range(1, count($order)))
+        ->and(array_column($reopened->json('routePlan.stops'), 'location'))->toBe(array_column($orderedStops, 'location'));
+})->with([
+    'identity' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], [0, 1], false, false],
+    'reversal' => [[['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 1, 'optimizedIndex' => 0]], [1, 0], false, false],
+    'cycle with shuffled metadata' => [[['providedIndex' => 1, 'optimizedIndex' => 2], ['providedIndex' => 2, 'optimizedIndex' => 0], ['providedIndex' => 0, 'optimizedIndex' => 1]], [2, 0, 1], false, false],
+    'repeated labels' => [[['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 1, 'optimizedIndex' => 0]], [1, 0], true, false],
+    'repeated coordinates' => [[['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 1, 'optimizedIndex' => 0]], [1, 0], false, true],
+    'identical repeated stops' => [[['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 1, 'optimizedIndex' => 0]], [1, 0], true, true],
+    'direct route' => [[], [], false, false],
+    'one stop without metadata' => [[], [0], false, false],
+    'one stop identity' => [[['providedIndex' => 0, 'optimizedIndex' => 0]], [0], false, false],
+]);
+
+it('rejects malformed waypoint metadata without issuing proof or changing route history', function (mixed $mapping, int $stopCount) {
+    $routePlan = p53Route(p53Reservation());
+    $routePlan->stops()->create(['stop_order' => 1, 'location' => 'Existing synthetic stop', 'latitude' => 14.6, 'longitude' => 121.0]);
+    $before = $routePlan->fresh()->toArray();
+    $auditCount = AuditLog::count();
+    $coordinates = [['latitude' => 14.5995, 'longitude' => 120.9842]];
+    for ($index = 0; $index < $stopCount; $index++) {
+        $coordinates[] = ['latitude' => 14.601 + $index / 1000, 'longitude' => 121.001 + $index / 1000];
+    }
+    $coordinates[] = ['latitude' => 14.6091, 'longitude' => 121.0223];
+    $tomTom = Mockery::mock(TomTomRoutingService::class);
+    $tomTom->shouldReceive('calculateRoute')->once()->andReturn(array_replace(p53TomTomResult(), ['optimized_waypoints' => $mapping]));
+    $this->app->instance(TomTomRoutingService::class, $tomTom);
+
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        'coordinates' => $coordinates,
+        'reservation_id' => $routePlan->reservation_id,
+    ])->assertStatus(502)->assertJsonPath('success', false)->assertJsonMissingPath('optimization_proof');
+
+    expect($routePlan->fresh()->toArray())->toBe($before)
+        ->and($routePlan->stops()->pluck('location')->all())->toBe(['Existing synthetic stop'])
+        ->and(AuditLog::count())->toBe($auditCount);
+})->with([
+    'missing multi-stop mapping' => [[], 2],
+    'incorrect count' => [[['providedIndex' => 0, 'optimizedIndex' => 0]], 2],
+    'duplicate source' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 0, 'optimizedIndex' => 1]], 2],
+    'duplicate destination' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 0]], 2],
+    'missing source' => [[['optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'missing destination' => [[['providedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'negative source' => [[['providedIndex' => -1, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'large source' => [[['providedIndex' => 2, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'negative destination' => [[['providedIndex' => 0, 'optimizedIndex' => -1], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'large destination' => [[['providedIndex' => 0, 'optimizedIndex' => 2], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'fractional source' => [[['providedIndex' => 0.5, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'fractional destination' => [[['providedIndex' => 0, 'optimizedIndex' => 0.5], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'numeric string' => [[['providedIndex' => '0', 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'string destination' => [[['providedIndex' => 0, 'optimizedIndex' => '0'], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'boolean' => [[['providedIndex' => false, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'boolean destination' => [[['providedIndex' => 0, 'optimizedIndex' => false], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'null index' => [[['providedIndex' => null, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'null destination' => [[['providedIndex' => 0, 'optimizedIndex' => null], ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'non-object entry' => [[null, ['providedIndex' => 1, 'optimizedIndex' => 1]], 2],
+    'null metadata' => [null, 2],
+    'non-list metadata' => [['entry' => ['providedIndex' => 0, 'optimizedIndex' => 0]], 1],
+    'one stop invalid source' => [[['providedIndex' => 1, 'optimizedIndex' => 0]], 1],
+    'one stop invalid destination' => [[['providedIndex' => 0, 'optimizedIndex' => 1]], 1],
+    'direct route unexpected metadata' => [[['providedIndex' => 0, 'optimizedIndex' => 0]], 0],
+]);

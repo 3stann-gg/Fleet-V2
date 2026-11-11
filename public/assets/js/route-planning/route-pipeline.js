@@ -1926,7 +1926,7 @@ async function requestTomTomRoute(routeCoordinates, record) {
         liveTrafficTravelTimeSeconds: data.live_traffic_travel_time_seconds,
         trafficLengthMeters: data.traffic_length_meters,
         optimizationProof: data.optimization_proof || null,
-        optimizedWaypoints: Array.isArray(data.optimized_waypoints)
+        optimizedWaypoints: Object.prototype.hasOwnProperty.call(data, "optimized_waypoints")
             ? data.optimized_waypoints
             : [],
         /*
@@ -2162,6 +2162,37 @@ async function calculateRouteWithOsrm(record, options = {}) {
     }
 }
 
+function orderRouteWaypoints(stops, waypoints = []) {
+    if (!Array.isArray(stops) || !Array.isArray(waypoints)) {
+        throw new Error("TomTom returned an invalid waypoint permutation.");
+    }
+    if (stops.length < 2 && waypoints.length === 0) {
+        return stops.slice();
+    }
+    if (waypoints.length !== stops.length) {
+        throw new Error("TomTom returned an invalid waypoint permutation.");
+    }
+    const providedIndexes = new Set();
+    const optimizedIndexes = new Set();
+    const orderedStops = new Array(stops.length);
+    for (const waypoint of waypoints) {
+        const providedIndex = waypoint?.providedIndex;
+        const optimizedIndex = waypoint?.optimizedIndex;
+        if (
+            !Number.isInteger(providedIndex) || !Number.isInteger(optimizedIndex) ||
+            providedIndex < 0 || providedIndex >= stops.length ||
+            optimizedIndex < 0 || optimizedIndex >= stops.length ||
+            providedIndexes.has(providedIndex) || optimizedIndexes.has(optimizedIndex)
+        ) {
+            throw new Error("TomTom returned an invalid waypoint permutation.");
+        }
+        providedIndexes.add(providedIndex);
+        optimizedIndexes.add(optimizedIndex);
+        orderedStops[optimizedIndex] = stops[providedIndex];
+    }
+    return orderedStops;
+}
+
 /**
  * Traffic-aware routing with OSRM fallback.
  *
@@ -2214,43 +2245,11 @@ async function calculateRouteWithTraffic(record, options = {}) {
             | optimizedIndex → new stop position
             |
             */
-            let optimizedRouteCoordinates = routeCoordinates;
-            const originalStops = Array.isArray(routeCoordinates.stops)
-                ? routeCoordinates.stops
-                : [];
-
-            const optimizedWaypoints = Array.isArray(
-                trafficRoute.optimizedWaypoints,
-            )
-                ? trafficRoute.optimizedWaypoints
-                : [];
-
-            if (
-                originalStops.length >= 2 &&
-                optimizedWaypoints.length === originalStops.length
-            ) {
-                const reorderedEntries = optimizedWaypoints
-                    .map((waypoint) => ({
-                        providedIndex: Number(waypoint?.providedIndex),
-                        optimizedIndex: Number(waypoint?.optimizedIndex),
-                    }))
-                    .filter(
-                        (waypoint) =>
-                            Number.isFinite(waypoint.providedIndex) &&
-                            Number.isFinite(waypoint.optimizedIndex) &&
-                            originalStops[waypoint.providedIndex],
-                    )
-                    .sort((a, b) => a.optimizedIndex - b.optimizedIndex);
-                if (reorderedEntries.length === originalStops.length) {
-                    optimizedRouteCoordinates = {
-                        origin: routeCoordinates.origin,
-                        stops: reorderedEntries.map(
-                            (entry) => originalStops[entry.providedIndex],
-                        ),
-                        destination: routeCoordinates.destination,
-                    };
-                }
-            }
+            const optimizedRouteCoordinates = {
+                origin: routeCoordinates.origin,
+                stops: orderRouteWaypoints(routeCoordinates.stops, trafficRoute.optimizedWaypoints),
+                destination: routeCoordinates.destination,
+            };
             /*
             |--------------------------------------------------------------------------
             | Draw optimized TomTom route
@@ -2416,9 +2415,9 @@ async function updateRouteMapPanel(record) {
     }
     if (strategyEl) {
         strategyEl.textContent = record.optimizationStrategy
-            ? record.optimizationStrategy +
+            ? formatRouteStrategyLabel(record.optimizationStrategy) +
               (record.optimizationScore != null
-                  ? " · Score " + record.optimizationScore
+                  ? " · Assessment: " + record.optimizationScore + "/100"
                   : "")
             : "—";
     }
@@ -2489,7 +2488,7 @@ function updateOptimizationSummaryPanel(record) {
 
     set("optSummaryDistance", formatRouteDistance(record.estimatedDistance));
     set("optSummaryTime", record.estimatedTravelTime || "—");
-    set("optSummaryStrategy", record.optimizationStrategy || "—");
+    set("optSummaryStrategy", formatRouteStrategyLabel(record.optimizationStrategy) || "—");
     set("optSummaryVehicle", record.vehicle || "—");
     set("optSummaryDriver", record.driver || "—");
     set(
