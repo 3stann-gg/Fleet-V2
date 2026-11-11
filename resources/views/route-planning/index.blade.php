@@ -755,7 +755,17 @@
                   <textarea id="routeNotes" rows="3" placeholder="Optional notes"></textarea>
                 </div>
               </div>
-              <div id="routeOptimizeSummary" class="route-optimize-summary" hidden></div>
+              <div class="route-comparison-option">
+                <label for="routeComparisonEnabled">
+                  <input type="checkbox" id="routeComparisonEnabled" aria-describedby="routeComparisonHelp" />
+                  Compare original and candidate route estimates
+                </label>
+                <p id="routeComparisonHelp">Off by default. Requests one additional TomTom calculation using the same routing assumptions. Estimated differences only. Actual travel outcomes may vary.</p>
+              </div>
+              <div class="route-result-panels">
+                <div id="routeOptimizeSummary" class="route-optimize-summary" hidden></div>
+                <section id="routeComparisonSummary" class="route-comparison-summary" aria-live="polite" aria-labelledby="routeComparisonTitle" hidden></section>
+              </div>
             </div>
             <div class="modal-footer">
                 <div class="route-modal-secondary-actions">

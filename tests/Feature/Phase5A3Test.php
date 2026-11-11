@@ -8,9 +8,447 @@ use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Policies\ReservationPolicy;
+use App\Policies\RoutePlanPolicy;
+use App\Services\RouteComparisonService;
 use App\Services\TomTomRoutingService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
+
+it('allows twenty shared routing attempts and rejects variations and new sessions for the same user', function () {
+    $this->freezeTime();
+    config(['services.tomtom.key' => 'synthetic-rate-limit-test-only']);
+    Http::preventStrayRequests();
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [], 1000, 120)));
+    $user = p53User();
+    $payload = ['coordinates' => [['latitude' => 14, 'longitude' => 121], ['latitude' => 15, 'longitude' => 122]]];
+
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $this->actingAs($user)->withHeader('X-Forwarded-For', '192.0.2.'.($attempt + 1))
+            ->postJson(route('route-planning.traffic-route'), $payload)
+            ->assertSuccessful()->assertJsonStructure(['optimization_proof']);
+    }
+    Http::assertSentCount(20);
+    $this->flushSession();
+    $rejected = $this->actingAs($user)->withHeader('X-Forwarded-For', '198.51.100.1')
+        ->postJson(route('route-planning.traffic-route'), [
+            ...$payload,
+            'coordinates' => [['latitude' => 16, 'longitude' => 123], ['latitude' => 17, 'longitude' => 124]],
+            'include_comparison' => true,
+            'reservation_id' => 999999,
+        ])->assertStatus(429)->assertJsonPath('success', false)
+        ->assertJsonPath('code', 'ROUTE_RATE_LIMITED')->assertJsonPath('scope', 'all')
+        ->assertJsonPath('retry_after', 60)->assertHeader('Retry-After', '60')
+        ->assertHeader('X-RateLimit-Limit', '20')->assertHeader('X-RateLimit-Remaining', '0');
+    expect($rejected->getContent())->not->toContain('all:'.$user->id);
+    Http::assertSentCount(20);
+
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), $payload)->assertSuccessful();
+    Http::assertSentCount(21);
+    $this->travel(61)->seconds();
+    $this->actingAs($user)->postJson(route('route-planning.traffic-route'), $payload)->assertSuccessful();
+    Http::assertSentCount(22);
+});
+
+it('charges comparison requests to both buckets without resetting on request variations', function (string $role) {
+    $this->freezeTime();
+    config(['services.tomtom.key' => 'synthetic-rate-limit-test-only']);
+    Http::preventStrayRequests();
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [2, 0, 1], 1000, 120)));
+    $user = User::factory()->create(['role' => $role]);
+    $payload = p53ComparisonPayload(p53Reservation());
+
+    for ($attempt = 0; $attempt < 6; $attempt++) {
+        $this->actingAs($user)->postJson(route('route-planning.traffic-route'), $payload)
+            ->assertSuccessful()->assertJsonPath('comparison.status', 'available');
+    }
+    Http::assertSentCount(12);
+    $this->postJson(route('route-planning.traffic-route'), [
+        ...$payload, 'reservation_id' => p53Reservation()->id, 'include_comparison' => '1',
+    ])->assertStatus(429)->assertJsonPath('scope', 'comparison')
+        ->assertJsonPath('retry_after', 60)->assertHeader('Retry-After', '60');
+    Http::assertSentCount(12);
+
+    for ($attempt = 0; $attempt < 14; $attempt++) {
+        $this->postJson(route('route-planning.traffic-route'), [...$payload, 'include_comparison' => false])
+            ->assertSuccessful()->assertJsonMissingPath('comparison');
+    }
+    $this->postJson(route('route-planning.traffic-route'), [...$payload, 'include_comparison' => false])
+        ->assertStatus(429)->assertJsonPath('scope', 'all');
+    Http::assertSentCount(26);
+    $this->travel(61)->seconds();
+    $this->postJson(route('route-planning.traffic-route'), $payload)->assertSuccessful();
+    Http::assertSentCount(28);
+})->with(['fleet_manager', 'dispatcher']);
+
+it('counts admitted invalid routing requests and leaves other route endpoints unthrottled', function () {
+    $this->freezeTime();
+    Http::fake();
+    $this->actingAs(p53User());
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $this->postJson(route('route-planning.traffic-route'), [])->assertUnprocessable();
+    }
+    $this->postJson(route('route-planning.traffic-route'), [])->assertStatus(429);
+    $this->get(route('route-planning'))->assertSuccessful();
+    Http::assertNothingSent();
+});
+
+it('keeps driver navigation routing available within the shared limit', function () {
+    config(['services.tomtom.key' => 'synthetic-rate-limit-test-only']);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [], 1000, 120)));
+    $user = User::factory()->create(['role' => 'driver']);
+    $before = Dispatch::count();
+    for ($attempt = 0; $attempt < 4; $attempt++) {
+        $this->actingAs($user)->postJson(route('route-planning.traffic-route'), [
+            'coordinates' => [['latitude' => 14, 'longitude' => 121], ['latitude' => 15, 'longitude' => 122]],
+        ])->assertSuccessful();
+    }
+    expect(Dispatch::count())->toBe($before);
+    Http::assertSentCount(4);
+});
+
+it('does not contact a provider when the limiter cache fails', function () {
+    Http::fake();
+    $limiter = Mockery::mock(Illuminate\Cache\RateLimiter::class)->makePartial();
+    $limiter->shouldReceive('limiter')->with('route-traffic')->andReturn(RateLimiter::limiter('route-traffic'));
+    $limiter->shouldReceive('tooManyAttempts')->andThrow(new RuntimeException('Synthetic limiter cache failure'));
+    $this->app->instance(Illuminate\Cache\RateLimiter::class, $limiter);
+
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        'coordinates' => [['latitude' => 14, 'longitude' => 121], ['latitude' => 15, 'longitude' => 122]],
+    ])->assertStatus(500);
+    Http::assertNothingSent();
+});
+
+function p53ComparisonPayload(Reservation $reservation, int $stopCount = 3): array
+{
+    $stops = [];
+    for ($index = 0; $index < $stopCount; $index++) {
+        $stops[] = ['latitude' => 14.601 + $index / 1000, 'longitude' => 121.001 + $index / 1000];
+    }
+
+    return [
+        'reservation_id' => $reservation->id,
+        'include_comparison' => true,
+        'depart_at' => now()->addDay()->toIso8601String(),
+        'coordinates' => [
+            ['latitude' => 14.5995, 'longitude' => 120.9842],
+            ...$stops,
+            ['latitude' => 14.6091, 'longitude' => 121.0223],
+        ],
+    ];
+}
+
+function p53ComparisonBody(Request $request, array $order, float $distance, float $duration): array
+{
+    preg_match('~/calculateRoute/([^/]+)/json$~', rawurldecode(parse_url($request->url(), PHP_URL_PATH)), $matches);
+    $points = array_map(function (string $pair): array {
+        [$lat, $lng] = array_map('floatval', explode(',', $pair));
+
+        return ['latitude' => $lat, 'longitude' => $lng];
+    }, explode(':', $matches[1]));
+    $optimized = $request['computeBestOrder'] === 'true';
+    $mapping = [];
+    $ordered = [$points[0]];
+    foreach ($order as $position => $index) {
+        $mapping[] = ['providedIndex' => $index, 'optimizedIndex' => $position];
+        $ordered[] = $points[$index + 1];
+    }
+    $ordered[] = $points[array_key_last($points)];
+
+    return [
+        'optimizedWaypoints' => $optimized ? $mapping : [],
+        'routes' => [[
+            'summary' => [
+                'lengthInMeters' => $distance,
+                'travelTimeInSeconds' => $duration,
+                'trafficDelayInSeconds' => 0,
+                'noTrafficTravelTimeInSeconds' => $duration,
+                'liveTrafficIncidentsTravelTimeInSeconds' => $duration,
+            ],
+            'legs' => [['points' => $optimized ? $ordered : $points]],
+        ]],
+    ];
+}
+
+it('compares two TomTom orders with a frozen context raw measurements and unchanged proof', function (array $order, bool $duplicateCoordinates) {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    $reservation = p53Reservation();
+    $user = p53User();
+    $payload = p53ComparisonPayload($reservation, count($order));
+    if ($duplicateCoordinates) {
+        foreach (range(1, count($order)) as $index) {
+            $payload['coordinates'][$index] = $payload['coordinates'][1];
+        }
+    }
+    $requests = [];
+    Http::fake(function (Request $request, array $options) use (&$requests, $order) {
+        $requests[] = $request;
+        expect($options['timeout'])->toBeLessThanOrEqual(7)
+            ->and($options['connect_timeout'])->toBeLessThanOrEqual(2);
+        $optimized = $request['computeBestOrder'] === 'true';
+
+        return Http::response(p53ComparisonBody($request, $order, $optimized ? 12500.25 : 15000.75, $optimized ? 1680.25 : 1800.5));
+    });
+    $audits = AuditLog::count();
+    $response = $this->actingAs($user)->postJson(route('route-planning.traffic-route'), $payload)
+        ->assertSuccessful()
+        ->assertJsonPath('comparison.status', 'available')
+        ->assertJsonPath('comparison.candidate_order', $order)
+        ->assertJsonPath('comparison.original.distance_meters', 15000.75)
+        ->assertJsonPath('comparison.candidate.distance_meters', 12500.25)
+        ->assertJsonPath('comparison.difference.distance_meters', 2500.5)
+        ->assertJsonPath('comparison.difference.travel_time_seconds', 120.25);
+    Http::assertSentCount(2);
+    expect($requests[0]['computeBestOrder'])->toBe('true')
+        ->and($requests[1]['computeBestOrder'])->toBe('false');
+    foreach (['departAt', 'traffic', 'routeType', 'travelMode', 'computeTravelTimeFor'] as $field) {
+        expect($requests[0][$field])->toBe($requests[1][$field]);
+    }
+    expect(parse_url($requests[0]->url(), PHP_URL_PATH))->toBe(parse_url($requests[1]->url(), PHP_URL_PATH))
+        ->and($response->json('comparison.source_coordinates'))->toEqual($payload['coordinates'])
+        ->and($response->json('comparison.routing_context.depart_at'))->toBe($payload['depart_at'])
+        ->and($response->json('comparison.order_changed'))->toBe($order !== range(0, count($order) - 1));
+    $proof = json_decode(Crypt::decryptString($response->json('optimization_proof')), true, flags: JSON_THROW_ON_ERROR);
+    expect(array_keys($proof))->toBe(['user_id', 'reservation_id', 'issued_at', 'origin_latitude', 'origin_longitude', 'destination_latitude', 'destination_longitude', 'coordinates', 'estimated_distance', 'estimated_time', 'optimization_strategy', 'provider'])
+        ->and($proof['coordinates'])->toEqual([$payload['coordinates'][0], ...array_map(fn (int $index): array => $payload['coordinates'][$index + 1], $order), $payload['coordinates'][array_key_last($payload['coordinates'])]])
+        ->and(AuditLog::count())->toBe($audits)
+        ->and(RoutePlan::count())->toBe(0);
+})->with([
+    'two-stop reversal' => [[1, 0], false],
+    'three-stop cycle' => [[2, 0, 1], false],
+    'identity' => [[0, 1, 2], false],
+    'duplicate coordinates remain separate occurrences' => [[2, 0, 1], true],
+]);
+
+it('keeps comparison optional and preserves a single legacy routing call', function (bool $includeFlag) {
+    $routing = Mockery::mock(TomTomRoutingService::class);
+    $points = p53UpdatePayload();
+    $coordinates = [
+        ['latitude' => $points['origin_latitude'], 'longitude' => $points['origin_longitude']],
+        ['latitude' => $points['destination_latitude'], 'longitude' => $points['destination_longitude']],
+    ];
+    $routing->shouldReceive('calculateRoute')->once()->with($coordinates, null)->andReturn(p53TomTomResult());
+    $this->app->instance(TomTomRoutingService::class, $routing);
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        'coordinates' => $coordinates,
+        ...($includeFlag ? ['include_comparison' => false] : []),
+    ])->assertSuccessful()->assertJsonMissingPath('comparison');
+})->with([false, true]);
+
+it('preserves a valid candidate when the baseline fails without retrying', function () {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    $payload = p53ComparisonPayload(p53Reservation());
+    Http::fake(function (Request $request) {
+        if ($request['computeBestOrder'] === 'false') {
+            throw new ConnectionException('Synthetic private provider failure');
+        }
+
+        return Http::response(p53ComparisonBody($request, [2, 0, 1], 12500, 1200));
+    });
+    $response = $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), $payload)
+        ->assertSuccessful()->assertJsonPath('comparison.status', 'unavailable')
+        ->assertJsonPath('provider', 'TomTom')->assertJsonPath('distance_meters', 12500);
+    expect($response->json('optimization_proof'))->toBeString()
+        ->and($response->json('comparison.difference'))->toBeNull()
+        ->and($response->getContent())->not->toContain('Synthetic private provider failure');
+});
+
+it('does not request a baseline when the candidate provider fails', function () {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    Http::fake(['*' => Http::response(['message' => 'Synthetic failure'], 503)]);
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53ComparisonPayload(p53Reservation()))
+        ->assertStatus(502)->assertJsonMissingPath('optimization_proof');
+    Http::assertSentCount(1);
+});
+
+it('requires explicit comparison capability before any provider call', function (string $role) {
+    Http::fake();
+    $this->actingAs(User::factory()->create(['role' => $role]))
+        ->postJson(route('route-planning.traffic-route'), p53ComparisonPayload(p53Reservation()))
+        ->assertForbidden();
+    Http::assertNothingSent();
+})->with(['driver', 'it_admin', 'department_head']);
+
+it('checks reservation and associated route policies before comparison calls', function (bool $denyReservation) {
+    $reservation = p53Reservation();
+    p53Route($reservation);
+    if ($denyReservation) {
+        $policy = new class extends ReservationPolicy
+        {
+            public function view(User $user, Reservation $reservation): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(Reservation::class, $policy::class);
+    } else {
+        $policy = new class extends RoutePlanPolicy
+        {
+            public function view(User $user, RoutePlan $routePlan): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(RoutePlan::class, $policy::class);
+    }
+    Http::fake();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53ComparisonPayload($reservation))->assertForbidden();
+    Http::assertNothingSent();
+})->with([true, false]);
+
+it('requires a reservation for comparison and rejects malformed opt-in values', function (mixed $flag) {
+    Http::fake();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        'coordinates' => [['latitude' => 14, 'longitude' => 121], ['latitude' => 15, 'longitude' => 122]],
+        'include_comparison' => $flag,
+    ])->assertUnprocessable();
+    Http::assertNothingSent();
+})->with([[true], ['yes'], [[]], [null]]);
+
+it('reports signed and zero differences without fabricated percentages', function (float $originalDistance, float $candidateDistance, float $originalTime, float $candidateTime) {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    Http::fake(function (Request $request) use ($originalDistance, $candidateDistance, $originalTime, $candidateTime) {
+        $optimized = $request['computeBestOrder'] === 'true';
+
+        return Http::response(p53ComparisonBody($request, [0, 1, 2], $optimized ? $candidateDistance : $originalDistance, $optimized ? $candidateTime : $originalTime));
+    });
+    $response = $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53ComparisonPayload(p53Reservation()))
+        ->assertSuccessful()->assertJsonPath('comparison.status', 'available')->assertJsonPath('comparison.order_changed', false);
+    foreach (['distance_meters' => [$originalDistance, $candidateDistance], 'travel_time_seconds' => [$originalTime, $candidateTime]] as $key => [$original, $candidate]) {
+        expect($response->json('comparison.difference.'.$key))->toEqual($original - $candidate)
+            ->and($response->json('comparison.difference.'.$key.'_percent'))->toEqual($original > 0 ? (($original - $candidate) / $original) * 100 : null);
+    }
+    expect($response->json('comparison.reason'))->toContain('not verified savings');
+})->with([
+    [15000, 12000, 1500, 1200],
+    [9000, 10000, 500, 600],
+    [10000, 10000, 600, 600],
+    [0, 10000, 0, 600],
+]);
+
+function p53ComparableResult(array $coordinates, string $departAt, bool $optimized = true): array
+{
+    return [
+        'provider' => 'TomTom',
+        'routing_context' => TomTomRoutingService::routingContext($departAt),
+        'request_coordinates' => array_map(fn (array $point): array => ['latitude' => (float) $point['latitude'], 'longitude' => (float) $point['longitude']], $coordinates),
+        'waypoint_order_optimized' => $optimized,
+        'comparison_metrics' => ['distance_meters' => 12000, 'travel_time_seconds' => 1200],
+        'optimized_waypoints' => $optimized ? [['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 1, 'optimizedIndex' => 2], ['providedIndex' => 2, 'optimizedIndex' => 0]] : [],
+        'calculation_started_at' => now()->toISOString(),
+        'calculated_at' => now()->toISOString(),
+    ];
+}
+
+it('rejects incomplete malformed stale or mismatched comparison results', function (array $changes, bool $baselineInvalid) {
+    $payload = p53ComparisonPayload(p53Reservation());
+    $valid = p53ComparableResult($payload['coordinates'], $payload['depart_at']);
+    $baseline = p53ComparableResult($payload['coordinates'], $payload['depart_at'], false);
+    $routing = Mockery::mock(TomTomRoutingService::class);
+    if ($baselineInvalid) {
+        $routing->shouldReceive('calculateRoute')->once()->andReturn(array_replace_recursive($baseline, $changes));
+    } else {
+        $valid = array_replace_recursive($valid, $changes);
+        $routing->shouldNotReceive('calculateRoute');
+    }
+    $comparison = (new RouteComparisonService($routing))->compare($payload['coordinates'], $valid, $payload['depart_at'], hrtime(true) / 1e9);
+    expect($comparison['status'])->toBe('unavailable')->and($comparison['difference'])->toBeNull();
+})->with([
+    'mixed provider' => [['provider' => 'OSRM'], false],
+    'different traffic assumption' => [['routing_context' => ['traffic' => false]], false],
+    'different departure' => [['routing_context' => ['depart_at' => '2000-01-01T00:00:00Z']], false],
+    'different profile' => [['routing_context' => ['travel_mode' => 'truck']], false],
+    'different route objective' => [['routing_context' => ['route_type' => 'shortest']], false],
+    'different API version' => [['routing_context' => ['api_version' => '2']], false],
+    'changed endpoint coordinate' => [['request_coordinates' => [0 => ['latitude' => 0]]], false],
+    'missing metric' => [['comparison_metrics' => ['distance_meters' => null]], false],
+    'string metric' => [['comparison_metrics' => ['distance_meters' => '12000']], false],
+    'boolean metric' => [['comparison_metrics' => ['distance_meters' => false]], false],
+    'negative metric' => [['comparison_metrics' => ['travel_time_seconds' => -1]], false],
+    'nonfinite metric' => [['comparison_metrics' => ['distance_meters' => INF]], false],
+    'NaN metric' => [['comparison_metrics' => ['distance_meters' => NAN]], false],
+    'stale timestamp' => [['calculation_started_at' => '2000-01-01T00:00:00Z'], false],
+    'missing timestamp' => [['calculated_at' => null], false],
+    'future timestamp' => [['calculated_at' => '2099-01-01T00:00:00Z'], false],
+    'duplicate indices' => [['optimized_waypoints' => [0 => ['optimizedIndex' => 0]]], false],
+    'baseline provider differs' => [['provider' => 'OSRM'], true],
+    'baseline context differs' => [['routing_context' => ['traffic' => false]], true],
+    'baseline reordered unexpectedly' => [['optimized_waypoints' => [['providedIndex' => 0, 'optimizedIndex' => 2], ['providedIndex' => 1, 'optimizedIndex' => 0], ['providedIndex' => 2, 'optimizedIndex' => 1]]], true],
+    'baseline metric missing' => [['comparison_metrics' => ['travel_time_seconds' => null]], true],
+]);
+
+it('skips the baseline when the shared request budget is exhausted', function () {
+    $payload = p53ComparisonPayload(p53Reservation());
+    $routing = Mockery::mock(TomTomRoutingService::class);
+    $routing->shouldNotReceive('calculateRoute');
+    $comparison = (new RouteComparisonService($routing))->compare($payload['coordinates'], p53ComparableResult($payload['coordinates'], $payload['depart_at']), $payload['depart_at'], hrtime(true) / 1e9 - 15);
+    expect($comparison['status'])->toBe('unavailable')->and($comparison['reason'])->toContain('budget');
+});
+
+it('uses only the remaining baseline budget and discards a late baseline result', function (bool $late) {
+    $payload = p53ComparisonPayload(p53Reservation());
+    $routing = Mockery::mock(TomTomRoutingService::class);
+    $routing->shouldReceive('calculateRoute')->once()->with($payload['coordinates'], $payload['depart_at'], false, 4.0)
+        ->andReturn(p53ComparableResult($payload['coordinates'], $payload['depart_at'], false));
+    $comparison = new class($routing, $late) extends RouteComparisonService
+    {
+        private int $checks = 0;
+
+        public function __construct(TomTomRoutingService $routing, private bool $late)
+        {
+            parent::__construct($routing);
+        }
+
+        protected function elapsedSeconds(float $startedAt): float
+        {
+            $this->checks++;
+
+            return $this->checks === 1 ? 10.0 : ($this->late ? 14.01 : 13.5);
+        }
+    };
+    $result = $comparison->compare($payload['coordinates'], p53ComparableResult($payload['coordinates'], $payload['depart_at']), $payload['depart_at'], 0.0);
+    expect($result['status'])->toBe($late ? 'unavailable' : 'available')
+        ->and($result['difference'] === null)->toBe($late);
+})->with([false, true]);
+
+it('freezes a single explicit departure time when comparison has no supplied departure', function () {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    $this->freezeTime();
+    $payload = p53ComparisonPayload(p53Reservation());
+    unset($payload['depart_at']);
+    $departures = [];
+    Http::fake(function (Request $request) use (&$departures) {
+        $departures[] = $request['departAt'];
+
+        return Http::response(p53ComparisonBody($request, [2, 0, 1], 12000, 1200));
+    });
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), $payload)->assertSuccessful()
+        ->assertJsonPath('comparison.status', 'available')
+        ->assertJsonPath('comparison.routing_context.depart_at', now()->toIso8601String());
+    expect($departures)->toBe([now()->toIso8601String(), now()->toIso8601String()]);
+    Http::assertSentCount(2);
+});
+
+it('rejects malformed raw baseline metrics without losing the candidate', function () {
+    config(['services.tomtom.key' => 'synthetic-comparison-test-only']);
+    Http::fake(function (Request $request) {
+        $body = p53ComparisonBody($request, [2, 0, 1], 12000, 1200);
+        if ($request['computeBestOrder'] === 'false') {
+            $body['routes'][0]['summary']['lengthInMeters'] = '12000';
+        }
+
+        return Http::response($body);
+    });
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53ComparisonPayload(p53Reservation()))
+        ->assertSuccessful()->assertJsonPath('comparison.status', 'unavailable')->assertJsonPath('comparison.difference', null)
+        ->assertJsonPath('provider', 'TomTom');
+    Http::assertSentCount(2);
+});
 
 beforeEach(function () {
     Http::preventStrayRequests();

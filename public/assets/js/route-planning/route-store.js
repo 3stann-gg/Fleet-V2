@@ -14,6 +14,39 @@
 const ROUTE_API_BASE = "/route-planning";
 const HIMS_FLEET_ROUTE_TEMPLATES_KEY = "himsFleetRouteTemplates";
 const ROUTE_TEMPLATES_MAX = 30;
+const routeTrafficCooldowns = { all: 0, comparison: 0 };
+
+function routeTrafficRetryDeadline(header, fallbackSeconds) {
+    const now = Date.now();
+    const value = String(header || "").trim();
+    let seconds = null;
+    if (/^\d+$/.test(value)) {
+        seconds = Number(value);
+    } else if (/\d{2}:\d{2}:\d{2}/.test(value)) {
+        const date = Date.parse(value);
+        if (Number.isFinite(date)) seconds = Math.max(0, Math.ceil((date - now) / 1000));
+    }
+    if (seconds === null || !Number.isFinite(now + seconds * 1000) || now + seconds * 1000 > Number.MAX_SAFE_INTEGER) {
+        seconds = typeof fallbackSeconds === "number" && Number.isFinite(fallbackSeconds) && fallbackSeconds >= 0
+            ? fallbackSeconds : 60;
+    }
+    return now + seconds * 1000;
+}
+
+function getRouteTrafficRateLimitError(includeComparison = false) {
+    const scope = includeComparison && routeTrafficCooldowns.comparison > routeTrafficCooldowns.all
+        ? "comparison" : "all";
+    const retryAt = routeTrafficCooldowns[scope];
+    if (retryAt <= Date.now()) return null;
+    const seconds = Math.ceil((retryAt - Date.now()) / 1000);
+    const error = new Error(`Too many requests. Please try again in ${seconds} seconds.`);
+    error.status = 429;
+    error.code = "ROUTE_RATE_LIMITED";
+    error.scope = scope;
+    error.retryAt = retryAt;
+    error.retryAfter = seconds;
+    return error;
+}
 
 function formatRouteStrategyLabel(strategy) {
     return strategy === "OSRM Optimized Waypoints (Fallback)"
@@ -90,6 +123,17 @@ function getRouteCsrfToken() {
  */
 async function routeApiRequest(url, options = {}) {
     const method = String(options.method || "GET").toUpperCase();
+    const isTrafficRequest = method === "POST" && String(url).split("?")[0].endsWith(`${ROUTE_API_BASE}/traffic-route`);
+    let includeComparison = false;
+    if (isTrafficRequest) {
+        try {
+            includeComparison = [true, 1, "1"].includes(JSON.parse(options.body || "{}").include_comparison);
+        } catch {
+            // Invalid payloads still go through the existing server validation.
+        }
+        const cooldown = getRouteTrafficRateLimitError(includeComparison);
+        if (cooldown) throw cooldown;
+    }
 
     const headers = {
         Accept: "application/json",
@@ -155,6 +199,20 @@ async function routeApiRequest(url, options = {}) {
     }
 
     if (!response.ok) {
+        if (isTrafficRequest && response.status === 429) {
+            const scope = data.scope === "comparison" ? "comparison" : "all";
+            const deadline = routeTrafficRetryDeadline(response.headers.get("Retry-After"), data.retry_after);
+            routeTrafficCooldowns[scope] = Math.max(routeTrafficCooldowns[scope], deadline);
+            if (typeof refreshRouteTrafficCooldownControls === "function") refreshRouteTrafficCooldownControls();
+            const error = getRouteTrafficRateLimitError(scope === "comparison") || new Error("Too many requests. Please try again.");
+            error.status = 429;
+            error.code = "ROUTE_RATE_LIMITED";
+            error.scope = scope;
+            error.retryAt = routeTrafficCooldowns[scope];
+            error.retryAfter = Math.max(0, Math.ceil((error.retryAt - Date.now()) / 1000));
+            error.data = data;
+            throw error;
+        }
         const error = new Error(
             data.message || "Route Planning request failed.",
         );

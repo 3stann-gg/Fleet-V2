@@ -129,6 +129,155 @@ function canDuplicateRoute() {
 let routeLastOptimization = null;
 let routePendingOptimization = null;
 
+let routeOptimizationGeneration = 0;
+let routeOptimizationRequestPending = false;
+let routeComparisonSnapshot = null;
+let routeComparisonTimer = null;
+let routeTrafficCooldownTimer = null;
+let routeFormGeneration = 0;
+let routeSaveOperation = null;
+
+function invalidateRouteSaveContext() {
+    routeFormGeneration++;
+    if (routeSaveOperation?.ownsSubmitButton) {
+        routeSaveOperation.submitButton.disabled = routeSaveOperation.submitWasDisabled;
+    }
+    routeSaveOperation = null;
+}
+
+function isRouteSaveCurrent(operation, checkInputs = true) {
+    return routeSaveOperation === operation &&
+        operation.generation === routeFormGeneration &&
+        operation.mode === routeFormMode &&
+        operation.routeId === routeEditingId &&
+        operation.reservationId === document.getElementById("routeReservation")?.value &&
+        (!checkInputs || (operation.optimizationGeneration === routeOptimizationGeneration &&
+            operation.fingerprint === routeCalculationFingerprint()));
+}
+
+function refreshRouteTrafficCooldownControls() {
+    window.clearTimeout?.(routeTrafficCooldownTimer);
+    routeTrafficCooldownTimer = null;
+    const button = document.getElementById("optimizeRouteBtn");
+    if (!button) return;
+    const error = getRouteTrafficRateLimitError(document.getElementById("routeComparisonEnabled")?.checked === true);
+    if (error) {
+        if (button.dataset.routeCooldownLocked !== "true") button.dataset.routeCooldownTitle = button.title || "";
+        button.dataset.routeCooldownLocked = "true";
+        button.disabled = true;
+        button.title = error.message;
+        routeTrafficCooldownTimer = window.setTimeout?.(refreshRouteTrafficCooldownControls, Math.min(error.retryAfter * 1000 + 10, 2147483647));
+    } else if (button.dataset.routeCooldownLocked === "true") {
+        button.disabled = routeOptimizationRequestPending;
+        button.title = button.dataset.routeCooldownTitle || "";
+        delete button.dataset.routeCooldownLocked;
+        delete button.dataset.routeCooldownTitle;
+    }
+}
+
+function routeCalculationFingerprint() {
+    const ids = ["routeReservation", "routeOrigin", "routeDestination", "routeDepartureDate", "routeDepartureTime", "routeVehicle", "routeDriver"];
+    return JSON.stringify({
+        mode: routeFormMode,
+        id: routeEditingId,
+        fields: ids.map(id => {
+            const field = document.getElementById(id);
+            return [field?.value || "", field?.dataset.latitude ?? null, field?.dataset.longitude ?? null];
+        }),
+        stops: getRouteStopsFromForm(),
+        stopCoordinates: Array.from(document.getElementById("routeStopsList")?.querySelectorAll("input.route-stop-input") || []).map(input => [input.dataset.latitude ?? null, input.dataset.longitude ?? null]),
+        comparison: document.getElementById("routeComparisonEnabled")?.checked === true,
+    });
+}
+
+function clearRouteComparison() {
+    window.clearTimeout?.(routeComparisonTimer);
+    routeComparisonTimer = null;
+    routeComparisonSnapshot = null;
+    const panel = document.getElementById("routeComparisonSummary");
+    if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = "";
+    }
+}
+
+function renderRouteComparison(result) {
+    clearRouteComparison();
+    const panel = document.getElementById("routeComparisonSummary");
+    if (!panel || document.getElementById("routeComparisonEnabled")?.checked !== true) return;
+    const comparison = result?.comparison;
+    const originalStops = result?.originalRouteCoordinates?.stops || [];
+    const candidateStops = result?.routeCoordinates?.stops || [];
+    const expiry = Date.parse(comparison?.expires_at);
+    let available = comparison?.status === "available" && result?.provider === "TomTom" && !result?.fallback && Number.isFinite(expiry) && expiry > Date.now();
+    let reason = comparison?.reason || "Comparable TomTom estimates are unavailable. OSRM fallback is not a verified optimization comparison.";
+    const metric = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
+    if (available) {
+        const points = [result.originalRouteCoordinates?.origin, ...originalStops.map(stop => stop.coordinate), result.originalRouteCoordinates?.destination];
+        const source = comparison.source_coordinates, order = comparison.candidate_order, context = comparison.routing_context;
+        available = comparison.provider === "TomTom" && context?.api_version === "1" && context.route_type === "fastest" && context.travel_mode === "car" && context.traffic === true &&
+            Array.isArray(source) && source.length === points.length && points.every((point, i) => point && source[i]?.latitude === point.lat && source[i]?.longitude === point.lng) &&
+            Array.isArray(order) && order.length === originalStops.length && new Set(order).size === order.length &&
+            order.every((index, i) => Number.isInteger(index) && index >= 0 && index < originalStops.length && candidateStops[i]?.location === originalStops[index]?.location && candidateStops[i]?.coordinate?.lat === originalStops[index]?.coordinate?.lat && candidateStops[i]?.coordinate?.lng === originalStops[index]?.coordinate?.lng);
+        for (const key of ["distance_meters", "travel_time_seconds"]) {
+            const original = comparison.original?.[key], candidate = comparison.candidate?.[key], delta = comparison.difference?.[key];
+            const percent = comparison.difference?.[key + "_percent"];
+            const expectedPercent = original > 0 ? ((original - candidate) / original) * 100 : null;
+            available = available && metric(original) && metric(candidate) && typeof delta === "number" && Number.isFinite(delta) && Math.abs(delta - (original - candidate)) < 0.000001 &&
+                (expectedPercent === null ? percent === null : typeof percent === "number" && Number.isFinite(percent) && Math.abs(percent - expectedPercent) < 0.000001);
+        }
+        if (!available) reason = "Comparison unavailable: measurements or route context do not match this calculation.";
+    } else if (comparison?.status === "available") {
+        reason = "Comparison expired or is not comparable. Run Optimize again.";
+    }
+    const escape = value => escapeRouteHtml(String(value));
+    const value = (number, divisor, unit, signed = false) => {
+        if (typeof number !== "number" || !Number.isFinite(number)) return "Unavailable";
+        return (signed && number > 0 ? "+" : "") + (number / divisor).toFixed(2) + unit;
+    };
+    const originalOrder = originalStops.map((stop, index) => "<li>" + (index + 1) + ". " + escape(stop.location) + "</li>").join("");
+    const candidateOrder = candidateStops.map(stop => "<li>" + escape(stop.location) + "</li>").join("");
+    const context = comparison?.routing_context;
+    const row = (label, key, divisor, unit) => "<tr><th scope='row'>" + label + "</th><td>" + (available ? value(comparison.original[key], divisor, unit) : "Unavailable") + "</td><td>" + (available ? value(comparison.candidate[key], divisor, unit) : "Unavailable") + "</td><td>" + (available ? value(comparison.difference[key], divisor, unit, true) : "Unavailable") + "</td><td>" + (available ? value(comparison.difference[key + "_percent"], 1, "%", true) : "Unavailable") + "</td></tr>";
+    panel.hidden = false;
+    panel.innerHTML = [
+        "<h3 id='routeComparisonTitle'>Original vs Candidate Route Estimates</h3>",
+        "<p class='route-comparison-status'><strong>" + (available ? "Comparable estimates" : "Unavailable") + "</strong> — " + escape(reason) + "</p>",
+        "<div class='route-comparison-table-wrap'><table><thead><tr><th>Metric</th><th>Original input order</th><th>Candidate order</th><th>Difference (original − candidate)</th><th>Difference (%)</th></tr></thead><tbody>",
+        row("Estimated distance", "distance_meters", 1000, " km"),
+        row("Estimated travel duration", "travel_time_seconds", 60, " min"),
+        "</tbody></table></div>",
+        "<p>Positive differences mean shorter distance or duration; negative differences mean longer. These are estimates, not verified savings.</p>",
+        "<div class='route-comparison-orders'><div><strong>Original input order</strong><ol>" + (originalOrder || "<li>No intermediate stops</li>") + "</ol></div><div><strong>Candidate order</strong><ol>" + (candidateOrder || "<li>No intermediate stops</li>") + "</ol></div></div>",
+        "<p>Provider: " + escape(comparison?.provider || result?.provider || "Unavailable") + (context ? " · Routing API " + escape(context.api_version) + " · " + escape(context.travel_mode) + " · " + escape(context.route_type) + " · Traffic " + (context.traffic === true ? "enabled" : "unavailable") + " · Departure: " + escape(context.depart_at) : "") + "</p>",
+        "<p>Original calculated: " + escape(comparison?.original_calculated_at || "Unavailable") + " · Candidate calculated: " + escape(comparison?.candidate_calculated_at || "Unavailable") + "</p>",
+        "<p>Estimated differences only. Actual travel outcomes may vary.</p>",
+    ].join("");
+    const snapshot = { result, fingerprint: routeCalculationFingerprint(), expiry };
+    routeComparisonSnapshot = snapshot;
+    if (available && typeof window.setTimeout === "function") {
+        routeComparisonTimer = window.setTimeout(() => {
+            if (routeComparisonSnapshot === snapshot) renderRouteComparison({ ...result, comparison: { ...comparison, status: "unavailable", reason: "Comparison expired. Run Optimize again." } });
+        }, Math.max(0, expiry - Date.now()));
+    }
+}
+
+function verifyRouteComparisonSnapshot() {
+    if (routeComparisonSnapshot && (routeComparisonSnapshot.fingerprint !== routeCalculationFingerprint() || routeComparisonSnapshot.expiry <= Date.now())) {
+        const result = routeComparisonSnapshot.result;
+        renderRouteComparison({ ...result, comparison: { ...result.comparison, status: "unavailable", reason: "Comparison inputs changed or expired. Run Optimize again." } });
+    }
+}
+
+function invalidateRouteComparisonContext() {
+    routeOptimizationGeneration++;
+    routeOptimizationRequestPending = false;
+    const result = routeComparisonSnapshot?.result;
+    if (result) {
+        renderRouteComparison({ ...result, comparison: { ...result.comparison, status: "unavailable", reason: "Comparison inputs changed. Run Optimize again." } });
+    }
+}
+
 const ROUTE_STATUS_TRANSITIONS = {
     Draft: ["Planned"],
     Planned: ["Draft", "Ready For Dispatch"],
@@ -353,6 +502,7 @@ function updateRouteFormWorkflowUi(reservation = null) {
         isCompleted,
     );
     setRouteWorkflowPrimaryAction(primaryAction);
+    refreshRouteTrafficCooldownControls();
 }
 
 function initRouteSectionNavigation() {
@@ -615,6 +765,9 @@ function updateRouteStrategyPresentation() {
 }
 
 function resetRouteOptimization() {
+    routeOptimizationGeneration++;
+    routeOptimizationRequestPending = false;
+    clearRouteComparison();
     routeLastOptimization = null;
     const distance = document.getElementById("routeEstimatedDistance");
     const time = document.getElementById("routeEstimatedTime");
@@ -1022,7 +1175,7 @@ function calculateRouteOptimizationScore({
     );
 }
 
-async function optimizeRouteWithOsrm(data) {
+async function optimizeRouteWithOsrm(data, options = {}) {
     if (!data.origin || !data.destination) {
         throw new Error("Origin and destination are required.");
     }
@@ -1055,10 +1208,12 @@ async function optimizeRouteWithOsrm(data) {
             departureDate: data.departureDate,
             departureTime: data.departureTime,
             reservationId: data.reservationId,
+            includeComparison: data.includeComparison === true,
         },
         {
             draw: true,
             silent: true,
+            isCurrent: options.isCurrent,
         },
     );
 
@@ -1167,6 +1322,7 @@ async function optimizeRouteWithOsrm(data) {
             ? result.optimizedWaypoints
             : [],
         optimizationProof: result.optimizationProof || null,
+        comparison: result.comparison || null,
     };
 }
 
@@ -1283,6 +1439,13 @@ function applyPendingRouteOptimization({
         return false;
     }
     const result = routePendingOptimization;
+    if (routeOptimizationRequestPending) {
+        return false;
+    }
+    if (result.sourceFingerprint && result.sourceFingerprint !== routeCalculationFingerprint()) {
+        resetRouteOptimization();
+        throw new Error("Route inputs changed. Run optimization again before applying.");
+    }
     assertRouteOptimizationStops(result);
 
     /*
@@ -1317,6 +1480,7 @@ function applyPendingRouteOptimization({
     | Update summary state
     |--------------------------------------------------------------------------
     */
+    renderRouteComparison(result);
     const summary = document.getElementById("routeOptimizeSummary");
     if (summary) {
         const provider = result.provider || "Routing Service";
@@ -1552,7 +1716,13 @@ async function openRouteFormModal(mode, record = null) {
     if (!modal || !form) {
         return;
     }
+    invalidateRouteSaveContext();
     routeFormMode = mode;
+    routeOptimizationGeneration++;
+    routeOptimizationRequestPending = false;
+    clearRouteComparison();
+    const comparisonOption = document.getElementById("routeComparisonEnabled");
+    if (comparisonOption) comparisonOption.checked = false;
     routeEditingId = mode === "edit" && record ? record.id : null;
     routeLastOptimization = null;
     routePendingOptimization = null;
@@ -1840,6 +2010,12 @@ async function openRouteFormModal(mode, record = null) {
 }
 
 function closeRouteFormModal() {
+    invalidateRouteSaveContext();
+    window.clearTimeout?.(routeTrafficCooldownTimer);
+    routeTrafficCooldownTimer = null;
+    routeOptimizationGeneration++;
+    routeOptimizationRequestPending = false;
+    clearRouteComparison();
     const modal = document.getElementById("routeFormModal");
 
     if (!modal) {
@@ -2048,6 +2224,15 @@ function closeDeleteRouteModal() {
 }
 */ 
 async function saveRouteFromForm() {
+    if (routeOptimizationRequestPending) {
+        window.showToast?.("Wait for the current route calculation before saving.", "warning");
+        return;
+    }
+    if (routeSaveOperation && isRouteSaveCurrent(routeSaveOperation, false)) {
+        window.showToast?.("Wait for the current route save before saving again.", "warning");
+        return;
+    }
+    verifyRouteComparisonSnapshot();
     if (routeFormMode === "add" && !canCreateRoute()) {
         return;
     }
@@ -2080,83 +2265,110 @@ async function saveRouteFromForm() {
         document.getElementById("applyRouteOptimizationBtn")?.focus();
         return;
     }
-    const needsOptimization =
-        data.origin &&
-        data.destination &&
-        (data.estimatedDistance === "" ||
-            data.estimatedTravelTimeMinutes === "");
-    if (routeModuleSettings.preferOptimized && needsOptimization) {
-        try {
-            await runRouteOptimization({
-                showSuccessToast: false,
-            });
-            applyPendingRouteOptimization({
-                showToast: false,
-            });
-            /*
-            |--------------------------------------------------------------------------
-            | Recollect because optimization updated the fields + stop order
-            |--------------------------------------------------------------------------
-            */
-            data = collectRouteFormData();
-        } catch (error) {
-            console.warn(
-                "Preferred route optimization was unavailable:",
-                error,
-            );
-            /*
-            |--------------------------------------------------------------------------
-            | Draft / Planned routes may continue.
-            | Ready For Dispatch will still fail normal validation below.
-            |--------------------------------------------------------------------------
-            */
-            if (data.status === "Ready For Dispatch") {
-                if (typeof showToast === "function") {
-                    showToast(
-                        error.message ||
-                            "Route optimization is required before this route can be marked Ready For Dispatch.",
-                        "error",
-                    );
+    const operation = {
+        generation: routeFormGeneration,
+        mode: routeFormMode,
+        routeId: routeEditingId,
+        reservationId: document.getElementById("routeReservation")?.value,
+        fingerprint: routeCalculationFingerprint(),
+        optimizationGeneration: routeOptimizationGeneration,
+        submitButton: form.querySelector('[type="submit"]'),
+        ownsSubmitButton: false,
+        submitWasDisabled: false,
+    };
+    routeSaveOperation = operation;
+    try {
+        const needsOptimization =
+            data.origin &&
+            data.destination &&
+            (data.estimatedDistance === "" ||
+                data.estimatedTravelTimeMinutes === "");
+        if (routeModuleSettings.preferOptimized && needsOptimization) {
+            try {
+                const calculation = runRouteOptimization({
+                    showSuccessToast: false,
+                });
+                operation.optimizationGeneration = routeOptimizationGeneration;
+                await calculation;
+                if (!isRouteSaveCurrent(operation)) return;
+                applyPendingRouteOptimization({
+                    showToast: false,
+                });
+                operation.fingerprint = routeCalculationFingerprint();
+                /*
+                |--------------------------------------------------------------------------
+                | Recollect because optimization updated the fields + stop order
+                |--------------------------------------------------------------------------
+                */
+                data = collectRouteFormData();
+            } catch (error) {
+                if (!isRouteSaveCurrent(operation)) return;
+                if (error?.status === 429) {
+                    window.showToast?.(error.message, "warning");
+                    return;
                 }
-                return;
+                console.warn(
+                    "Preferred route optimization was unavailable:",
+                    error,
+                );
+                /*
+                |--------------------------------------------------------------------------
+                | Draft / Planned routes may continue.
+                | Ready For Dispatch will still fail normal validation below.
+                |--------------------------------------------------------------------------
+                */
+                if (data.status === "Ready For Dispatch") {
+                    if (typeof showToast === "function") {
+                        showToast(
+                            error.message ||
+                                "Route optimization is required before this route can be marked Ready For Dispatch.",
+                            "error",
+                        );
+                    }
+                    return;
+                }
             }
         }
-    }
-    if (!validateRouteForm()) {
-        return;
-    }
-    /*
-    |--------------------------------------------------------------------------
-    | Collect again after validation / possible optimization
-    |--------------------------------------------------------------------------
-    */
-    data = collectRouteFormData();
-    clearRouteFieldErrors(form);
-    const submitButton = form.querySelector('[type="submit"]');
-    if (submitButton) {
-        submitButton.disabled = true;
-    }
+        if (!isRouteSaveCurrent(operation)) return;
+        if (!validateRouteForm()) {
+            return;
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Collect again after validation / possible optimization
+        |--------------------------------------------------------------------------
+        */
+        data = collectRouteFormData();
+        clearRouteFieldErrors(form);
+        const submitButton = operation.submitButton;
+        if (submitButton) {
+            operation.submitWasDisabled = submitButton.disabled;
+            operation.ownsSubmitButton = true;
+            submitButton.disabled = true;
+        }
 
-    try {
- 
-        if (routeFormMode === "edit" && routeEditingId) {
+        if (!isRouteSaveCurrent(operation)) return;
+        if (operation.mode === "edit" && operation.routeId) {
             const payload = buildUpdateRoutePayload(data);
-            const currentRecord = getRouteRecordById(routeEditingId);
+            const currentRecord = getRouteRecordById(operation.routeId);
             const isLifecycleAction =
                 String(currentRecord?.status || "Draft") !== data.status ||
                 data.optimizationApplied === true;
             const result = isLifecycleAction
-                ? await transitionRoutePlanApi(routeEditingId, payload)
-                : await updateRoutePlanApi(routeEditingId, payload);
+                ? await transitionRoutePlanApi(operation.routeId, payload)
+                : await updateRoutePlanApi(operation.routeId, payload);
+            if (!isRouteSaveCurrent(operation)) return;
             const updated = result.routePlan;
             closeRouteFormModal();
+            const completedGeneration = routeFormGeneration;
             await reloadRoutePlanningData({
                 resetPage: false,
 
-                focusId: updated?.id || routeEditingId,
+                focusId: updated?.id || operation.routeId,
 
                 reason: "edit",
             });
+            if (completedGeneration !== routeFormGeneration) return;
 
             if (typeof showToast === "function") {
                 showToast(
@@ -2170,13 +2382,16 @@ async function saveRouteFromForm() {
 
         const payload = buildCreateRoutePayload(data);
         const result = await createRoutePlanApi(payload);
+        if (!isRouteSaveCurrent(operation)) return;
         const created = result.routePlan;
         closeRouteFormModal();
+        const completedGeneration = routeFormGeneration;
         await reloadRoutePlanningData({
             resetPage: true,
             focusId: created?.id,
             reason: "add",
         });
+        if (completedGeneration !== routeFormGeneration) return;
 
         if (typeof showToast === "function") {
             showToast(
@@ -2185,6 +2400,7 @@ async function saveRouteFromForm() {
             );
         }
     } catch (error) {
+        if (!isRouteSaveCurrent(operation)) return;
         console.error("Unable to save Route Plan:", error);
 
         applyLaravelValidationErrors(error.errors);
@@ -2193,8 +2409,11 @@ async function saveRouteFromForm() {
             showToast(error.message || "Unable to save Route Plan.", "error");
         }
     } finally {
-        if (submitButton) {
-            submitButton.disabled = false;
+        if (routeSaveOperation === operation) {
+            if (operation.ownsSubmitButton && operation.generation === routeFormGeneration) {
+                operation.submitButton.disabled = operation.submitWasDisabled;
+            }
+            routeSaveOperation = null;
         }
     }
 }
@@ -2292,6 +2511,11 @@ async function duplicateRouteFromView(routeId) {
 
 async function runRouteOptimization({ showSuccessToast = true } = {}) {
     const data = collectRouteFormData();
+    data.includeComparison = document.getElementById("routeComparisonEnabled")?.checked === true;
+    const generation = ++routeOptimizationGeneration;
+    const fingerprint = routeCalculationFingerprint();
+    const isCurrent = () => generation === routeOptimizationGeneration && fingerprint === routeCalculationFingerprint();
+    clearRouteComparison();
     if (!data.origin || !data.destination) {
         throw new Error(
             "Origin and destination are required before calculating the route.",
@@ -2303,7 +2527,29 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
     | optimizeRouteWithOsrm() already draws the result.
     |--------------------------------------------------------------------------
     */
-    const result = await optimizeRouteWithOsrm(data);
+    let result;
+    routeOptimizationRequestPending = true;
+    try {
+        result = await optimizeRouteWithOsrm(data, { isCurrent });
+        if (!isCurrent()) throw new Error("Route inputs changed during calculation. Run Optimize again.");
+    } catch (error) {
+        if (error?.status === 429 && isCurrent()) {
+            routePendingOptimization = null;
+            const applyButton = document.getElementById("applyRouteOptimizationBtn");
+            if (applyButton) applyButton.disabled = true;
+            if (!routeLastOptimization?.optimizationApplied) {
+                const summary = document.getElementById("routeOptimizeSummary");
+                if (summary) summary.hidden = true;
+            }
+            clearRouteComparison();
+            updateRouteFormWorkflowUi();
+        }
+        throw error;
+    } finally {
+        if (generation === routeOptimizationGeneration) routeOptimizationRequestPending = false;
+        refreshRouteTrafficCooldownControls();
+    }
+    result.sourceFingerprint = fingerprint;
     if (
         Array.isArray(data.stops) &&
         Array.isArray(result.optimizedStops) &&
@@ -2324,6 +2570,7 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
         ...result,
         optimizationApplied: false,
     };
+    renderRouteComparison(result);
     const applyButton = document.getElementById("applyRouteOptimizationBtn");
     if (applyButton) {
         applyButton.disabled = false;
@@ -2387,6 +2634,15 @@ function initRoutePlanningModals() {
         return;
     }
     routeModalsInitialized = true;
+    document.getElementById("routeComparisonEnabled")?.addEventListener("change", resetRouteOptimization);
+    const comparisonForm = document.getElementById("routeForm");
+    if (comparisonForm && typeof MutationObserver === "function") {
+        new MutationObserver(() => invalidateRouteComparisonContext()).observe(comparisonForm, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["data-latitude", "data-longitude"],
+        });
+    }
     populateRouteFormOptions();
     initRouteSectionNavigation();
     updateRouteWorkflowPresentation(null);
@@ -2508,12 +2764,12 @@ function initRoutePlanningModals() {
                     showSuccessToast: true,
                 });
             } catch (error) {
-                console.error("Route calculation failed:", error);
+                if (error?.status !== 429) console.error("Route calculation failed:", error);
 
                 if (typeof showToast === "function") {
                     showToast(
                         error.message || "Unable to calculate the route.",
-                        "error",
+                        error?.status === 429 ? "warning" : "error",
                     );
                 }
             } finally {
@@ -2523,6 +2779,7 @@ function initRoutePlanningModals() {
                     if (originalHtml !== undefined) {
                         optimizeButton.innerHTML = originalHtml;
                     }
+                    refreshRouteTrafficCooldownControls();
                 }
             }
         });

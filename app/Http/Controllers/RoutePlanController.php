@@ -8,6 +8,7 @@ use App\Models\Reservation;
 use App\Models\RoutePlan;
 use App\Services\AuditLogService;
 use App\Services\DispatchAssignmentService;
+use App\Services\RouteComparisonService;
 use App\Services\TomTomRoutingService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -1292,7 +1293,8 @@ class RoutePlanController extends Controller
      */
     public function trafficRoute(
         Request $request,
-        TomTomRoutingService $tomTom
+        TomTomRoutingService $tomTom,
+        RouteComparisonService $comparison
     ) {
         $this->authorize('viewAny', RoutePlan::class);
 
@@ -1319,10 +1321,12 @@ class RoutePlanController extends Controller
                     'date',
                 ],
                 'reservation_id' => [
+                    Rule::requiredIf($request->boolean('include_comparison')),
                     'nullable',
                     'integer',
                     'exists:reservations,id',
                 ],
+                'include_comparison' => ['sometimes', 'boolean'],
             ]
         );
 
@@ -1334,15 +1338,23 @@ class RoutePlanController extends Controller
             ], 422);
         }
 
-        try {
-            $validated =
-                $validator->validated();
+        $validated = $validator->validated();
+        $includeComparison = (bool) ($validated['include_comparison'] ?? false);
+        if ($includeComparison) {
+            $this->authorize('create', RoutePlan::class);
+            $reservation = Reservation::with('routePlan.reservation')->findOrFail($validated['reservation_id']);
+            $this->authorize('view', $reservation);
+            if ($reservation->routePlan) {
+                $this->authorize('view', $reservation->routePlan);
+            }
+        }
 
-            $result =
-                $tomTom->calculateRoute(
-                    $validated['coordinates'],
-                    $validated['depart_at'] ?? null
-                );
+        try {
+            $departAt = $validated['depart_at'] ?? ($includeComparison ? now()->toIso8601String() : null);
+            $comparisonStartedAt = hrtime(true) / 1e9;
+            $result = $includeComparison
+                ? $tomTom->calculateRoute($validated['coordinates'], $departAt, true, RouteComparisonService::REQUEST_SECONDS)
+                : $tomTom->calculateRoute($validated['coordinates'], $departAt);
 
             $distanceKm = $result['distance_meters'] !== null
                 ? round($result['distance_meters'] / 1000, 2)
@@ -1395,6 +1407,7 @@ class RoutePlanController extends Controller
                 'travel_time_seconds' => $result['travel_time_seconds'],
                 'travel_time_minutes' => $travelTimeMinutes,
                 'optimization_proof' => $optimizationProof,
+                ...($includeComparison ? ['comparison' => $comparison->compare($validated['coordinates'], $result, $departAt, $comparisonStartedAt)] : []),
                 'traffic_delay_seconds' => $result['traffic_delay_seconds'],
                 'traffic_delay_minutes' => $result['traffic_delay_seconds'] !== null
                         ? round(

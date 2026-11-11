@@ -1840,6 +1840,9 @@ async function requestTomTomRoute(routeCoordinates, record) {
             longitude: point.lng,
         })),
     };
+    if (record?.includeComparison === true) {
+        payload.include_comparison = true;
+    }
     if (record?.reservationId) {
         payload.reservation_id = Number(record.reservationId);
     }
@@ -1893,6 +1896,7 @@ async function requestTomTomRoute(routeCoordinates, record) {
     };
     return {
         provider: data.provider || "TomTom",
+        comparison: data.comparison || null,
         distanceKm:
             data.distance_km !== null && data.distance_km !== undefined
                 ? Number(data.distance_km)
@@ -1997,6 +2001,7 @@ async function calculateTrafficRouteFromCoordinates(
             fallback: false,
         };
     } catch (tomTomError) {
+        if (tomTomError?.status === 429) throw tomTomError;
         console.warn(
             "[Route Pipeline] TomTom return route failed. Using OSRM fallback.",
             tomTomError,
@@ -2192,6 +2197,9 @@ function orderRouteWaypoints(stops, waypoints = []) {
  * Existing OSRM
  */
 async function calculateRouteWithTraffic(record, options = {}) {
+    const cooldown = typeof getRouteTrafficRateLimitError === "function"
+        ? getRouteTrafficRateLimitError(record?.includeComparison === true) : null;
+    if (cooldown) throw cooldown;
     const map = await initRouteLeafletMap();
     if (options.draw !== false && !map) {
         return null;
@@ -2200,6 +2208,8 @@ async function calculateRouteWithTraffic(record, options = {}) {
         return null;
     }
     const requestToken = ++routeRoutingRequestToken;
+    const isCurrent = () => requestToken === routeRoutingRequestToken &&
+        (typeof options.isCurrent !== "function" || options.isCurrent());
     try {
         /*
         |--------------------------------------------------------------------------
@@ -2207,7 +2217,7 @@ async function calculateRouteWithTraffic(record, options = {}) {
         |--------------------------------------------------------------------------
         */
         const routeCoordinates = await geocodeRouteRecord(record);
-        if (requestToken !== routeRoutingRequestToken) {
+        if (!isCurrent()) {
             return null;
         }
         /*
@@ -2220,7 +2230,7 @@ async function calculateRouteWithTraffic(record, options = {}) {
                 routeCoordinates,
                 record,
             );
-            if (requestToken !== routeRoutingRequestToken) {
+            if (!isCurrent()) {
                 return null;
             }
             /*
@@ -2264,6 +2274,7 @@ async function calculateRouteWithTraffic(record, options = {}) {
                     trafficRoute.noTrafficTravelTimeSeconds,
             };
         } catch (tomTomError) {
+            if (tomTomError?.status === 429) throw tomTomError;
             console.warn(
                 "TomTom routing failed. Falling back to OSRM:",
                 tomTomError?.message || tomTomError,
@@ -2275,7 +2286,7 @@ async function calculateRouteWithTraffic(record, options = {}) {
         |--------------------------------------------------------------------------
         */
         const osrmRoute = await requestOsrmRoute(routeCoordinates);
-        if (requestToken !== routeRoutingRequestToken) {
+        if (!isCurrent()) {
             return null;
         }
         const distanceMeters = Number(osrmRoute.distance || 0);

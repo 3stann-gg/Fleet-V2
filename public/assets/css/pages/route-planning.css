@@ -550,6 +550,68 @@
   color: var(--color-text);
 }
 
+.route-result-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+.route-comparison-option,
+.route-comparison-summary {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+    color: inherit;
+    min-width: 0;
+}
+
+.route-comparison-option p,
+.route-comparison-summary p,
+.route-comparison-summary li {
+    font-size: 0.8rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.route-comparison-option input[type="checkbox"] {
+    width: auto;
+    accent-color: var(--color-primary);
+}
+
+.route-comparison-summary[hidden] {
+    display: none;
+}
+
+.route-comparison-table-wrap {
+    overflow-x: auto;
+}
+
+.route-comparison-summary table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.route-comparison-summary th,
+.route-comparison-summary td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.route-comparison-orders {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 12px;
+}
+
+.route-comparison-orders ol {
+    padding-left: 20px;
+}
+
 .route-optimize-summary {
   margin: 12px 0 0;
   padding: 12px 14px;

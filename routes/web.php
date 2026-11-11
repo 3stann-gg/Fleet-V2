@@ -752,7 +752,7 @@ Route::middleware([
         Route::post(
             '/route-planning/traffic-route',
             [RoutePlanController::class, 'trafficRoute']
-        )->name('route-planning.traffic-route');
+        )->middleware('throttle:route-traffic')->name('route-planning.traffic-route');
         
         Route::get(
             '/route-planning/{routePlan}',

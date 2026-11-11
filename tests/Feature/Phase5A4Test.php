@@ -52,11 +52,555 @@ const traffic = mapping => ({provider:'TomTom',distanceKm:10,durationMinutes:12,
 (async () => {
 JS;
     $script = $harness."\n".$scenario."\n})().catch(error => { console.error(error.stack); process.exitCode = 1; });";
-    $process = new Process(['node', '-e', $script, public_path('assets/js/route-planning')]);
-    $process->setTimeout(30)->mustRun();
+    $process = new Process(['node', '-e', 'eval(require("node:fs").readFileSync(0, "utf8"))', public_path('assets/js/route-planning')]);
+    $process->setInput($script)->setTimeout(30)->mustRun();
 
     return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
 }
+
+function p54RunRouteSaveJavaScript(string $scenario): array
+{
+    $setup = <<<'JS'
+for(const id of ['routeFormModal','routeFormModalTitle','routeNumber','routePriority','routePurpose','routeNotes','routeVehicle','routeDriver','routeComparisonEnabled','routeComparisonSummary','applyRouteOptimizationBtn','saveRouteBtn'])nodes[id]??=new Element();
+let modalOpen=false;
+nodes.routeFormModal.classList={add:()=>modalOpen=true,remove:()=>modalOpen=false};
+nodes.saveRouteBtn.disabled=false;
+nodes.routeForm.querySelector=selector=>selector==='[type="submit"]'?nodes.saveRouteBtn:null;
+nodes.routeForm.reset=()=>{};nodes.routeForm.removeAttribute=()=>{};
+context.document.body={style:{}};context.requestAnimationFrame=callback=>callback();
+context.populateRouteFormOptions=()=>{};context.clearRouteFieldErrors=()=>{};
+context.applyRouteFormLifecycleRules=()=>{};context.applyReservationResourceDisplay=()=>{};
+context.resetRouteResourceDisplay=()=>{};context.applyRouteStatusTransitions=(field,status)=>field.value=status;
+context.populateRouteReservations=async()=>[];context.fetchNextRouteNumber=async()=>'SYNTHETIC-NEXT';
+context.validateRouteForm=()=>true;context.reloadRoutePlanningData=async()=>{};
+const record=id=>({id,reservationId:id,routeNumber:'SYNTHETIC-'+id,origin:'Synthetic origin '+id,destination:'Synthetic destination '+id,department:'Operations',purpose:'Synthetic Save test',notes:'',priority:'routine',priorityLabel:'Routine',isEmergency:false,status:'Planned',departureDate:'2026-11-20',departureTime:'09:00',stops:stops.map(s=>s.location),stopCoordinates:stops.map(s=>({location:s.location,latitude:s.coordinate.lat,longitude:s.coordinate.lng})),estimatedDistance:null,estimatedTravelTimeMinutes:null,optimizationScore:null});
+context.fetchRoutePlanById=async id=>record(id);context.getRouteRecordById=id=>record(id);
+const notices=[],saveCalls=[],validationErrors=[];
+context.showToast=context.window.showToast=(message,type)=>notices.push({message,type});
+context.applyLaravelValidationErrors=errors=>validationErrors.push(errors);
+const saved=(id=11)=>({routePlan:{id},message:'Synthetic save complete'});
+context.createRoutePlanApi=async payload=>{saveCalls.push({mode:'add',payload});return saved(33);};
+context.updateRoutePlanApi=async(id,payload)=>{saveCalls.push({mode:'edit',id,payload});return saved(id);};
+context.transitionRoutePlanApi=async(id,payload)=>{saveCalls.push({mode:'transition',id,payload});return saved(id);};
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
+const open=async(mode='edit',id=11)=>{
+    await context.openRouteFormModal(mode,mode==='edit'?record(id):null);
+    if(mode==='add'){nodes.routeReservation.value=String(id);nodes.routeOrigin.value='Synthetic origin '+id;nodes.routeDestination.value='Synthetic destination '+id;nodes.routeDepartment.value='Operations';nodes.routeDepartureDate.value='2026-11-20';nodes.routeDepartureTime.value='09:00';context.renderRouteStops(stops.map(s=>s.location));}
+};
+const validResult=()=>({...traffic([{providedIndex:0,optimizedIndex:0},{providedIndex:1,optimizedIndex:1},{providedIndex:2,optimizedIndex:2}]),routeCoordinates:coordinates,originalRouteCoordinates:coordinates,optimizedStops:stops.map(s=>s.location),estimatedDistance:10,estimatedTravelTimeMinutes:12,optimizationScore:85});
+const state=()=>plain({data:context.collectRouteFormData(),pending:vm.runInContext('routePendingOptimization',context),last:vm.runInContext('routeLastOptimization',context),modalOpen,saveDisabled:nodes.saveRouteBtn.disabled,comparison:nodes.routeComparisonSummary.innerHTML});
+vm.runInContext('routeModuleSettings.preferOptimized=true',context);
+JS;
+
+    return p54RunRouteJavaScript($setup."\n".$scenario);
+}
+
+it('abandons stale automatic Save calculations without touching the current form', function (string $outcome, string $change) {
+    $scenario = <<<'JS'
+const outcome=OUTCOME,change=CHANGE;
+await open(change==='add_to_edit'||change.startsWith('reservation')?'add':'edit',11);
+const calculation=deferred();context.optimizeRouteWithOsrm=()=>calculation.promise;
+const older=context.saveRouteFromForm();
+if(change==='reservation'){nodes.routeReservation.value='77';context.resetRouteOptimization();}
+else if(change==='reservation_roundtrip'){nodes.routeReservation.value='77';context.resetRouteOptimization();nodes.routeReservation.value='11';context.resetRouteOptimization();}
+else if(change==='stop_roundtrip'){const input=nodes.routeStopsList.querySelectorAll('input.route-stop-input')[0];const previous=input.value;input.value='Temporary synthetic edit';context.resetRouteOptimization();input.value=previous;context.resetRouteOptimization();}
+else {context.closeRouteFormModal();if(change!=='close_only')await open(change==='edit_to_add'?'add':'edit',change==='same'?11:22);}
+const current=state(),noticeCount=notices.length;
+if(outcome==='success')calculation.resolve(validResult());
+else calculation.reject(Object.assign(new Error('Synthetic older calculation failed'),outcome==='429'?{status:429}:{}));
+await older;
+assert.equal(saveCalls.length,0);assert.deepEqual(state(),current);
+assert.equal(notices.length,noticeCount);assert.equal(validationErrors.length,0);
+process.stdout.write(JSON.stringify({noSave:true,formUntouched:true,noStaleMessages:true}));
+JS;
+    $scenario = str_replace(['OUTCOME', 'CHANGE'], [json_encode($outcome), json_encode($change)], $scenario);
+    expect(p54RunRouteSaveJavaScript($scenario))->toBe(['noSave' => true, 'formUntouched' => true, 'noStaleMessages' => true]);
+})->with([
+    'failed calculation after switching routes' => ['failure', 'different'],
+    'successful calculation after switching routes' => ['success', 'different'],
+    'reopened same route has a new generation' => ['success', 'same'],
+    'Add to Edit' => ['failure', 'add_to_edit'],
+    'Edit to Add' => ['failure', 'edit_to_add'],
+    'different Add reservation' => ['success', 'reservation'],
+    'reservation changed and restored' => ['failure', 'reservation_roundtrip'],
+    'stop changed and restored' => ['failure', 'stop_roundtrip'],
+    'closed without reopening' => ['failure', 'close_only'],
+    'older rate limit after switching routes' => ['429', 'different'],
+]);
+
+it('ignores stale Save responses without resetting a newer pending Save', function (string $outcome) {
+    $scenario = <<<'JS'
+await open();vm.runInContext('routeModuleSettings.preferOptimized=false',context);
+const oldResponse=deferred(),newResponse=deferred();let calls=0;
+context.updateRoutePlanApi=(id,payload)=>{saveCalls.push({id,payload});return++calls===1?oldResponse.promise:newResponse.promise;};
+const oldSave=context.saveRouteFromForm();assert.equal(nodes.saveRouteBtn.disabled,true);
+context.closeRouteFormModal();await open('edit',22);
+assert.equal(nodes.saveRouteBtn.disabled,false);
+const newSave=context.saveRouteFromForm();const current=state(),noticeCount=notices.length;
+if(OUTCOME==='success')oldResponse.resolve(saved(11));
+else oldResponse.reject(Object.assign(new Error('Synthetic older Save failure'),OUTCOME==='429'?{status:429}:{errors:{origin:['Old error']}}));
+await oldSave;
+assert.deepEqual(state(),current);assert.equal(nodes.saveRouteBtn.disabled,true);
+assert.equal(notices.length,noticeCount);assert.equal(validationErrors.length,0);
+assert.deepEqual(saveCalls.map(c=>c.id),[11,22]);
+newResponse.resolve(saved(22));await newSave;
+assert.equal(modalOpen,false);assert.equal(nodes.saveRouteBtn.disabled,false);
+assert.equal(notices.filter(n=>n.type==='success').length,1);
+process.stdout.write(JSON.stringify({newerPendingPreserved:true,noStaleMessages:true,intendedRoutesOnly:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript(str_replace('OUTCOME', json_encode($outcome), $scenario)))->toBe([
+        'newerPendingPreserved' => true, 'noStaleMessages' => true, 'intendedRoutesOnly' => true,
+    ]);
+})->with(['success', 'failure', '429']);
+
+it('does not release a newer Save after changing reservation in the same form', function () {
+    expect(p54RunRouteSaveJavaScript(<<<'JS'
+await open('add',11);
+const older=deferred(),newer=deferred();let calculations=0;
+context.optimizeRouteWithOsrm=()=>++calculations===1?older.promise:newer.promise;
+const oldSave=context.saveRouteFromForm();nodes.routeReservation.value='77';context.resetRouteOptimization();
+const newSave=context.saveRouteFromForm();const current=state();
+older.resolve(validResult());await oldSave;
+assert.deepEqual(state(),current);assert.equal(saveCalls.length,0);
+assert.equal(vm.runInContext('routeOptimizationRequestPending',context),true);
+newer.resolve(validResult());await newSave;
+assert.equal(saveCalls.length,1);assert.equal(saveCalls[0].mode,'add');assert.equal(saveCalls[0].payload.reservation_id,77);
+assert.equal(notices.filter(n=>n.type==='success').length,1);
+process.stdout.write(JSON.stringify({newerCalculationPreserved:true,newReservationOnly:true}));
+JS))->toBe(['newerCalculationPreserved' => true, 'newReservationOnly' => true]);
+});
+
+it('releases its own submit lock when reservation changes during an already submitted Save', function () {
+    expect(p54RunRouteSaveJavaScript(<<<'JS'
+await open('add',11);vm.runInContext('routeModuleSettings.preferOptimized=false',context);
+const response=deferred();context.createRoutePlanApi=payload=>{saveCalls.push({payload});return response.promise;};
+const older=context.saveRouteFromForm();assert.equal(nodes.saveRouteBtn.disabled,true);
+nodes.routeReservation.value='77';context.resetRouteOptimization();const current=plain(context.collectRouteFormData());
+response.resolve(saved(33));await older;
+assert.deepEqual(plain(context.collectRouteFormData()),current);assert.equal(modalOpen,true);
+assert.equal(nodes.saveRouteBtn.disabled,false);assert.equal(notices.length,0);
+assert.equal(saveCalls.length,1);assert.equal(saveCalls[0].payload.reservation_id,11);
+process.stdout.write(JSON.stringify({currentInputsPreserved:true,ownLockReleased:true,noStaleSuccess:true}));
+JS))->toBe(['currentInputsPreserved' => true, 'ownLockReleased' => true, 'noStaleSuccess' => true]);
+});
+
+it('prevents duplicate Saves while calculation or submission is pending', function (bool $calculate) {
+    $scenario = <<<'JS'
+await open();vm.runInContext('routeModuleSettings.preferOptimized=CALCULATE',context);
+const pending=deferred();
+if(CALCULATE)context.optimizeRouteWithOsrm=()=>pending.promise;
+else context.updateRoutePlanApi=(id,payload)=>{saveCalls.push({id,payload});return pending.promise;};
+const first=context.saveRouteFromForm();await context.saveRouteFromForm();
+assert.equal(saveCalls.length,CALCULATE?0:1);
+pending.resolve(CALCULATE?validResult():saved(11));await first;
+assert.equal(saveCalls.length,1);assert.equal(modalOpen,false);
+assert.equal(notices.filter(n=>n.type==='success').length,1);
+process.stdout.write(JSON.stringify({oneSave:true,oneSuccess:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript(str_replace('CALCULATE', $calculate ? 'true' : 'false', $scenario)))->toBe(['oneSave' => true, 'oneSuccess' => true]);
+})->with([true, false]);
+
+it('preserves valid same-form Saves and the existing optional calculation error policy', function (string $calculation, string $mode) {
+    $scenario = <<<'JS'
+await open(MODE);
+if(CALCULATION==='success')context.optimizeRouteWithOsrm=async()=>validResult();
+else context.optimizeRouteWithOsrm=async()=>{throw new Error('Synthetic optional calculation failure');};
+if(CALCULATION==='ready_failure')nodes.routeStatus.value='Ready For Dispatch';
+await context.saveRouteFromForm();
+assert.equal(saveCalls.length,CALCULATION==='ready_failure'?0:1);
+assert.equal(modalOpen,CALCULATION==='ready_failure');
+assert.equal(nodes.saveRouteBtn.disabled,false);
+if(saveCalls.length){if(MODE==='edit')assert.equal(saveCalls[0].id,11);else assert.equal(saveCalls[0].mode,'add');}
+process.stdout.write(JSON.stringify({sameFormPolicyPreserved:true,buttonRecovered:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript(str_replace(['CALCULATION', 'MODE'], [json_encode($calculation), json_encode($mode)], $scenario)))->toBe(['sameFormPolicyPreserved' => true, 'buttonRecovered' => true]);
+})->with([
+    'Edit calculated Save' => ['success', 'edit'],
+    'Edit optional calculation failure' => ['failure', 'edit'],
+    'Ready For Dispatch calculation failure' => ['ready_failure', 'edit'],
+    'Add calculated Save' => ['success', 'add'],
+    'Add optional calculation failure' => ['failure', 'add'],
+]);
+
+it('retains shared cooldowns from a stale real 429 without notifying or saving the newer form', function () {
+    expect(p54RunRouteSaveJavaScript(<<<'JS'
+await open();context.FormData=class {};const response=deferred(),entered=deferred();let requests=0;
+context.__saveClock=Date.parse('2026-11-12T00:00:00Z');vm.runInContext('Date.now=()=>__saveClock',context);
+context.fetch=async()=>{requests++;entered.resolve();return response.promise;};
+const oldSave=context.saveRouteFromForm();await entered.promise;
+context.closeRouteFormModal();await open('edit',22);const current=state(),noticeCount=notices.length;
+response.resolve({ok:false,status:429,headers:{get:n=>n.toLowerCase()==='content-type'?'application/json':'42'},json:async()=>({code:'ROUTE_RATE_LIMITED',scope:'all',retry_after:42})});
+await oldSave;
+assert.deepEqual(state(),current);assert.equal(saveCalls.length,0);assert.equal(notices.length,noticeCount);
+const cooldown=context.getRouteTrafficRateLimitError(false);assert.equal(cooldown.status,429);assert.equal(cooldown.retryAfter,42);
+assert.equal(requests,1);assert.equal(fallbackCalls,0);
+process.stdout.write(JSON.stringify({cooldownPreserved:true,newFormUntouched:true,noFallbackOrSave:true}));
+JS))->toBe(['cooldownPreserved' => true, 'newFormUntouched' => true, 'noFallbackOrSave' => true]);
+});
+
+it('does not announce an older Save after another form opens during refresh', function () {
+    expect(p54RunRouteSaveJavaScript(<<<'JS'
+await open();vm.runInContext('routeModuleSettings.preferOptimized=false',context);
+const refresh=deferred(),entered=deferred();context.reloadRoutePlanningData=async()=>{entered.resolve();await refresh.promise;};
+const save=context.saveRouteFromForm();await entered.promise;await open('edit',22);const current=state();
+refresh.resolve();await save;assert.deepEqual(state(),current);assert.equal(notices.filter(n=>n.type==='success').length,0);
+assert.equal(saveCalls.length,1);assert.equal(saveCalls[0].id,11);
+process.stdout.write(JSON.stringify({newFormPreserved:true,noStaleSuccess:true}));
+JS))->toBe(['newFormPreserved' => true, 'noStaleSuccess' => true]);
+});
+
+it('honors retry headers with independent cooldowns and never retries on timer expiry', function (string $header, int $seconds) {
+    $scenario = <<<'JS'
+context.FormData=class {};
+context.__now=Date.parse('2026-11-11T00:00:00Z');
+vm.runInContext('Date.now=()=>__now',context);
+const timers=new Map();let timerId=0,calls=0;
+context.window.setTimeout=(fn,delay)=>{timers.set(++timerId,{fn,at:context.__now+delay});return timerId;};
+context.window.clearTimeout=id=>timers.delete(id);
+nodes.optimizeRouteBtn=new Element();nodes.routeComparisonEnabled=new Element();nodes.routeComparisonEnabled.checked=true;
+const header=HEADER_VALUE,seconds=EXPECTED_SECONDS;
+context.fetch=async()=>{calls++;return calls===1
+    ?{ok:false,status:429,headers:{get:n=>n.toLowerCase()==='content-type'?'application/json':header},json:async()=>({success:false,code:'ROUTE_RATE_LIMITED',retry_after:9,scope:'comparison'})}
+    :{ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>({success:true})};};
+const request=include=>context.routeApiRequest('/route-planning/traffic-route',{method:'POST',body:JSON.stringify({include_comparison:include})});
+await assert.rejects(request(true),e=>e.status===429&&e.scope==='comparison'&&e.retryAfter===seconds&&/Too many requests/.test(e.message));
+assert.equal(calls,1);assert.equal(nodes.optimizeRouteBtn.disabled,true);
+await assert.rejects(request(true),e=>e.status===429);assert.equal(calls,1,'Cooldown must not issue requests');
+nodes.routeComparisonEnabled.checked=false;context.refreshRouteTrafficCooldownControls();assert.equal(nodes.optimizeRouteBtn.disabled,false);
+await request(false);assert.equal(calls,2,'Comparison limit must not prohibit normal routing');
+nodes.routeComparisonEnabled.checked=true;context.refreshRouteTrafficCooldownControls();assert.equal(nodes.optimizeRouteBtn.disabled,true);
+context.__now+=seconds*1000+11;
+for(const [id,timer]of [...timers])if(timer.at<=context.__now){timers.delete(id);timer.fn();}
+assert.equal(nodes.optimizeRouteBtn.disabled,false);assert.equal(calls,2,'Timer must only re-enable controls');
+await request(true);assert.equal(calls,3);
+const invalid=context.routeTrafficRetryDeadline('invalid',undefined);
+assert.equal(invalid-context.__now,60000);
+process.stdout.write(JSON.stringify({headerHonored:true,scopesIndependent:true,noAutomaticRetries:true,recovered:true}));
+JS;
+    $scenario = str_replace(['HEADER_VALUE', 'EXPECTED_SECONDS'], [json_encode($header), (string) $seconds], $scenario);
+    expect(p54RunRouteJavaScript($scenario))->toBe([
+        'headerHonored' => true, 'scopesIndependent' => true, 'noAutomaticRetries' => true, 'recovered' => true,
+    ]);
+})->with([
+    'seconds' => ['42', 42],
+    'http date' => ['Wed, 11 Nov 2026 00:00:42 GMT', 42],
+    'invalid header uses body' => ['invalid', 9],
+]);
+
+it('blocks both routing modes on a shared cooldown without contacting a provider', function () {
+    expect(p54RunRouteJavaScript(<<<'JS'
+context.FormData=class {};let calls=0;
+context.fetch=async()=>{calls++;return{ok:false,status:429,headers:{get:n=>n.toLowerCase()==='content-type'?'application/json':'30'},json:async()=>({scope:'all',retry_after:30})};};
+await assert.rejects(context.routeApiRequest('/route-planning/traffic-route',{method:'POST',body:'{}'}),e=>e.status===429);
+await assert.rejects(context.routeApiRequest('/route-planning/traffic-route',{method:'POST',body:'{"include_comparison":true}'}),e=>e.status===429);
+await assert.rejects(context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true}),e=>e.status===429);
+assert.equal(calls,1);assert.equal(fallbackCalls,0);
+process.stdout.write(JSON.stringify({sharedCooldown:true,noProviderRequests:true}));
+JS))->toBe(['sharedCooldown' => true, 'noProviderRequests' => true]);
+});
+
+it('propagates application 429 through both routing paths while preserving genuine provider fallback', function () {
+    expect(p54RunRouteJavaScript(<<<'JS'
+const limited=Object.assign(new Error('Too many requests.'),{status:429});
+context.requestTomTomRoute=async()=>{throw limited;};
+await assert.rejects(context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true}),e=>e===limited);
+await assert.rejects(context.calculateTrafficRouteFromCoordinates(coordinates),e=>e===limited);
+assert.equal(fallbackCalls,0);
+context.requestTomTomRoute=async()=>{throw Object.assign(new Error('Provider unavailable'),{status:502});};
+assert.equal((await context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true})).fallback,true);
+assert.equal((await context.calculateTrafficRouteFromCoordinates(coordinates)).fallback,true);
+assert.equal(fallbackCalls,2);
+process.stdout.write(JSON.stringify({noFallbackOn429:true,genuineFailureFallback:true}));
+JS))->toBe(['noFallbackOn429' => true, 'genuineFailureFallback' => true]);
+});
+
+it('does not save automatically or publish a stale optimization after a rate limit', function () {
+    expect(p54RunRouteJavaScript(<<<'JS'
+nodes.applyRouteOptimizationBtn=new Element();nodes.routeComparisonSummary=new Element();
+context.renderRouteStops(stops.map(s=>s.location));
+const limited=Object.assign(new Error('Too many requests. Please try again in 30 seconds.'),{status:429});
+const before=plain(context.collectRouteFormData());let writes=0;const messages=[];
+context.createRoutePlanApi=async()=>{writes++;};context.updateRoutePlanApi=async()=>{writes++;};
+context.transitionRoutePlanApi=async()=>{writes++;};context.window.showToast=(message,type)=>messages.push({message,type});
+vm.runInContext('routeModuleSettings.preferOptimized=true',context);
+context.optimizeRouteWithOsrm=async()=>{throw limited;};
+await context.saveRouteFromForm();assert.equal(writes,0);assert.deepEqual(plain(context.collectRouteFormData()),before);
+assert.equal(messages.length,1);assert.match(messages[0].message,/Too many requests/);
+vm.runInContext('routePendingOptimization={old:true}',context);
+await assert.rejects(context.runRouteOptimization(),e=>e.status===429);
+assert.equal(vm.runInContext('routePendingOptimization',context),null);assert.equal(nodes.applyRouteOptimizationBtn.disabled,true);
+assert.equal(nodes.routeComparisonSummary.hidden,true);assert.deepEqual(plain(context.collectRouteFormData()),before);
+let rejectOld;const older=new Promise((resolve,reject)=>rejectOld=reject);let count=0;
+const valid={...traffic([{providedIndex:0,optimizedIndex:0},{providedIndex:1,optimizedIndex:1},{providedIndex:2,optimizedIndex:2}]),routeCoordinates:coordinates,originalRouteCoordinates:coordinates,optimizedStops:stops.map(s=>s.location),estimatedDistance:10,estimatedTravelTimeMinutes:12,optimizationScore:85};
+context.optimizeRouteWithOsrm=async()=>++count===1?older:valid;
+const old=context.runRouteOptimization({showSuccessToast:false}).catch(e=>e.status);
+await context.runRouteOptimization({showSuccessToast:false});const current=plain(vm.runInContext('routePendingOptimization',context));
+rejectOld(limited);assert.equal(await old,429);
+assert.deepEqual(plain(vm.runInContext('routePendingOptimization',context)),current,'An older 429 cannot erase a newer valid result');
+process.stdout.write(JSON.stringify({noAutomaticSave:true,formPreserved:true,noStaleApply:true,newerResultPreserved:true}));
+JS))->toBe(['noAutomaticSave' => true, 'formPreserved' => true, 'noStaleApply' => true, 'newerResultPreserved' => true]);
+});
+
+it('retains the driver route and dispatch state when rerouting or returning is rate limited', function () {
+    expect(p54RunRouteJavaScript(<<<'JS'
+const messages=[];context.window.showToast=(message,type)=>messages.push({message,type});
+context.window.FLEET_RBAC={role:'driver'};context.document.readyState='loading';
+context.requestTomTomRoute=async()=>{throw Object.assign(new Error('Too many requests. Please try again later.'),{status:429});};
+context.window.calculateTrafficRouteFromCoordinates=context.calculateTrafficRouteFromCoordinates;
+const marker='    window.initFullRouteMap = init;';
+const code=fs.readFileSync(process.argv[1]+'/route-full-map.js','utf8');assert.equal(code.split(marker).length,2);
+const hooks=`window.__driverTest={setup(route,record){currentFullMapRoute=route;currentFullMapRecord=record;currentFullMapLiveVehicle={location:{latitude:14.6,longitude:121}};},reroute:recalculateRouteFromCurrentLocation,returnHome:handleReturnToHospital,state(){return{route:currentFullMapRoute,record:currentFullMapRecord,isRerouting,isReturningToHospital};}};`;
+vm.runInContext(code.replace(marker,hooks+marker),context);
+const record={id:99,dispatchId:7,tripStatus:'In Progress',destination:'D'};
+context.window.__driverTest.setup({...traffic([]),routeCoordinates:coordinates,instructions:[]},record);
+const before=plain(context.window.__driverTest.state());
+await context.window.__driverTest.reroute();await context.window.__driverTest.returnHome();
+assert.deepEqual(plain(context.window.__driverTest.state()),before);assert.equal(fallbackCalls,0);
+assert.equal(messages.length,2);assert.ok(messages.every(m=>m.message.includes('Too many requests')));
+process.stdout.write(JSON.stringify({routePreserved:true,dispatchPreserved:true,noFallback:true,driverNotified:true}));
+JS))->toBe(['routePreserved' => true, 'dispatchPreserved' => true, 'noFallback' => true, 'driverNotified' => true]);
+});
+
+it('renders a temporary comparison with signed raw-unit differences and preserves it through Apply', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+nodes.routeComparisonEnabled = new Element('input');
+nodes.routeComparisonSummary = new Element();
+assert.equal(nodes.routeComparisonEnabled.checked === true, false);
+context.renderRouteStops(stops.map(s=>s.location));
+const cycle = [{providedIndex:0,optimizedIndex:1},{providedIndex:1,optimizedIndex:2},{providedIndex:2,optimizedIndex:0}];
+const source = [coordinates.origin,...stops.map(s=>s.coordinate),coordinates.destination].map(s=>({latitude:s.lat,longitude:s.lng}));
+const comparison = {
+    status:'available',reason:'Estimated differences only.',provider:'TomTom',
+    routing_context:{api_version:'1',route_type:'fastest',travel_mode:'car',traffic:true,depart_at:'2026-11-20T09:00:00+08:00'},
+    generated_at:new Date().toISOString(),expires_at:new Date(Date.now()+30000).toISOString(),
+    original_calculated_at:new Date().toISOString(),candidate_calculated_at:new Date().toISOString(),
+    source_coordinates:source,candidate_order:[2,0,1],order_changed:true,
+    original:{distance_meters:12500.5,travel_time_seconds:600.25},candidate:{distance_meters:10000,travel_time_seconds:720},
+    difference:{distance_meters:2500.5,distance_meters_percent:2500.5/12500.5*100,travel_time_seconds:-119.75,travel_time_seconds_percent:-119.75/600.25*100},
+};
+context.requestTomTomRoute=async()=>({...traffic(cycle),comparison});
+await context.runRouteOptimization({showSuccessToast:false});
+assert.equal(nodes.routeComparisonSummary.hidden,true,'Comparison must remain hidden until explicitly enabled');
+context.resetRouteOptimization();
+nodes.routeComparisonEnabled.checked=true;
+const route=await context.runRouteOptimization({showSuccessToast:false});
+const html=nodes.routeComparisonSummary.innerHTML;
+assert.match(html,/Comparable estimates/);
+assert.match(html,/\+2\.50 km/);
+assert.match(html,/-2\.00 min/);
+assert.match(html,/Estimated travel duration/);
+assert.match(html,/Estimated differences only\. Actual travel outcomes may vary\./);
+assert.match(html,/Traffic enabled/);
+assert.match(html,/car/);
+assert.deepEqual(plain(context.getRouteStopsFromForm()),stops.map(s=>s.location));
+const before=plain(vm.runInContext('routeComparisonSnapshot.result.comparison',context));
+assert.equal(context.applyPendingRouteOptimization({showToast:false}),true);
+assert.deepEqual(plain(vm.runInContext('routeComparisonSnapshot.result.comparison',context)),before);
+assert.equal(nodes.routeComparisonSummary.innerHTML,html,'Apply must preserve original baseline rather than recalculate savings');
+assert.equal(context.applyPendingRouteOptimization({showToast:false}),false);
+const payload=context.buildUpdateRoutePayload(context.collectRouteFormData());
+assert.equal('comparison' in payload,false);
+assert.equal('include_comparison' in payload,false);
+assert.equal(payload.optimization_proof,'synthetic-proof');
+nodes.routeOrigin.dataset.latitude='99';
+context.verifyRouteComparisonSnapshot();
+assert.match(nodes.routeComparisonSummary.innerHTML,/Unavailable/);
+assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/\+2\.50 km/);
+context.resetRouteOptimization();
+assert.equal(nodes.routeComparisonSummary.hidden,true,'Cleared/reopened routes must not inherit comparisons');
+process.stdout.write(JSON.stringify({optInOnly:true,rawUnitDifferences:true,applyPreservesSnapshot:true,noPersistence:true,invalidation:true}));
+JS);
+
+    expect($result)->toBe([
+        'optInOnly' => true,
+        'rawUnitDifferences' => true,
+        'applyPreservesSnapshot' => true,
+        'noPersistence' => true,
+        'invalidation' => true,
+    ]);
+});
+
+it('shows unavailable comparison values for fallback malformed mismatched and expired results', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+nodes.routeComparisonEnabled=new Element('input');nodes.routeComparisonEnabled.checked=true;
+nodes.routeComparisonSummary=new Element();
+const source=[coordinates.origin,...stops.map(s=>s.coordinate),coordinates.destination].map(s=>({latitude:s.lat,longitude:s.lng}));
+const base={
+    status:'available',reason:'Stop order unchanged. Recalculated differences are not verified savings.',provider:'TomTom',
+    routing_context:{api_version:'1',route_type:'fastest',travel_mode:'car',traffic:true,depart_at:'2026-11-20T09:00:00+08:00'},
+    expires_at:new Date(Date.now()+30000).toISOString(),source_coordinates:source,candidate_order:[0,1,2],
+    original:{distance_meters:0,travel_time_seconds:0},candidate:{distance_meters:10,travel_time_seconds:20},
+    difference:{distance_meters:-10,distance_meters_percent:null,travel_time_seconds:-20,travel_time_seconds_percent:null},
+};
+const route={provider:'TomTom',fallback:false,routeCoordinates:coordinates,originalRouteCoordinates:coordinates,comparison:base};
+context.renderRouteComparison(route);
+assert.match(nodes.routeComparisonSummary.innerHTML,/Comparable estimates/);
+assert.match(nodes.routeComparisonSummary.innerHTML,/not verified savings/);
+assert.match(nodes.routeComparisonSummary.innerHTML,/Unavailable/,'Zero denominator percentage must be unavailable');
+assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/NaN|Infinity/);
+const cases=[
+    {...route,provider:'OSRM',fallback:true,comparison:null},
+    {...route,comparison:{...base,expires_at:'2000-01-01T00:00:00Z'}},
+    {...route,comparison:{...base,original:{distance_meters:null,travel_time_seconds:0}}},
+    {...route,comparison:{...base,routing_context:{...base.routing_context,travel_mode:'truck'}}},
+    {...route,comparison:{...base,source_coordinates:[]}},
+    {...route,comparison:{...base,candidate_order:[0,0,2]}},
+    {...route,comparison:{...base,difference:{...base.difference,distance_meters:999}}},
+];
+for(const current of cases){
+    context.renderRouteComparison(current);
+    assert.match(nodes.routeComparisonSummary.innerHTML,/Unavailable/);
+    assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/Comparable estimates/);
+    assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/NaN|Infinity/);
+}
+const timers=[];
+context.window.setTimeout=(callback,delay)=>{timers.push({callback,delay});return timers.length;};
+context.window.clearTimeout=()=>{};
+context.renderRouteComparison(route);
+assert.ok(timers[0].delay<=30000&&timers[0].delay>0);
+timers[0].callback();
+assert.match(nodes.routeComparisonSummary.innerHTML,/expired/);
+assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/Comparable estimates/);
+process.stdout.write(JSON.stringify({cases:cases.length,zeroDenominator:true,identityTruthful:true,expiry:true}));
+JS);
+
+    expect($result)->toBe([
+        'cases' => 7,
+        'zeroDenominator' => true,
+        'identityTruthful' => true,
+        'expiry' => true,
+    ]);
+});
+
+it('discards out-of-order and edited-context responses before they overwrite the map or comparison', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+context.renderRouteStops(stops.map(s=>s.location));
+const pending=[],drawn=[];
+context.requestTomTomRoute=()=>new Promise(resolve=>pending.push(resolve));
+context.drawRouteOnLeaflet=(route,coords)=>drawn.push(plain(coords));
+const identity=[0,1,2].map(i=>({providedIndex:i,optimizedIndex:i}));
+const older=context.runRouteOptimization({showSuccessToast:false}).then(()=>null,error=>error.message);
+await new Promise(resolve=>setImmediate(resolve));
+const newer=context.runRouteOptimization({showSuccessToast:false});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(pending.length,2);
+pending[1](traffic(identity));await newer;
+assert.equal(drawn.length,1);
+const current=plain(vm.runInContext('routePendingOptimization',context));
+pending[0](traffic(identity));assert.match(await older,/Unable|changed/);
+assert.deepEqual(plain(vm.runInContext('routePendingOptimization',context)),current);
+assert.equal(drawn.length,1);
+for(const change of [
+    ()=>nodes.routeReservation.value='2',
+    ()=>nodes.routeOrigin.dataset.latitude='14.9',
+    ()=>nodes.routeStopsList.querySelectorAll('input.route-stop-input')[0].value='Changed',
+    ()=>nodes.routeDepartureTime.value='10:00',
+]){
+    context.resetRouteOptimization();
+    const start=pending.length;
+    const work=context.runRouteOptimization({showSuccessToast:false}).then(()=>null,error=>error.message);
+    await new Promise(resolve=>setImmediate(resolve));
+    let writes=0;context.createRoutePlanApi=async()=>{writes++;};
+    await context.saveRouteFromForm();
+    assert.equal(writes,0,'In-flight Save must be blocked');
+    change();pending[start](traffic(identity));
+    assert.match(await work,/Unable|changed/);
+    assert.equal(vm.runInContext('routePendingOptimization',context),null);
+    assert.equal(drawn.length,1);
+}
+process.stdout.write(JSON.stringify({outOfOrderBlocked:true,contextChanges:4,noStaleMap:true,inFlightSaveBlocked:true}));
+JS);
+
+    expect($result)->toBe([
+        'outOfOrderBlocked' => true,
+        'contextChanges' => 4,
+        'noStaleMap' => true,
+        'inFlightSaveBlocked' => true,
+    ]);
+});
+
+it('requests extra comparison work only with an explicit option and keeps raw response measurements', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+const calls=[];
+context.routeApiRequest=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {success:true,provider:'TomTom',distance_km:10,travel_time_minutes:12,points:[{latitude:14.6,longitude:121},{latitude:14.7,longitude:121.1}],optimized_waypoints:[],optimization_proof:'proof',comparison:{status:'unavailable',reason:'Synthetic baseline failure'}};};
+await context.requestTomTomRoute(coordinates,{reservationId:1,departureDate:'2026-11-20',departureTime:'09:00'});
+await context.requestTomTomRoute(coordinates,{reservationId:1,departureDate:'2026-11-20',departureTime:'09:00',includeComparison:false});
+const result=await context.requestTomTomRoute(coordinates,{reservationId:1,departureDate:'2026-11-20',departureTime:'09:00',includeComparison:true});
+assert.equal('include_comparison' in calls[0].body,false);
+assert.equal('include_comparison' in calls[1].body,false);
+assert.equal(calls[2].body.include_comparison,true);
+assert.deepEqual(calls[0].body.coordinates,calls[2].body.coordinates);
+assert.equal(calls[0].body.depart_at,calls[2].body.depart_at);
+assert.equal(result.comparison.status,'unavailable');
+assert.equal(result.optimizationProof,'proof');
+process.stdout.write(JSON.stringify({explicitOptIn:true,sameFrozenInput:true,candidateProofPreserved:true}));
+JS);
+
+    expect($result)->toBe([
+        'explicitOptIn' => true,
+        'sameFrozenInput' => true,
+        'candidateProofPreserved' => true,
+    ]);
+});
+
+it('invalidates pending results after coordinate mutations and clears comparison when opening historical routes', function () {
+    $result = p54RunRouteJavaScript(<<<'JS'
+context.renderRouteStops(stops.map(s=>s.location));
+context.requestTomTomRoute=async()=>traffic([0,1,2].map(i=>({providedIndex:i,optimizedIndex:i})));
+await context.runRouteOptimization({showSuccessToast:false});
+nodes.routeOrigin.dataset.longitude='122';
+assert.throws(()=>context.applyPendingRouteOptimization({showToast:false}),/inputs changed/);
+assert.equal(vm.runInContext('routePendingOptimization',context),null);
+let response;
+context.requestTomTomRoute=()=>new Promise(resolve=>response=resolve);
+const work=context.runRouteOptimization({showSuccessToast:false}).then(()=>null,error=>error.message);
+await new Promise(resolve=>setImmediate(resolve));
+context.invalidateRouteComparisonContext();
+response(traffic([0,1,2].map(i=>({providedIndex:i,optimizedIndex:i}))));
+assert.match(await work,/Unable|changed/);
+assert.equal(vm.runInContext('routePendingOptimization',context),null);
+nodes.routeComparisonEnabled=new Element('input');nodes.routeComparisonEnabled.checked=true;
+nodes.routeComparisonSummary=new Element();nodes.routeComparisonSummary.hidden=false;nodes.routeComparisonSummary.innerHTML='Old comparison';
+nodes.routeFormModal=new Element();
+nodes.routeForm.reset=()=>{};
+nodes.routeNotes=new Element();
+nodes.routePurpose=new Element();
+nodes.routeStatus.options=[];
+context.document.body={style:{}};
+context.requestAnimationFrame=callback=>callback();
+context.populateRouteFormOptions=()=>{};
+context.clearRouteFieldErrors=()=>{};
+context.fetchRoutePlanById=async()=>context.normalizeRouteApiRecord({id:99,reservation_id:1,origin:'O',destination:'D',stops:[]});
+context.populateRouteReservations=async()=>[];
+context.applyReservationResourceDisplay=()=>{};
+context.getRouteRecordById=()=>null;
+context.applyRouteFormLifecycleRules=()=>{};
+nodes.routeNumber=new Element();nodes.routePriority=new Element();
+await context.openRouteFormModal('edit',{id:99});
+assert.equal(nodes.routeComparisonEnabled.checked,false);
+assert.equal(nodes.routeComparisonSummary.hidden,true);
+assert.equal(vm.runInContext('routeComparisonSnapshot',context),null);
+process.stdout.write(JSON.stringify({directCoordinateMutationRejected:true,inFlightCoordinateInvalidation:true,historicalComparisonAbsent:true}));
+JS);
+
+    expect($result)->toBe([
+        'directCoordinateMutationRejected' => true,
+        'inFlightCoordinateInvalidation' => true,
+        'historicalComparisonAbsent' => true,
+    ]);
+});
+
+it('exposes a default-off temporary comparison control and accessible estimate panel', function () {
+    $this->actingAs(User::factory()->create(['role' => 'fleet_manager']))->get(route('route-planning'))
+        ->assertSuccessful()
+        ->assertSee('id="routeComparisonEnabled"', false)
+        ->assertSee('id="routeComparisonSummary"', false)
+        ->assertSee('Estimated differences only. Actual travel outcomes may vary.');
+    $view = file_get_contents(resource_path('views/route-planning/index.blade.php'));
+    preg_match('/<input[^>]+id="routeComparisonEnabled"[^>]*>/', $view, $match);
+    expect($match[0])->not->toContain(' checked')
+        ->and($view)->toContain('aria-live="polite" aria-labelledby="routeComparisonTitle" hidden');
+});
 
 it('renders the route planning workflow and accessible section navigation', function () {
     $user = User::factory()->create(['role' => 'fleet_manager']);
