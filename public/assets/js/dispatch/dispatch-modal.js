@@ -7,6 +7,10 @@ let dispatchModalInitialized = false;
 function validateDispatchForm(form) {
     let isValid = true;
     const firstInvalid = [];
+    const reservationId = form.querySelector("#dispatchReservation")?.value;
+    const reservation = typeof availableReservations === "undefined"
+        ? null
+        : availableReservations.find((item) => String(item.id) === String(reservationId));
 
     const requiredFields = [
         {
@@ -27,7 +31,11 @@ function validateDispatchForm(form) {
         },
         {
             id: "dispatchPatient",
-            validate: (value) => value.trim() !== "",
+            validate: (value) => value.trim() !== "" || (
+                reservation?.request_type === "administrative_trip" &&
+                reservation.status === "Approved" &&
+                String(reservation.patient_name ?? "").trim() === ""
+            ),
         },
         {
             id: "dispatchRequestType",

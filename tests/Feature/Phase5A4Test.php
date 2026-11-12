@@ -341,6 +341,387 @@ process.stdout.write(JSON.stringify({noAutomaticSave:true,formPreserved:true,noS
 JS))->toBe(['noAutomaticSave' => true, 'formPreserved' => true, 'noStaleApply' => true, 'newerResultPreserved' => true]);
 });
 
+function p54RunDriverRerouteJavaScript(string $scenario): array
+{
+    $setup = <<<'JS'
+const messages=[],providerRequests=[],osrmRequests=[],draws=[];
+let providerMode='identity';
+context.window.showToast=(message,type)=>messages.push({message,type});
+context.window.FLEET_RBAC={role:'driver'};context.document.readyState='loading';
+context.__now=100000;vm.runInContext('Date.now=()=>__now',context);
+const marker='    window.initFullRouteMap = init;';
+const fullMapSource=fs.readFileSync(process.argv[1]+'/route-full-map.js','utf8');assert.equal(fullMapSource.split(marker).length,2);
+const hooks=`window.__driverTest={
+ setup(route,record){currentFullMapRoute=route;currentFullMapRecord=record;currentFullMapLiveVehicle={location:{latitude:14.59,longitude:121.02}};lastRerouteAt=0;},
+ reroute:recalculateRouteFromCurrentLocation,returnHome:handleReturnToHospital,
+ remainingTime:calculateNavigationRemainingTimeMinutes,renderMetrics:updateFullMapInfo,
+ prepareMetricDisplay(remainingDistance){
+  calculatePolylineRemainingDistanceKm=()=>remainingDistance;
+  updateStatusAwareNavigationUI=()=>{};updateFullRouteProgress=()=>{};
+  updateFullMapGpsIndicator=()=>{};updateFullMapGpsAccuracyCircle=()=>{};
+ },
+ state(){return{route:currentFullMapRoute,record:currentFullMapRecord,isRerouting,isReturningToHospital};}
+};
+drawFullRoute=(route,record)=>window.__driverDraws.push({route,record});
+updateFullMapInfo=()=>{};updateCurrentNavigationInstruction=()=>{};
+`;
+context.window.__driverDraws=draws;
+vm.runInContext(fullMapSource.replace(marker,hooks+marker),context);
+const driverStops=stops.map((stop,index)=>({...plain(stop),id:41+index}));
+const driverCoordinates={origin:{lat:14.6,lng:121},stops:driverStops,destination:{lat:14.7,lng:121.1}};
+const savedRoute={...traffic([]),routeCoordinates:driverCoordinates,instructions:[],geometry:{type:'LineString',coordinates:[driverCoordinates.origin,...driverStops.map(s=>s.coordinate),driverCoordinates.destination].map(p=>[p.lng,p.lat])}};
+const driverRecord={id:99,dispatchId:7,tripStatus:'En Route',destination:'Synthetic destination'};
+const initial=()=>context.window.__driverTest.setup(plain(savedRoute),plain(driverRecord));
+initial();
+context.routeApiRequest=async(url,options)=>{
+ const body=JSON.parse(options.body);providerRequests.push({url,body});
+ if(providerMode==='limited')throw Object.assign(new Error('Too many requests. Please try again later.'),{status:429});
+ if(providerMode==='unavailable')throw Object.assign(new Error('Synthetic provider unavailable'),{status:503});
+ const input=body.coordinates,count=input.length-2;
+ const order=Array.from({length:count},(_,i)=>i);
+ if(providerMode==='reordered'&&count>1)order.unshift(order.pop());
+ let mapping=order.map((providedIndex,optimizedIndex)=>({providedIndex,optimizedIndex}));
+ if(providerMode==='bad_mapping')mapping=mapping.map(m=>({...m,optimizedIndex:0}));
+ const points=[input[0],...order.map(i=>input[i+1]),input.at(-1)];
+ return {success:true,provider:'TomTom',distance_km:10,travel_time_minutes:12,points,optimized_waypoints:mapping};
+};
+context.requestOsrmRoute=actualRequestOsrmRoute;
+context.fetch=async(url)=>{
+ assert.ok(url.startsWith('https://router.project-osrm.org/route/v1/driving/'),'Unexpected external request in isolated regression');
+ osrmRequests.push(url);
+ const pairs=decodeURIComponent(new URL(url).pathname.split('/').at(-1)).split(';').map(p=>p.split(',').map(Number));
+ return {ok:true,json:async()=>({code:'Ok',routes:[{distance:12000,duration:900,geometry:{type:'LineString',coordinates:pairs}}]})};
+};
+context.window.calculateTrafficRouteFromCoordinates=context.calculateTrafficRouteFromCoordinates;
+const state=()=>plain(context.window.__driverTest.state());
+JS;
+
+    return p54RunRouteJavaScript($setup."\n".$scenario);
+}
+
+it('normalizes OSRM navigation metrics without inventing unavailable estimates', function (string $metrics, ?float $distance, ?float $duration): void {
+    $script = <<<'JS'
+providerMode='unavailable';
+const response=METRICS;
+context.fetch=async url=>{osrmRequests.push(url);return{ok:true,json:async()=>({code:'Ok',routes:[{...response,geometry:savedRoute.geometry}]})};};
+const route=await context.calculateTrafficRouteFromCoordinates(driverCoordinates,driverRecord);
+assert.equal(route.distanceKm,DISTANCE);assert.equal(route.durationMinutes,DURATION);
+assert.equal(route.provider,'OSRM');assert.equal(route.fallback,true);
+assert.equal(route.trafficDelayMinutes,0);assert.deepEqual(plain(route.optimizedWaypoints),[]);
+assert.deepEqual(plain(route.routeCoordinates),driverCoordinates);
+assert.deepEqual(plain(route.geometry),savedRoute.geometry);
+assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,1);
+process.stdout.write(JSON.stringify({metricsCorrect:true,fixedOrder:true,truthfulProvider:true}));
+JS;
+    $script = str_replace(['METRICS', 'DISTANCE', 'DURATION'], [$metrics, json_encode($distance), json_encode($duration)], $script);
+    expect(p54RunDriverRerouteJavaScript($script))->toBe(['metricsCorrect' => true, 'fixedOrder' => true, 'truthfulProvider' => true]);
+})->with([
+    'raw 12000 meters and 900 seconds' => ['{distance:12000,duration:900}', 12, 15],
+    'normalized meters and seconds' => ['{distanceMeters:12000,durationSeconds:900}', 12, 15],
+    'raw fields take precedence' => ['{distance:12000,duration:900,distanceMeters:5000,durationSeconds:60}', 12, 15],
+    'decimals' => ['{distance:12500.5,duration:930.5}', 12.5005, 930.5 / 60],
+    'numeric strings' => ['{distance:"12000",duration:"900"}', 12, 15],
+    'legitimate zeros' => ['{distance:0,duration:0}', 0, 0],
+    'normalized zeros' => ['{distanceMeters:0,durationSeconds:0}', 0, 0],
+    'missing duration' => ['{distance:12000}', 12, null],
+    'missing distance' => ['{duration:900}', null, 15],
+    'missing both' => ['{}', null, null],
+    'explicit null is not replaced by aliases' => ['{distance:null,duration:null,distanceMeters:12000,durationSeconds:900}', null, null],
+    'normalized null' => ['{distanceMeters:null,durationSeconds:null}', null, null],
+    'nonnumeric strings' => ['{distance:"invalid",duration:"invalid"}', null, null],
+    'empty strings' => ['{distance:"",duration:" "}', null, null],
+    'negative' => ['{distance:-1,duration:-1}', null, null],
+    'NaN' => ['{distance:NaN,duration:NaN}', null, null],
+    'Infinity' => ['{distance:Infinity,duration:-Infinity}', null, null],
+    'booleans' => ['{distance:false,duration:true}', null, null],
+    'arrays and objects' => ['{distance:[],duration:{}}', null, null],
+]);
+
+it('calculates and renders truthful live navigation ETA metrics', function (string $metrics, float $remainingDistance, ?int $expectedMinutes, string $expectedDisplay): void {
+    $script = <<<'JS'
+const route={...plain(savedRoute),...METRICS};
+for(const id of ['fullMapDistanceLabel','fullMapEtaLabel','fullMapStatusLabel'])nodes[id]=new Element();
+nodes.fullMapEtaLabel.textContent='Stale 99 min';
+context.window.__driverTest.prepareMetricDisplay(REMAINING);
+assert.equal(context.window.__driverTest.remainingTime(route,REMAINING),MINUTES);
+context.window.__driverTest.renderMetrics(driverRecord,route);
+assert.equal(nodes.fullMapEtaLabel.textContent,DISPLAY);
+assert.equal(nodes.fullMapDistanceLabel.textContent,REMAINING.toFixed(1)+' km remaining');
+assert.equal(nodes.fullMapStatusLabel.textContent,'En Route');
+assert.equal(providerRequests.length,0);assert.equal(osrmRequests.length,0);
+assert.deepEqual(state().record,driverRecord);
+process.stdout.write(JSON.stringify({calculationCorrect:true,displayCorrect:true,noLifecycleChange:true}));
+JS;
+    $script = str_replace(['METRICS', 'REMAINING', 'MINUTES', 'DISPLAY'], [$metrics, '('.json_encode($remainingDistance).')', json_encode($expectedMinutes), json_encode($expectedDisplay)], $script);
+    expect(p54RunDriverRerouteJavaScript($script))->toBe(['calculationCorrect' => true, 'displayCorrect' => true, 'noLifecycleChange' => true]);
+})->with([
+    'normalized 15 minute route' => ['{distanceKm:12,durationMinutes:15}', 12, 15, '15 min remaining'],
+    'half route' => ['{distanceKm:12,durationMinutes:15}', 6, 8, '8 min remaining'],
+    'remaining distance capped at full route' => ['{distanceKm:12,durationMinutes:15}', 16.1, 15, '15 min remaining'],
+    'numeric strings' => ['{distanceKm:"12",durationMinutes:"15"}', 12, 15, '15 min remaining'],
+    'zero duration' => ['{distanceKm:12,durationMinutes:0}', 12, 0, '0 min remaining'],
+    'zero distance and duration' => ['{distanceKm:0,durationMinutes:0}', 0, 0, '0 min remaining'],
+    'zero distance with positive duration cannot be prorated' => ['{distanceKm:0,durationMinutes:15}', 0, null, '—'],
+    'missing duration' => ['{distanceKm:12,durationMinutes:undefined}', 12, null, '—'],
+    'null duration' => ['{distanceKm:12,durationMinutes:null}', 12, null, '—'],
+    'invalid duration' => ['{distanceKm:12,durationMinutes:"invalid"}', 12, null, '—'],
+    'negative duration' => ['{distanceKm:12,durationMinutes:-1}', 12, null, '—'],
+    'nonfinite duration' => ['{distanceKm:12,durationMinutes:Infinity}', 12, null, '—'],
+    'NaN duration' => ['{distanceKm:12,durationMinutes:NaN}', 12, null, '—'],
+    'blank duration' => ['{distanceKm:12,durationMinutes:" "}', 12, null, '—'],
+    'boolean duration' => ['{distanceKm:12,durationMinutes:false}', 12, null, '—'],
+    'unknown distance' => ['{distanceKm:null,durationMinutes:15}', 12, null, '—'],
+    'invalid distance' => ['{distanceKm:-1,durationMinutes:15}', 12, null, '—'],
+    'nonfinite distance' => ['{distanceKm:Infinity,durationMinutes:15}', 12, null, '—'],
+    'normalized metrics override stale summary' => ['{distanceKm:12,durationMinutes:15,summary:{lengthInMeters:1000,travelTimeInSeconds:60}}', 12, 15, '15 min remaining'],
+    'explicit unknown duration does not borrow a summary' => ['{distanceKm:12,durationMinutes:null,summary:{lengthInMeters:12000,travelTimeInSeconds:900}}', 12, null, '—'],
+]);
+
+it('preserves legacy summary and planned metric presentation without false zeros', function (): void {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+for(const id of ['fullMapDistanceLabel','fullMapEtaLabel'])nodes[id]=new Element();
+context.window.__driverTest.prepareMetricDisplay(12);
+const legacy={summary:{lengthInMeters:12000,travelTimeInSeconds:900}};
+assert.equal(context.window.__driverTest.remainingTime(legacy,12),15);
+context.window.__driverTest.renderMetrics(driverRecord,legacy);
+assert.equal(nodes.fullMapEtaLabel.textContent,'15 min remaining');
+for(const remaining of [null,undefined,NaN,Infinity,-1])assert.equal(context.window.__driverTest.remainingTime(legacy,remaining),null);
+for(const status of ['Assigned','En Route']){
+ context.window.__driverTest.prepareMetricDisplay(null);
+ const record={...driverRecord,tripStatus:status};
+ context.window.__driverTest.renderMetrics(record,legacy);
+ assert.equal(nodes.fullMapDistanceLabel.textContent,'12.0 km');assert.equal(nodes.fullMapEtaLabel.textContent,'15 min');
+ for(const value of [null,undefined,NaN,Infinity,-1,false,'',[],{}]){
+  context.window.__driverTest.renderMetrics(record,{distanceKm:value,durationMinutes:value});
+  assert.equal(nodes.fullMapDistanceLabel.textContent,'—');assert.equal(nodes.fullMapEtaLabel.textContent,'—');
+ }
+ context.window.__driverTest.renderMetrics(record,{distanceKm:0,durationMinutes:0});
+ assert.equal(nodes.fullMapDistanceLabel.textContent,'0.0 km');assert.equal(nodes.fullMapEtaLabel.textContent,'0 min');
+}
+process.stdout.write(JSON.stringify({legacySupported:true,unavailableExplicit:true,zeroPreserved:true}));
+JS))->toBe(['legacySupported' => true, 'unavailableExplicit' => true, 'zeroPreserved' => true]);
+});
+
+it('renders actual OSRM and TomTom reroute metrics while preserving navigation and dispatch', function (string $provider): void {
+    $script = <<<'JS'
+providerMode=PROVIDER==='OSRM'?'unavailable':'reordered';
+const before=state();await context.window.__driverTest.reroute();const route=state().route;
+const distance=PROVIDER==='OSRM'?12:10,minutes=PROVIDER==='OSRM'?15:12;
+assert.equal(route.distanceKm,distance);assert.equal(route.durationMinutes,minutes);
+assert.equal(route.provider,PROVIDER);
+assert.deepEqual(route.routeCoordinates.stops,(PROVIDER==='OSRM'?[0,1,2]:[2,0,1]).map(i=>before.route.routeCoordinates.stops[i]));
+assert.deepEqual(state().record,before.record);assert.equal(draws.length,1);
+for(const id of ['fullMapDistanceLabel','fullMapEtaLabel'])nodes[id]=new Element();
+context.window.__driverTest.prepareMetricDisplay(distance);
+context.window.__driverTest.renderMetrics(driverRecord,route);
+assert.equal(nodes.fullMapEtaLabel.textContent,minutes+' min remaining');
+assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,PROVIDER==='OSRM'?1:0);
+process.stdout.write(JSON.stringify({realAdapterRendered:true,stopOrderPreserved:true,dispatchPreserved:true}));
+JS;
+    expect(p54RunDriverRerouteJavaScript(str_replace('PROVIDER', json_encode($provider), $script)))
+        ->toBe(['realAdapterRendered' => true, 'stopOrderPreserved' => true, 'dispatchPreserved' => true]);
+})->with(['OSRM', 'TomTom']);
+
+it('retains all saved intermediate stop occurrences in driver rerouting requests', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+const before=state();
+await context.window.__driverTest.reroute();
+assert.equal(providerRequests.length,1);
+assert.deepEqual(providerRequests[0].body.coordinates,[
+ {latitude:14.59,longitude:121.02},
+ {latitude:14.61,longitude:121.01},
+ {latitude:14.62,longitude:121.02},
+ {latitude:14.63,longitude:121.03},
+ {latitude:14.7,longitude:121.1},
+]);
+assert.deepEqual(state().route.routeCoordinates.stops,before.route.routeCoordinates.stops);
+assert.deepEqual(state().record,before.record);assert.equal(draws.length,1);assert.equal(osrmRequests.length,0);
+process.stdout.write(JSON.stringify({allStops:true,pairingPreserved:true,noDispatchChange:true}));
+JS))->toBe(['allStops' => true, 'pairingPreserved' => true, 'noDispatchChange' => true]);
+});
+
+it('keeps driver stop identity and geometry paired for identity and reordered provider results', function (bool $repeatCoordinates, bool $reordered): void {
+    $script = <<<'JS'
+const route=plain(savedRoute);
+if(REPEAT)route.routeCoordinates.stops[1].coordinate=plain(route.routeCoordinates.stops[0].coordinate);
+route.routeCoordinates.stops[0].visited=true;
+route.routeCoordinates.stops[0].coordinate.displayName='Original synthetic label';
+route.routeCoordinates.stops[0].coordinate.lat=String(route.routeCoordinates.stops[0].coordinate.lat);
+context.window.__driverTest.setup(route,plain(driverRecord));
+const expected=plain(route.routeCoordinates.stops).map(s=>({...s,coordinate:{...s.coordinate,lat:Number(s.coordinate.lat),lng:Number(s.coordinate.lng)}}));
+providerMode=REORDERED?'reordered':'identity';
+await context.window.__driverTest.reroute();
+const actual=state();
+const order=REORDERED?[2,0,1]:[0,1,2];
+assert.deepEqual(actual.route.routeCoordinates.stops,order.map(i=>expected[i]));
+assert.deepEqual(actual.route.geometry.coordinates,[[121.02,14.59],...order.map(i=>[expected[i].coordinate.lng,expected[i].coordinate.lat]),[121.1,14.7]]);
+assert.deepEqual(plain(draws.at(-1).route.routeCoordinates),actual.route.routeCoordinates);
+assert.deepEqual(actual.record,plain(driverRecord));
+assert.equal(providerRequests[0].body.coordinates.length,5);
+assert.equal(actual.route.routeCoordinates.stops.length,3,'Visited flags must not introduce a new pruning policy');
+assert.deepEqual(route.routeCoordinates.stops[0].coordinate.lat,String(expected[0].coordinate.lat),'Input stop objects must remain unchanged');
+process.stdout.write(JSON.stringify({occurrencesPreserved:true,geometryPaired:true,savedInputUnchanged:true}));
+JS;
+
+    expect(p54RunDriverRerouteJavaScript(str_replace(['REPEAT', 'REORDERED'], [json_encode($repeatCoordinates), json_encode($reordered)], $script)))
+        ->toBe(['occurrencesPreserved' => true, 'geometryPaired' => true, 'savedInputUnchanged' => true]);
+})->with([
+    'distinct coordinates, identity order' => [false, false],
+    'distinct coordinates, reordered' => [false, true],
+    'repeated coordinates, identity order' => [true, false],
+    'repeated coordinates, reordered' => [true, true],
+]);
+
+it('rejects invalid required driver stop data before requesting any provider', function (string $mutation): void {
+    $script = <<<'JS'
+const route=plain(savedRoute);
+MUTATION;
+context.window.__driverTest.setup(route,plain(driverRecord));const before=state();
+await context.window.__driverTest.reroute();
+assert.deepEqual(state(),before);assert.equal(providerRequests.length,0);assert.equal(osrmRequests.length,0);assert.equal(draws.length,0);
+assert.equal(messages.length,1);assert.match(messages[0].message,/stop.*coordinates/i);
+process.stdout.write(JSON.stringify({routePreserved:true,noProviderCalls:true,noPartialRoute:true}));
+JS;
+
+    expect(p54RunDriverRerouteJavaScript(str_replace('MUTATION', $mutation, $script)))
+        ->toBe(['routePreserved' => true, 'noProviderCalls' => true, 'noPartialRoute' => true]);
+})->with([
+    'missing list' => ['delete route.routeCoordinates.stops'],
+    'null list' => ['route.routeCoordinates.stops=null'],
+    'missing stop' => ['route.routeCoordinates.stops[1]=null'],
+    'missing coordinate' => ['delete route.routeCoordinates.stops[1].coordinate'],
+    'unverified flat format' => ['route.routeCoordinates.stops[1]={id:42,location:"Flat",lat:14.62,lng:121.02}'],
+    'missing latitude' => ['delete route.routeCoordinates.stops[1].coordinate.lat'],
+    'missing longitude' => ['delete route.routeCoordinates.stops[1].coordinate.lng'],
+    'null latitude' => ['route.routeCoordinates.stops[1].coordinate.lat=null'],
+    'blank longitude' => ['route.routeCoordinates.stops[1].coordinate.lng=" "'],
+    'boolean latitude' => ['route.routeCoordinates.stops[1].coordinate.lat=true'],
+    'nonnumeric longitude' => ['route.routeCoordinates.stops[1].coordinate.lng="invalid"'],
+    'nonfinite latitude' => ['route.routeCoordinates.stops[1].coordinate.lat=Infinity'],
+    'latitude out of range' => ['route.routeCoordinates.stops[1].coordinate.lat=91'],
+    'longitude out of range' => ['route.routeCoordinates.stops[1].coordinate.lng=-181'],
+]);
+
+it('rejects malformed driver waypoint permutations without replacing navigation', function (mixed $mapping): void {
+    $script = <<<'JS'
+const request=context.routeApiRequest;
+context.routeApiRequest=async(...args)=>({...await request(...args),optimized_waypoints:MAPPING});
+const before=state();await context.window.__driverTest.reroute();
+assert.deepEqual(state(),before);assert.equal(draws.length,0);assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,0);
+assert.match(messages[0].message,/invalid waypoint permutation/);
+process.stdout.write(JSON.stringify({routePreserved:true,noWrongMarkers:true,noNewFallback:true}));
+JS;
+
+    expect(p54RunDriverRerouteJavaScript(str_replace('MAPPING', json_encode($mapping, JSON_THROW_ON_ERROR), $script)))
+        ->toBe(['routePreserved' => true, 'noWrongMarkers' => true, 'noNewFallback' => true]);
+})->with([
+    'empty' => [[]],
+    'null' => [null],
+    'not an array' => ['invalid'],
+    'incomplete' => [[['providedIndex' => 0, 'optimizedIndex' => 0]]],
+    'duplicate target' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 0], ['providedIndex' => 2, 'optimizedIndex' => 2]]],
+    'duplicate source' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 0, 'optimizedIndex' => 1], ['providedIndex' => 2, 'optimizedIndex' => 2]]],
+    'out of range' => [[['providedIndex' => 0, 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1], ['providedIndex' => 3, 'optimizedIndex' => 2]]],
+    'string index' => [[['providedIndex' => '0', 'optimizedIndex' => 0], ['providedIndex' => 1, 'optimizedIndex' => 1], ['providedIndex' => 2, 'optimizedIndex' => 2]]],
+]);
+
+it('rejects malformed driver response geometry before drawing it', function (mixed $geometry): void {
+    $script = <<<'JS'
+const calculate=context.window.calculateTrafficRouteFromCoordinates;
+context.window.calculateTrafficRouteFromCoordinates=async(...args)=>({...await calculate(...args),geometry:GEOMETRY,route:null});
+const before=state();await context.window.__driverTest.reroute();
+assert.deepEqual(state(),before);assert.equal(draws.length,0);assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,0);
+assert.match(messages[0].message,/invalid geometry/);
+process.stdout.write(JSON.stringify({lastValidRoutePreserved:true,noInvalidDrawing:true}));
+JS;
+
+    expect(p54RunDriverRerouteJavaScript(str_replace('GEOMETRY', json_encode($geometry, JSON_THROW_ON_ERROR), $script)))
+        ->toBe(['lastValidRoutePreserved' => true, 'noInvalidDrawing' => true]);
+})->with([
+    'missing' => [null],
+    'wrong type' => [['type' => 'Point', 'coordinates' => [121, 14.6]]],
+    'too short' => [['type' => 'LineString', 'coordinates' => [[121, 14.6]]]],
+    'missing latitude' => [['type' => 'LineString', 'coordinates' => [[121, 14.6], [121.1]]]],
+    'null latitude' => [['type' => 'LineString', 'coordinates' => [[121, 14.6], [121.1, null]]]],
+    'out of range' => [['type' => 'LineString', 'coordinates' => [[121, 14.6], [181, 14.7]]]],
+]);
+
+it('keeps fixed-order OSRM driver fallback paired with every stop occurrence', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+providerMode='unavailable';const before=state();
+await context.window.__driverTest.reroute();
+assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,1);
+assert.match(osrmRequests[0],/121\.02,14\.59;121\.01,14\.61;121\.02,14\.62;121\.03,14\.63;121\.1,14\.7/);
+assert.deepEqual(state().route.routeCoordinates.stops,before.route.routeCoordinates.stops);
+assert.deepEqual(state().route.geometry.coordinates,[[121.02,14.59],[121.01,14.61],[121.02,14.62],[121.03,14.63],[121.1,14.7]]);
+assert.equal(state().route.provider,'OSRM');assert.equal(state().route.fallback,true);assert.equal(draws.length,1);
+assert.deepEqual(state().record,before.record);
+process.stdout.write(JSON.stringify({fixedOrder:true,pairedStops:true,noDispatchChange:true}));
+JS))->toBe(['fixedOrder' => true, 'pairedStops' => true, 'noDispatchChange' => true]);
+});
+
+it('preserves driver navigation after rate limiting and enforces the existing reroute cooldown', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+providerMode='limited';const before=state();await context.window.__driverTest.reroute();
+assert.deepEqual(state(),before);assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,0);assert.equal(draws.length,0);
+assert.match(messages[0].message,/Too many requests/);
+providerMode='identity';await context.window.__driverTest.reroute();assert.equal(providerRequests.length,1);
+context.__now+=14999;await context.window.__driverTest.reroute();assert.equal(providerRequests.length,1);
+context.__now+=1;await context.window.__driverTest.reroute();assert.equal(providerRequests.length,2);assert.equal(draws.length,1);
+assert.deepEqual(state().record,before.record);assert.equal(osrmRequests.length,0);
+process.stdout.write(JSON.stringify({no429Fallback:true,lastRouteRetained:true,cooldown15000:true,noLifecycleChange:true}));
+JS))->toBe(['no429Fallback' => true, 'lastRouteRetained' => true, 'cooldown15000' => true, 'noLifecycleChange' => true]);
+});
+
+it('preserves zero and one intermediate stop compatibility without appending the destination as a stop', function (int $count): void {
+    $script = <<<'JS'
+const route=plain(savedRoute);route.routeCoordinates.stops=route.routeCoordinates.stops.slice(0,COUNT);
+context.window.__driverTest.setup(route,plain(driverRecord));await context.window.__driverTest.reroute();
+assert.equal(providerRequests.length,1);assert.equal(providerRequests[0].body.coordinates.length,COUNT+2);
+assert.equal(state().route.routeCoordinates.stops.length,COUNT);
+assert.equal(providerRequests[0].body.coordinates.filter(p=>p.latitude===14.7&&p.longitude===121.1).length,1);
+assert.equal(draws.length,1);assert.equal(osrmRequests.length,0);
+process.stdout.write(JSON.stringify({compatible:true,noDuplicateDestination:true}));
+JS;
+
+    expect(p54RunDriverRerouteJavaScript(str_replace('COUNT', (string) $count, $script)))
+        ->toBe(['compatible' => true, 'noDuplicateDestination' => true]);
+})->with([0, 1]);
+
+it('preserves a distinct driver stop occurrence sharing the final destination coordinates', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+const route=plain(savedRoute);route.routeCoordinates.stops[1].coordinate=plain(route.routeCoordinates.destination);
+context.window.__driverTest.setup(route,plain(driverRecord));await context.window.__driverTest.reroute();
+assert.equal(providerRequests[0].body.coordinates.length,5);assert.equal(state().route.routeCoordinates.stops.length,3);
+assert.equal(state().route.routeCoordinates.stops[1].id,42);assert.equal(state().route.routeCoordinates.stops[1].location,'Repeated stop');
+assert.deepEqual(state().route.routeCoordinates.stops[1].coordinate,route.routeCoordinates.destination);
+process.stdout.write(JSON.stringify({distinctOccurrencePreserved:true,noCoordinateDeduplication:true}));
+JS))->toBe(['distinctOccurrencePreserved' => true, 'noCoordinateDeduplication' => true]);
+});
+
+it('keeps the existing driver in-flight reroute guard', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+const request=context.routeApiRequest;let release,attempts=0;
+context.routeApiRequest=(...args)=>{attempts++;return new Promise(resolve=>release=async()=>resolve(await request(...args)));};
+const first=context.window.__driverTest.reroute();
+assert.equal(attempts,1);assert.equal(state().isRerouting,true);
+await context.window.__driverTest.reroute();assert.equal(attempts,1);
+await release();await first;assert.equal(providerRequests.length,1);assert.equal(draws.length,1);assert.equal(state().isRerouting,false);
+process.stdout.write(JSON.stringify({singleInFlight:true,noDuplicateProviderCall:true}));
+JS))->toBe(['singleInFlight' => true, 'noDuplicateProviderCall' => true]);
+});
+
+it('retains Return to Hospital routing without introducing persistence or lifecycle writes', function () {
+    expect(p54RunDriverRerouteJavaScript(<<<'JS'
+const before=state();await context.window.__driverTest.returnHome();
+assert.deepEqual(providerRequests[0].body.coordinates,[{latitude:14.59,longitude:121.02},{latitude:14.7707,longitude:121.0659}]);
+assert.equal(providerRequests.length,1);assert.equal(osrmRequests.length,0);assert.equal(draws.length,1);
+assert.equal(state().route.routeCoordinates.stops.length,0);assert.deepEqual(state().record,before.record);
+assert.ok(providerRequests.every(r=>r.url.endsWith('/traffic-route')),'Navigation must never save a route or transition dispatch');
+process.stdout.write(JSON.stringify({hospitalUnchanged:true,noPersistedWrites:true,noDispatchChange:true}));
+JS))->toBe(['hospitalUnchanged' => true, 'noPersistedWrites' => true, 'noDispatchChange' => true]);
+});
+
 it('retains the driver route and dispatch state when rerouting or returning is rate limited', function () {
     expect(p54RunRouteJavaScript(<<<'JS'
 const messages=[];context.window.showToast=(message,type)=>messages.push({message,type});

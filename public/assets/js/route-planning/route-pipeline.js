@@ -1982,6 +1982,17 @@ async function requestOsrmRoute(routeCoordinates) {
     return data.routes[0];
 }
 
+function normalizeRouteMetric(value) {
+    if (
+        (typeof value !== "number" && typeof value !== "string") ||
+        (typeof value === "string" && value.trim() === "")
+    ) {
+        return null;
+    }
+    const metric = Number(value);
+    return Number.isFinite(metric) && metric >= 0 ? metric : null;
+}
+
 async function calculateTrafficRouteFromCoordinates(
     routeCoordinates,
     record = {},
@@ -2007,10 +2018,20 @@ async function calculateTrafficRouteFromCoordinates(
             tomTomError,
         );
         const osrmRoute = await requestOsrmRoute(routeCoordinates);
+        const distanceMeters = normalizeRouteMetric(
+            Object.prototype.hasOwnProperty.call(osrmRoute, "distance")
+                ? osrmRoute.distance
+                : osrmRoute.distanceMeters,
+        );
+        const durationSeconds = normalizeRouteMetric(
+            Object.prototype.hasOwnProperty.call(osrmRoute, "duration")
+                ? osrmRoute.duration
+                : osrmRoute.durationSeconds,
+        );
         return {
             provider: "OSRM",
-            distanceKm: Number(osrmRoute.distanceMeters || 0) / 1000,
-            durationMinutes: Number(osrmRoute.durationSeconds || 0) / 60,
+            distanceKm: distanceMeters === null ? null : distanceMeters / 1000,
+            durationMinutes: durationSeconds === null ? null : durationSeconds / 60,
             trafficDelayMinutes: 0,
             optimizedWaypoints: [],
             instructions: [],

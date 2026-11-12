@@ -11,6 +11,188 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Process\Process;
+
+function p51DispatchValidation(array $scenario): array
+{
+    $script = <<<'JS'
+const fs = require('node:fs'), vm = require('node:vm');
+const scenario = JSON.parse(process.argv[2]);
+const values = {
+    dispatchNumber: 'DSP-SYNTHETIC-001', dispatchReservation: '42', dispatchPatient: scenario.patient ?? '',
+    dispatchRequestType: scenario.label ?? 'Administrative Trip', dispatchVehicle: 'Synthetic Vehicle',
+    dispatchDriver: 'Synthetic Driver', dispatchPickup: 'Synthetic Origin', dispatchDestination: 'Synthetic Destination',
+    dispatchDate: '2099-01-01', dispatchTime: '09:00', dispatchPriority: 'Routine', dispatchStatus: 'Pending',
+    dispatchContact: '', dispatchSelectedVehicleId: '7', dispatchSelectedDriverId: '8', dispatchNotes: 'Synthetic test only',
+    ...scenario.fields,
+};
+const nodes = {}, handlers = {}, writes = [];
+for (const [id, value] of Object.entries(values)) {
+    const classes = new Set();
+    nodes[id] = { value, readOnly: id === 'dispatchPatient', disabled: false,
+        classList: { add: value => classes.add(value), remove: value => classes.delete(value), contains: value => classes.has(value) },
+        focus() {}, addEventListener() {} };
+}
+const form = { dataset: {}, querySelector: selector => selector === '[type="submit"]' ? nodes.submit : nodes[selector.slice(1)],
+    querySelectorAll: () => [], addEventListener: (name, fn) => handlers[name] = fn, reset() {} };
+nodes.submit = { disabled: false };
+nodes.dispatchForm = form;
+nodes.addDispatchModal = { classList: { remove() {} } };
+const context = vm.createContext({ console, document: { getElementById: id => nodes[id] ?? null,
+    addEventListener() {}, body: { style: {} } }, window: {
+        FleetRBAC: { hasPermission: (module, permission) => module === 'dispatch' && permission === 'canCreate' },
+    } });
+for (const file of ['dispatch-modal.js', 'dispatch-add.js']) {
+    vm.runInContext(fs.readFileSync(process.argv[1] + '/' + file, 'utf8'), context);
+}
+context.__reservations = scenario.missing ? [] : [{ id: scenario.recordId ?? 42, request_type: scenario.type,
+    patient_name: scenario.storedPatient ?? scenario.patient ?? null, status: scenario.status ?? 'Approved' }];
+vm.runInContext('availableReservations = __reservations', context);
+(async () => {
+    const valid = context.validateDispatchForm(form);
+    const invalid = Object.keys(values).filter(id => nodes[id].classList.contains('is-invalid'));
+    if (scenario.switchToAdministrative) {
+        context.__reservations = [{ id: 42, request_type: 'administrative_trip', patient_name: null, status: 'Approved' }];
+        vm.runInContext('availableReservations = __reservations', context);
+    }
+    const afterSwitch = scenario.switchToAdministrative ? context.validateDispatchForm(form) : null;
+    if (scenario.submit) {
+        context.dispatchAddApiRequest = async (url, options) => { writes.push({ url, body: JSON.parse(options.body) }); return { success: true }; };
+        context.clearReservationDetails = () => {};
+        context.clearDispatchAiRecommendation = () => {};
+        context.populateReservationSelect = () => {};
+        context.initDispatchAdd();
+        nodes.dispatchStatus.value = values.dispatchStatus;
+        await handlers.submit({ preventDefault() {} });
+    }
+    process.stdout.write(JSON.stringify({ valid, invalid, afterSwitch,
+        patientInvalidAfterSwitch: nodes.dispatchPatient.classList.contains('is-invalid'),
+        patientValue: nodes.dispatchPatient.value, patientReadOnly: nodes.dispatchPatient.readOnly, writes }));
+})().catch(error => { console.error(error.stack); process.exitCode = 1; });
+JS;
+    $process = new Process([
+        'node', '-e', 'eval(require("node:fs").readFileSync(0, "utf8"))',
+        public_path('assets/js/dispatch'), json_encode($scenario, JSON_THROW_ON_ERROR),
+    ]);
+    $process->setInput($script)->setTimeout(15)->mustRun();
+
+    return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+}
+
+it('validates dispatch patient names using the selected server reservation rather than the display label', function (array $scenario, bool $valid) {
+    $result = p51DispatchValidation($scenario);
+
+    expect($result['valid'])->toBe($valid)
+        ->and($result['patientValue'])->toBe($scenario['patient'] ?? '')
+        ->and($result['patientReadOnly'])->toBeTrue();
+})->with([
+    'administrative null patient' => [['type' => 'administrative_trip'], true],
+    'administrative named patient' => [['type' => 'administrative_trip', 'patient' => 'Synthetic Person'], true],
+    'administrative whitespace absent patient' => [['type' => 'administrative_trip', 'patient' => '   '], true],
+    'canonical type overrides conflicting display' => [['type' => 'administrative_trip', 'label' => 'Patient Transfer'], true],
+    'string reservation ID' => [['type' => 'administrative_trip', 'recordId' => '42'], true],
+    'patient transfer null' => [['type' => 'patient_transfer'], false],
+    'patient transfer whitespace' => [['type' => 'patient_transfer', 'patient' => '   '], false],
+    'patient transfer named' => [['type' => 'patient_transfer', 'patient' => 'Synthetic Patient'], true],
+    'emergency response null' => [['type' => 'emergency_response'], false],
+    'specimen transport null' => [['type' => 'laboratory_specimen_transport'], false],
+    'legacy patient transport null' => [['type' => 'Patient Transport'], false],
+    'legacy emergency null' => [['type' => 'Emergency Transfer'], false],
+    'legacy appointment null' => [['type' => 'Medical Appointment'], false],
+    'legacy laboratory null' => [['type' => 'Laboratory Transport'], false],
+    'unknown type cannot use administrative display' => [['type' => 'unknown', 'label' => 'Administrative Trip'], false],
+    'missing type' => [[], false],
+    'missing selected reservation' => [['type' => 'administrative_trip', 'missing' => true], false],
+    'mismatched selected ID' => [['type' => 'administrative_trip', 'recordId' => 43], false],
+    'pending reservation has no exemption' => [['type' => 'administrative_trip', 'status' => 'Pending'], false],
+    'stored name cannot be silently cleared' => [['type' => 'administrative_trip', 'storedPatient' => 'Synthetic Person'], false],
+]);
+
+it('preserves all other dispatch form requirements for a null-patient administrative trip', function (string $field, string $value) {
+    $result = p51DispatchValidation(['type' => 'administrative_trip', 'fields' => [$field => $value], 'submit' => true]);
+
+    expect($result['valid'])->toBeFalse()
+        ->and($result['invalid'])->toContain($field)
+        ->and($result['writes'])->toBe([]);
+})->with([
+    ['dispatchNumber', 'Generating...'], ['dispatchReservation', ''], ['dispatchRequestType', ''],
+    ['dispatchVehicle', ''], ['dispatchDriver', ''], ['dispatchPickup', ''], ['dispatchDestination', ''],
+    ['dispatchDate', '2000-01-01'], ['dispatchTime', ''], ['dispatchPriority', ''],
+    ['dispatchStatus', 'Completed'], ['dispatchContact', 'invalid-contact'],
+]);
+
+it('clears a patient validation error when switching to a valid administrative reservation', function () {
+    $result = p51DispatchValidation(['type' => 'patient_transfer', 'switchToAdministrative' => true]);
+
+    expect($result['valid'])->toBeFalse()
+        ->and($result['afterSwitch'])->toBeTrue()
+        ->and($result['patientInvalidAfterSwitch'])->toBeFalse()
+        ->and($result['patientValue'])->toBe('');
+});
+
+it('submits the original reservation identity without inventing patient data', function () {
+    $result = p51DispatchValidation(['type' => 'administrative_trip', 'submit' => true]);
+
+    expect($result['valid'])->toBeTrue()
+        ->and($result['patientValue'])->toBe('')
+        ->and($result['writes'])->toBe([[
+            'url' => '/dispatch',
+            'body' => [
+                'dispatch_number' => 'DSP-SYNTHETIC-001', 'reservation_id' => 42,
+                'vehicle_id' => 7, 'driver_id' => 8, 'arrival_time' => null, 'remarks' => 'Synthetic test only',
+            ],
+        ]]);
+    $view = file_get_contents(resource_path('views/components/dispatch/add-dispatch-modal.blade.php'));
+    preg_match('/<input[^>]*id="dispatchPatient"[^>]*>/', $view, $patient);
+    expect($patient[0])->toContain('readonly')->not->toContain('required');
+});
+
+it('creates a pending administrative dispatch without changing its null-patient reservation', function () {
+    $vehicle = p51Vehicle();
+    $driver = p51Driver($vehicle);
+    $reservation = p51Reservation($vehicle, $driver);
+    $reservation->update(['request_type' => 'administrative_trip', 'patient_name' => null]);
+    $before = $reservation->fresh()->getAttributes();
+
+    $this->actingAs(User::factory()->create(['role' => 'dispatcher']))
+        ->postJson(route('dispatch.store'), ['reservation_id' => $reservation->id])
+        ->assertCreated()->assertJsonPath('dispatch.trip_status', 'Pending');
+
+    expect($reservation->fresh()->getAttributes())->toBe($before)
+        ->and(Dispatch::where('reservation_id', $reservation->id)->count())->toBe(1)
+        ->and($vehicle->fresh()->status)->toBe('Available')
+        ->and($driver->fresh()->status)->toBe('Available');
+});
+
+it('keeps administrative dispatch approval readiness resource and duplicate guards', function (string $blocker) {
+    $vehicle = p51Vehicle();
+    $driver = p51Driver($vehicle);
+    $reservation = p51Reservation($vehicle, $driver);
+    $reservation->update(['request_type' => 'administrative_trip', 'patient_name' => null]);
+
+    if ($blocker === 'approval') {
+        $reservation->update(['status' => 'Pending']);
+    } elseif ($blocker === 'readiness') {
+        $reservation->routePlan->update(['status' => 'Draft']);
+    } elseif ($blocker === 'missing route') {
+        $reservation->routePlan->delete();
+    } elseif ($blocker === 'missing vehicle') {
+        $reservation->update(['vehicle_id' => null]);
+    } elseif ($blocker === 'missing driver') {
+        $reservation->update(['driver_id' => null]);
+    } elseif ($blocker === 'duplicate') {
+        p51Dispatch($reservation);
+    }
+    $before = $reservation->fresh()->getAttributes();
+    $dispatchCount = Dispatch::count();
+
+    $this->actingAs(User::factory()->create(['role' => 'dispatcher']))
+        ->postJson(route('dispatch.store'), ['reservation_id' => $reservation->id])
+        ->assertUnprocessable();
+
+    expect($reservation->fresh()->getAttributes())->toBe($before)
+        ->and(Dispatch::count())->toBe($dispatchCount);
+})->with(['approval', 'readiness', 'missing route', 'missing vehicle', 'missing driver', 'duplicate']);
 
 function p51Vehicle(array $attributes = []): Vehicle
 {

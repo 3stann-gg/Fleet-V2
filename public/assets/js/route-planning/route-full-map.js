@@ -699,24 +699,39 @@
         return remainingMeters / 1000;
     }
 
+    function getNavigationRouteMetrics(route) {
+        const summaryDistance = normalizeRouteMetric(route?.summary?.lengthInMeters);
+        const summaryDuration = normalizeRouteMetric(route?.summary?.travelTimeInSeconds);
+        return {
+            distanceKm: Object.prototype.hasOwnProperty.call(route || {}, "distanceKm")
+                ? normalizeRouteMetric(route.distanceKm)
+                : summaryDistance === null ? null : summaryDistance / 1000,
+            durationMinutes: Object.prototype.hasOwnProperty.call(route || {}, "durationMinutes")
+                ? normalizeRouteMetric(route.durationMinutes)
+                : summaryDuration === null ? null : summaryDuration / 60,
+        };
+    }
+
     function calculateNavigationRemainingTimeMinutes(
         route,
         remainingDistanceKm,
     ) {
-        const totalDistanceKm =
-            Number(route?.summary?.lengthInMeters || 0) / 1000;
-        const totalTimeMinutes =
-            Number(route?.summary?.travelTimeInSeconds || 0) / 60;
+        const { distanceKm: totalDistanceKm, durationMinutes: totalTimeMinutes } =
+            getNavigationRouteMetrics(route);
+        const remainingDistance = normalizeRouteMetric(remainingDistanceKm);
         if (
-            totalDistanceKm <= 0 ||
-            totalTimeMinutes <= 0 ||
-            !Number.isFinite(Number(remainingDistanceKm))
+            totalDistanceKm === null ||
+            totalTimeMinutes === null ||
+            remainingDistance === null
         ) {
             return null;
         }
+        if (totalDistanceKm === 0) {
+            return remainingDistance === 0 && totalTimeMinutes === 0 ? 0 : null;
+        }
         const ratio = Math.min(
             1,
-            Math.max(0, Number(remainingDistanceKm) / totalDistanceKm),
+            remainingDistance / totalDistanceKm,
         );
         return Math.max(0, Math.round(totalTimeMinutes * ratio));
     }
@@ -1079,22 +1094,30 @@
     }
 
     function getCurrentRouteStopCoordinates(route) {
-        const stops = Array.isArray(route?.routeCoordinates?.stops)
-            ? route.routeCoordinates.stops
-            : [];
-        return stops
-            .map((stop) => {
-                const lat = Number(stop?.lat ?? stop?.latitude);
-                const lng = Number(stop?.lng ?? stop?.longitude);
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                    return null;
-                }
-                return {
-                    lat,
-                    lng,
-                };
-            })
-            .filter(Boolean);
+        const stops = route?.routeCoordinates?.stops;
+        if (!Array.isArray(stops)) {
+            throw new Error("The saved route stop coordinates are missing.");
+        }
+        return stops.map((stop) => {
+            const coordinate = stop?.coordinate;
+            const values = [coordinate?.lat, coordinate?.lng];
+            if (values.some((value) =>
+                !["number", "string"].includes(typeof value) ||
+                String(value).trim() === ""
+            )) {
+                throw new Error("A saved route stop has invalid coordinates.");
+            }
+            const lat = Number(coordinate.lat);
+            const lng = Number(coordinate.lng);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+                Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+                throw new Error("A saved route stop has invalid coordinates.");
+            }
+            return {
+                ...stop,
+                coordinate: { ...coordinate, lat, lng },
+            };
+        });
     }
 
     async function recalculateRouteFromCurrentLocation() {
@@ -1172,15 +1195,35 @@
             if (!reroutedRoute) {
                 throw new Error("A new route could not be calculated.");
             }
+            const geometry = reroutedRoute.geometry || reroutedRoute.route?.geometry;
+            if (geometry?.type !== "LineString" ||
+                !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2 ||
+                geometry.coordinates.some((point) =>
+                    !Array.isArray(point) || point.length < 2 ||
+                    typeof point[0] !== "number" || typeof point[1] !== "number" ||
+                    !Number.isFinite(point[0]) || !Number.isFinite(point[1]) ||
+                    Math.abs(point[0]) > 180 || Math.abs(point[1]) > 90
+                )) {
+                throw new Error("The recalculated route has invalid geometry.");
+            }
+            let orderedStops;
+            if (reroutedRoute.provider === "OSRM" && reroutedRoute.fallback === true) {
+                orderedStops = routeCoordinates.stops;
+            } else if (reroutedRoute.provider === "TomTom" && reroutedRoute.fallback !== true) {
+                orderedStops = orderRouteWaypoints(
+                    routeCoordinates.stops,
+                    reroutedRoute.optimizedWaypoints,
+                );
+            } else {
+                throw new Error("The recalculated route provider is invalid.");
+            }
             currentFullMapRoute = {
                 ...reroutedRoute,
                 routeCoordinates: {
                     ...(reroutedRoute.routeCoordinates || routeCoordinates),
                     origin: routeCoordinates.origin,
-                    stops: routeCoordinates.stops,
-                    destination:
-                        reroutedRoute.routeCoordinates?.destination ||
-                        routeCoordinates.destination,
+                    stops: orderedStops,
+                    destination: routeCoordinates.destination,
                 },
             };
             drawFullRoute(currentFullMapRoute, currentFullMapRecord);
@@ -2716,6 +2759,7 @@
         const distanceElement = getElement("fullMapDistanceLabel");
         const etaElement = getElement("fullMapEtaLabel");
         const statusElement = getElement("fullMapStatusLabel");
+        const metrics = getNavigationRouteMetrics(route);
         const tripStatus = normalizeTripStatus(
             record?.tripStatus ?? record?.trip_status ?? "—",
         );
@@ -2731,7 +2775,7 @@
 
             if (
                 navigationProgress &&
-                Number.isFinite(Number(navigationProgress.remainingDistanceKm))
+                normalizeRouteMetric(navigationProgress.remainingDistanceKm) !== null
             ) {
                 if (distanceElement) {
                     distanceElement.textContent = `${Number(
@@ -2739,27 +2783,24 @@
                     ).toFixed(1)} km remaining`;
                 }
 
-                if (
-                    etaElement &&
-                    Number.isFinite(Number(navigationProgress.remainingMinutes))
-                ) {
-                    etaElement.textContent = `${Math.max(
-                        0,
-                        Math.round(navigationProgress.remainingMinutes),
-                    )} min remaining`;
+                if (etaElement) {
+                    const remainingMinutes = normalizeRouteMetric(navigationProgress.remainingMinutes);
+                    etaElement.textContent = remainingMinutes === null
+                        ? "—"
+                        : `${Math.round(remainingMinutes)} min remaining`;
                 }
             } else {
                 if (distanceElement) {
                     distanceElement.textContent =
-                        route?.distanceKm != null
-                            ? `${Number(route.distanceKm).toFixed(1)} km`
+                        metrics.distanceKm !== null
+                            ? `${metrics.distanceKm.toFixed(1)} km`
                             : "—";
                 }
 
                 if (etaElement) {
                     etaElement.textContent =
-                        route?.durationMinutes != null
-                            ? `${Math.round(route.durationMinutes)} min`
+                        metrics.durationMinutes !== null
+                            ? `${Math.round(metrics.durationMinutes)} min`
                             : "—";
                 }
             }
@@ -2781,14 +2822,14 @@
              */
             if (distanceElement) {
                 distanceElement.textContent =
-                    route?.distanceKm != null
-                        ? `${Number(route.distanceKm).toFixed(1)} km`
+                    metrics.distanceKm !== null
+                        ? `${metrics.distanceKm.toFixed(1)} km`
                         : "—";
             }
             if (etaElement) {
                 etaElement.textContent =
-                    route?.durationMinutes != null
-                        ? `${Math.round(route.durationMinutes)} min`
+                    metrics.durationMinutes !== null
+                        ? `${Math.round(metrics.durationMinutes)} min`
                         : "—";
             }
         }
