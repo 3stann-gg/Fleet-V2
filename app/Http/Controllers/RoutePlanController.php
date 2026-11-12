@@ -2,19 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\FleetSetting;
 use App\Models\HospitalFacility;
 use App\Models\Reservation;
 use App\Models\RoutePlan;
+use App\Models\RouteStop;
 use App\Services\AuditLogService;
 use App\Services\DispatchAssignmentService;
+use App\Services\PlannedRouteProofService;
 use App\Services\RouteComparisonService;
+use App\Services\RouteDepartureContextService;
+use App\Services\RouteEstimateProvenanceReadinessService;
+use App\Services\RouteEstimateProvenanceService;
 use App\Services\TomTomRoutingService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\Connection;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -24,6 +33,7 @@ class RoutePlanController extends Controller
 
     public function __construct(
         private DispatchAssignmentService $dispatchAssignmentService,
+        private RouteEstimateProvenanceService $provenanceService,
     ) {}
 
     /**
@@ -381,7 +391,7 @@ class RoutePlanController extends Controller
         }
 
         try {
-            $routePlan = DB::transaction(function () use ($validator) {
+            $routePlan = $this->provenanceService->createUnrecordedRoute(function () use ($validator, $request) {
                 $validated = $validator->validated();
                 /*
                 |--------------------------------------------------------------------------
@@ -398,6 +408,8 @@ class RoutePlanController extends Controller
                     ->findOrFail(
                         $validated['reservation_id']
                     );
+
+                $this->guardPlannedRouteSave($request, $reservation, null, $validated);
 
                 /*
                 |--------------------------------------------------------------------------
@@ -532,6 +544,10 @@ class RoutePlanController extends Controller
                 'routePlan' => $routePlan,
             ], 201);
 
+        } catch (HttpResponseException|AuthorizationException $e) {
+            throw $e;
+        } catch (QueryException $e) {
+            return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -557,6 +573,7 @@ class RoutePlanController extends Controller
 
         return response()->json([
             'routePlan' => $routePlan,
+            'estimateProvenance' => $this->provenanceService->persistedSummary($routePlan),
         ]);
     }
 
@@ -695,226 +712,186 @@ class RoutePlanController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use (
-                $validator,
-                $routePlan,
-                $isLifecycleTransition,
-            ) {
-                $routePlan = RoutePlan::query()
-                    ->lockForUpdate()
-                    ->findOrFail($routePlan->id);
+            $result = $this->provenanceService->executeRouteOperation(
+                $routePlan->id,
+                $isLifecycleTransition ? 'transition' : 'update',
+                $request->input('expected_estimate_revision'),
+                (int) $request->user()->id,
+                function (RoutePlan $fresh, Reservation $reservation): bool {
+                    $this->authorize('update', $fresh);
 
-                $reservation = Reservation::with([
-                    'dispatch',
-                    'vehicle',
-                    'driver',
-                    'pickupHospital',
-                    'destinationHospital',
-                ])
-                    ->lockForUpdate()
-                    ->findOrFail($routePlan->reservation_id);
+                    return true;
+                },
+                function (RoutePlan $routePlan, Reservation $reservation) use (
+                    $validator,
+                    $isLifecycleTransition,
+                    $request,
+                ): void {
+                    $validated = $validator->validated();
 
-                $routePlan->setRelation('reservation', $reservation);
+                    $this->guardPlannedRouteSave($request, $reservation, $routePlan, $validated);
 
-                $validated = $validator->validated();
-
-                if (in_array($routePlan->status, ['Completed', 'Archived'], true)) {
-                    throw new \Exception(
-                        "{$routePlan->status} route plans are historical records and cannot be edited."
-                    );
-                }
-                /*
-                |--------------------------------------------------------------------------
-                | Lock Route Plan once Dispatch exists
-                |--------------------------------------------------------------------------
-                */
-                if (
-                    $routePlan->reservation &&
-                    $routePlan->reservation->dispatch
-                ) {
-                    throw new \Exception(
-                        'This route plan can no longer be modified because a dispatch has already been created.'
-                    );
-                }
-
-                $currentStatus =
-                    $routePlan->status;
-
-                $requestedStatus =
-                    $isLifecycleTransition
-                        ? $validated['status']
-                        : $currentStatus;
-
-                if (
-                    $isLifecycleTransition &&
-                    $currentStatus !== $requestedStatus &&
-                    ! in_array(
-                        $requestedStatus,
-                        RoutePlan::WORKFLOW_TRANSITIONS[$currentStatus] ?? [],
-                        true
-                    )
-                ) {
-                    throw new \Exception(
-                        "Cannot change route status from {$currentStatus} to {$requestedStatus}."
-                    );
-                }
-
-                $newStatus = $requestedStatus;
-
-                $isEmergency = Reservation::isEmergencyPriority(
-                    $routePlan->reservation?->priority
-                );
-                $optimizationApplied = (bool) ($validated['optimization_applied'] ?? false);
-
-                if (
-                    $isLifecycleTransition &&
-                    $isEmergency &&
-                    $currentStatus === 'Planned' &&
-                    $requestedStatus === 'Ready For Dispatch'
-                ) {
-                    throw new \Exception(
-                        'Emergency routes become Ready For Dispatch automatically after a valid optimization is applied and saved.'
-                    );
-                }
-
-                if (
-                    $isLifecycleTransition &&
-                    $isEmergency &&
-                    in_array($currentStatus, ['Draft', 'Planned'], true) &&
-                    $requestedStatus === 'Planned' &&
-                    $optimizationApplied
-                ) {
-                    $this->assertEmergencyRouteReady(
-                        $routePlan,
-                        $validated
-                    );
-
-                    $newStatus = 'Ready For Dispatch';
-                }
-
-                $oldAuditValues =
-                    $this->getRoutePlanAuditValues(
-                        $routePlan
-                    );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Reservation must still be Approved
-                |--------------------------------------------------------------------------
-                */
-
-                if (
-                    $routePlan->reservation &&
-                    $routePlan->reservation->status !== 'Approved' &&
-                    $newStatus !== 'Archived'
-                ) {
-                    throw new \Exception(
-                        'This route can no longer be modified because the reservation is no longer Approved.'
-                    );
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | Ready For Dispatch Requirements
-                |--------------------------------------------------------------------------
-                */
-
-                if (
-                    $newStatus === 'Ready For Dispatch'
-                ) {
-                    if (
-                        $validated['estimated_distance'] === null ||
-                        $validated['estimated_time'] === null
-                    ) {
+                    if (in_array($routePlan->status, ['Completed', 'Archived'], true)) {
                         throw new \Exception(
-                            'Estimated distance and travel time are required before marking the route Ready For Dispatch.'
+                            "{$routePlan->status} route plans are historical records and cannot be edited."
                         );
                     }
-                }
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Lock Route Plan once Dispatch exists
+                    |--------------------------------------------------------------------------
+                    */
+                    if (
+                        $routePlan->reservation &&
+                        $routePlan->reservation->dispatch
+                    ) {
+                        throw new \Exception(
+                            'This route plan can no longer be modified because a dispatch has already been created.'
+                        );
+                    }
 
-                $originLocation =
-                    $routePlan->reservation?->pickupHospital?->name
-                    ?: $validated['origin'];
+                    $currentStatus =
+                        $routePlan->status;
 
-                $destinationLocation =
-                    $routePlan->reservation?->destinationHospital?->name
-                    ?: $validated['destination'];
+                    $requestedStatus =
+                        $isLifecycleTransition
+                            ? $validated['status']
+                            : $currentStatus;
 
-                /*
-                |--------------------------------------------------------------------------
-                | Update Route Plan
-                |--------------------------------------------------------------------------
-                */
+                    if (
+                        $isLifecycleTransition &&
+                        $currentStatus !== $requestedStatus &&
+                        ! in_array(
+                            $requestedStatus,
+                            RoutePlan::WORKFLOW_TRANSITIONS[$currentStatus] ?? [],
+                            true
+                        )
+                    ) {
+                        throw new \Exception(
+                            "Cannot change route status from {$currentStatus} to {$requestedStatus}."
+                        );
+                    }
 
-                $routePlan->update([
-                    'origin' => $originLocation,
-                    'origin_latitude' => $validated['origin_latitude'] ?? null,
-                    'origin_longitude' => $validated['origin_longitude'] ?? null,
-                    'destination' => $destinationLocation,
-                    'destination_latitude' => $validated['destination_latitude'] ?? null,
-                    'destination_longitude' => $validated['destination_longitude'] ?? null,
-                    'priority' => Reservation::canonicalPriority(
-                        $routePlan->reservation->priority
-                    ),
-                    'department' => $validated['department'],
-                    'status' => $newStatus,
-                    'departure_date' => $routePlan->reservation->schedule_date,
-                    'departure_time' => $routePlan->reservation->schedule_time,
-                    'estimated_distance' => $validated['estimated_distance'] ?? null,
-                    'estimated_time' => $validated['estimated_time'] ?? null,
-                    'optimization_strategy' => $validated['optimization_strategy'] ?? null,
-                    'optimization_score' => $validated['optimization_score'] ?? null,
-                    'purpose' => $validated['purpose'] ?? null,
-                    'notes' => $validated['notes'] ?? null,
-                ]);
+                    $newStatus = $requestedStatus;
 
-                /*
-                |--------------------------------------------------------------------------
-                | Replace Stops
-                |--------------------------------------------------------------------------
-                */
-
-                $routePlan->stops()->delete();
-
-                foreach (
-                    $validated['stops'] ?? [] as $index => $stop
-                ) {
-                    $routePlan->stops()->create([
-                        'stop_order' => $index + 1,
-                        'location' => $stop['location'],
-                        'latitude' => $stop['latitude'] ?? null,
-                        'longitude' => $stop['longitude'] ?? null,
-                    ]);
-                }
-
-                $routePlan->refresh();
-
-                $newAuditValues =
-                    $this->getRoutePlanAuditValues(
-                        $routePlan
+                    $isEmergency = Reservation::isEmergencyPriority(
+                        $routePlan->reservation?->priority
                     );
+                    $optimizationApplied = (bool) ($validated['optimization_applied'] ?? false);
 
-                $this->logRoutePlanUpdate(
-                    $routePlan,
-                    $oldAuditValues,
-                    $newAuditValues
-                );
+                    if (
+                        $isLifecycleTransition &&
+                        $isEmergency &&
+                        $currentStatus === 'Planned' &&
+                        $requestedStatus === 'Ready For Dispatch'
+                    ) {
+                        throw new \Exception(
+                            'Emergency routes become Ready For Dispatch automatically after a valid optimization is applied and saved.'
+                        );
+                    }
 
-                $routePlan->load([
-                    'reservation.vehicle',
-                    'reservation.driver',
-                    'stops',
-                ]);
+                    if (
+                        $isLifecycleTransition &&
+                        $isEmergency &&
+                        in_array($currentStatus, ['Draft', 'Planned'], true) &&
+                        $requestedStatus === 'Planned' &&
+                        $optimizationApplied
+                    ) {
+                        $this->assertEmergencyRouteReady(
+                            $routePlan,
+                            $validated
+                        );
 
-                return $routePlan;
-            });
+                        $newStatus = 'Ready For Dispatch';
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Reservation must still be Approved
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        $routePlan->reservation &&
+                        $routePlan->reservation->status !== 'Approved' &&
+                        $newStatus !== 'Archived'
+                    ) {
+                        throw new \Exception(
+                            'This route can no longer be modified because the reservation is no longer Approved.'
+                        );
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Ready For Dispatch Requirements
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        $newStatus === 'Ready For Dispatch'
+                    ) {
+                        if (
+                            $validated['estimated_distance'] === null ||
+                            $validated['estimated_time'] === null
+                        ) {
+                            throw new \Exception(
+                                'Estimated distance and travel time are required before marking the route Ready For Dispatch.'
+                            );
+                        }
+                    }
+
+                    $originLocation =
+                        $routePlan->reservation?->pickupHospital?->name
+                        ?: $validated['origin'];
+
+                    $destinationLocation =
+                        $routePlan->reservation?->destinationHospital?->name
+                        ?: $validated['destination'];
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Update Route Plan
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $this->saveRouteAndStops($routePlan, [
+                        'origin' => $originLocation,
+                        'origin_latitude' => $validated['origin_latitude'] ?? null,
+                        'origin_longitude' => $validated['origin_longitude'] ?? null,
+                        'destination' => $destinationLocation,
+                        'destination_latitude' => $validated['destination_latitude'] ?? null,
+                        'destination_longitude' => $validated['destination_longitude'] ?? null,
+                        'priority' => Reservation::canonicalPriority(
+                            $routePlan->reservation->priority
+                        ),
+                        'department' => $validated['department'],
+                        'status' => $newStatus,
+                        'departure_date' => $routePlan->reservation->schedule_date,
+                        'departure_time' => $routePlan->reservation->schedule_time,
+                        'estimated_distance' => $validated['estimated_distance'] ?? null,
+                        'estimated_time' => $validated['estimated_time'] ?? null,
+                        'optimization_strategy' => $validated['optimization_strategy'] ?? null,
+                        'optimization_score' => $validated['optimization_score'] ?? null,
+                        'purpose' => $validated['purpose'] ?? null,
+                        'notes' => $validated['notes'] ?? null,
+                    ], $validated['stops'] ?? []);
+                },
+                fn (Connection $connection, RoutePlan $before, RoutePlan $after, array $context): ?AuditLog => $this->auditRouteOperation($connection, $before, $after, $context),
+                app(PlannedRouteProofService::class)->capabilities()['save']
+                    ? $this->plannedSubmission($request, $validator->validated(), $routePlan->status) : null,
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Route plan updated successfully.',
-                'routePlan' => $result,
+                'routePlan' => $result['route'],
+                'estimateProvenance' => $result['summary'],
             ]);
 
+        } catch (HttpResponseException|AuthorizationException $e) {
+            throw $e;
+        } catch (QueryException $e) {
+            return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -926,172 +903,62 @@ class RoutePlanController extends Controller
     /**
      * Archive route.
      */
-    public function archive(RoutePlan $routePlan)
+    public function archive(Request $request, RoutePlan $routePlan)
     {
-        $this->authorize('archive', $routePlan);
-
-        $routePlan->load([
-            'reservation.dispatch',
-        ]);
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent archiving when Dispatch already exists
-        |--------------------------------------------------------------------------
-        | Once the route has already been handed off to Dispatch,
-        | it becomes part of the operational trip history.
-        */
-        if (
-            $routePlan->reservation &&
-            $routePlan->reservation->dispatch
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This route plan cannot be archived because a dispatch already exists for its reservation.',
-            ], 422);
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Already Archived
-        |--------------------------------------------------------------------------
-        */
-        if ($routePlan->status === 'Archived') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This route plan is already archived.',
-            ], 422);
-        }
-
-        $oldValues =
-            $this->getRoutePlanAuditValues(
-                $routePlan
-            );
-        /*
-        |--------------------------------------------------------------------------
-        | Archive Route
-        |--------------------------------------------------------------------------
-        */
-        $routePlan->update([
-            'status' => 'Archived',
-        ]);
-
-        $routePlan->refresh();
-
-        $newValues =
-            $this->getRoutePlanAuditValues(
-                $routePlan
-            );
-
-        $this->logRoutePlanUpdate(
-            $routePlan,
-            $oldValues,
-            $newValues
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Route plan archived successfully.',
-            'routePlan' => $routePlan->fresh(),
-        ]);
+        return $this->changeArchiveState($request, $routePlan, false);
     }
 
-    /**
-     * Restore archived route.
-     */
-    public function restore(RoutePlan $routePlan)
+    public function restore(Request $request, RoutePlan $routePlan)
     {
-        $this->authorize('restore', $routePlan);
+        return $this->changeArchiveState($request, $routePlan, true);
+    }
 
-        $routePlan->load([
-            'reservation.dispatch',
-        ]);
-        /*
-        |--------------------------------------------------------------------------
-        | Only Archived Routes Can Be Restored
-        |--------------------------------------------------------------------------
-        */
-        if ($routePlan->status !== 'Archived') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only archived routes can be restored.',
-            ], 422);
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent Restore When Dispatch Exists
-        |--------------------------------------------------------------------------
-        | A route connected to an existing dispatch must remain part of
-        | the operational trip history.
-        */
-        if (
-            $routePlan->reservation &&
-            $routePlan->reservation->dispatch
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This route plan cannot be restored because a dispatch already exists for its reservation.',
-            ], 422);
-        }
+    private function changeArchiveState(Request $request, RoutePlan $routePlan, bool $restore)
+    {
+        $event = $restore ? 'restore' : 'archive';
+        $this->authorize($event, $routePlan);
+        try {
+            $result = $this->provenanceService->executeRouteOperation(
+                $routePlan->id, $event, $request->input('expected_estimate_revision'), (int) $request->user()->id,
+                function (RoutePlan $fresh, Reservation $reservation) use ($event): bool {
+                    $this->authorize($event, $fresh);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Reservation Must Still Be Approved
-        |--------------------------------------------------------------------------
-        */
-        if (
-            ! $routePlan->reservation ||
-            $routePlan->reservation->status !== 'Approved'
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This route plan cannot be restored because its reservation is no longer Approved.',
-            ], 422);
-        }
-
-        $oldValues =
-            $this->getRoutePlanAuditValues(
-                $routePlan
+                    return true;
+                },
+                function (RoutePlan $fresh, Reservation $reservation) use ($restore): void {
+                    if ($restore && $fresh->status !== 'Archived') {
+                        throw new \InvalidArgumentException('Only archived routes can be restored.');
+                    }
+                    if (! $restore && $fresh->status === 'Archived') {
+                        throw new \InvalidArgumentException('This route plan is already archived.');
+                    }
+                    if ($reservation->dispatch) {
+                        throw new \InvalidArgumentException($restore
+                            ? 'This route plan cannot be restored because a dispatch already exists for its reservation.'
+                            : 'This route plan cannot be archived because a dispatch already exists for its reservation.');
+                    }
+                    if ($restore && $reservation->status !== 'Approved') {
+                        throw new \InvalidArgumentException('This route plan cannot be restored because its reservation is no longer Approved.');
+                    }
+                    if (! $fresh->update(['status' => $restore ? 'Draft' : 'Archived'])) {
+                        throw new \RuntimeException('Route lifecycle persistence failed.');
+                    }
+                },
+                fn (Connection $connection, RoutePlan $before, RoutePlan $after, array $context): ?AuditLog => $this->auditRouteOperation($connection, $before, $after, $context),
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Restore Route To Draft
-        |--------------------------------------------------------------------------
-        */
-        $routePlan->update([
-            'status' => 'Draft',
-        ]);
-
-        $routePlan->refresh();
-
-        $newValues =
-            $this->getRoutePlanAuditValues(
-                $routePlan
-            );
-
-        AuditLogService::log(
-            module: 'Route Planning',
-            action: 'Restored',
-            description: "Restored route {$routePlan->route_number} to Draft.",
-            record: $routePlan,
-            oldValues: [
-                'status' => $oldValues['status'] ?? null,
-            ],
-            newValues: [
-                'status' => $newValues['status'] ?? null,
-            ]
-        );
-
-        $routePlan->load([
-            'reservation.vehicle',
-            'reservation.driver',
-            'stops',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Route plan restored successfully.',
-            'routePlan' => $routePlan,
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => $restore ? 'Route plan restored successfully.' : 'Route plan archived successfully.',
+                'routePlan' => $result['route'], 'estimateProvenance' => $result['summary'],
+            ]);
+        } catch (HttpResponseException|AuthorizationException $exception) {
+            throw $exception;
+        } catch (QueryException $exception) {
+            return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
+        } catch (\Exception $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
     }
 
     /**
@@ -1129,7 +996,7 @@ class RoutePlanController extends Controller
         }
 
         try {
-            $newRoutePlan = DB::transaction(function () use (
+            $newRoutePlan = $this->provenanceService->createUnrecordedRoute(function () use (
                 $validator,
                 $routePlan
             ) {
@@ -1280,6 +1147,10 @@ class RoutePlanController extends Controller
                 'routePlan' => $newRoutePlan,
             ], 201);
 
+        } catch (HttpResponseException|AuthorizationException $e) {
+            throw $e;
+        } catch (QueryException $e) {
+            return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -1294,9 +1165,30 @@ class RoutePlanController extends Controller
     public function trafficRoute(
         Request $request,
         TomTomRoutingService $tomTom,
-        RouteComparisonService $comparison
+        RouteComparisonService $comparison,
+        RouteDepartureContextService $departureContexts
     ) {
         $this->authorize('viewAny', RoutePlan::class);
+
+        if ($request->has('departure_mode') && $request->input('departure_mode') !== 'planned') {
+            return response()->json([
+                'success' => false,
+                'code' => 'ROUTE_DEPARTURE_MODE_UNSUPPORTED',
+                'message' => 'The requested departure mode is unsupported.',
+            ], 422);
+        }
+
+        $isPlanned = $request->input('departure_mode') === 'planned';
+        if ($isPlanned) {
+            $this->authorize('create', RoutePlan::class);
+            if (config('services.tomtom.planned_departure_enabled', false) !== true) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'ROUTE_PLANNED_MODE_DISABLED',
+                    'message' => 'Planned departure calculations are disabled.',
+                ], 422);
+            }
+        }
 
         $validator = Validator::make(
             $request->all(),
@@ -1317,14 +1209,13 @@ class RoutePlanController extends Controller
                     'between:-180,180',
                 ],
                 'depart_at' => [
-                    'nullable',
-                    'date',
+                    ...($isPlanned ? ['exclude'] : ['nullable', 'date']),
                 ],
                 'reservation_id' => [
-                    Rule::requiredIf($request->boolean('include_comparison')),
+                    Rule::requiredIf($isPlanned || $request->boolean('include_comparison')),
                     'nullable',
                     'integer',
-                    'exists:reservations,id',
+                    ...($isPlanned ? [] : ['exists:reservations,id']),
                 ],
                 'include_comparison' => ['sometimes', 'boolean'],
             ]
@@ -1340,17 +1231,62 @@ class RoutePlanController extends Controller
 
         $validated = $validator->validated();
         $includeComparison = (bool) ($validated['include_comparison'] ?? false);
-        if ($includeComparison) {
+        $departureContext = null;
+        $proofContext = null;
+        if ($includeComparison || $isPlanned) {
             $this->authorize('create', RoutePlan::class);
             $reservation = Reservation::with('routePlan.reservation')->findOrFail($validated['reservation_id']);
             $this->authorize('view', $reservation);
             if ($reservation->routePlan) {
                 $this->authorize('view', $reservation->routePlan);
             }
+            if ($isPlanned) {
+                try {
+                    $departureContext = $departureContexts->forPlannedDeparture(
+                        $reservation->getRawOriginal('schedule_date'),
+                        $reservation->getRawOriginal('schedule_time'),
+                    );
+                } catch (\InvalidArgumentException $exception) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 'ROUTE_DEPARTURE_CONTEXT_INVALID',
+                        'message' => $exception->getMessage(),
+                    ], 422);
+                }
+            }
+        }
+
+        $proofs = app(PlannedRouteProofService::class);
+        if ($isPlanned && $proofs->capabilities()['issuance']) {
+            $input = Validator::make($request->all(), [
+                'route_id' => ['required', 'integer', 'min:1'],
+                'expected_estimate_revision' => ['required', 'integer', 'min:0'],
+                'intended_operation' => ['required', Rule::in(['update', 'transition'])],
+                'target_status' => ['required', Rule::in(['Draft', 'Planned', 'Ready For Dispatch'])],
+                'stop_labels' => ['present', 'array', 'size:'.(count($validated['coordinates']) - 2)],
+                'stop_labels.*' => ['required', 'string', 'max:255'],
+            ])->validate();
+            $sourceRoute = RoutePlan::findOrFail($input['route_id']);
+            $this->authorize('update', $sourceRoute);
+            $this->authorize('view', $sourceRoute);
+            if ((int) $sourceRoute->reservation_id !== (int) $reservation->id || $reservation->status !== 'Approved'
+                || ! in_array($sourceRoute->status, ['Draft', 'Planned'], true) || $reservation->dispatch()->exists()) {
+                $this->plannedProofFailure('ROUTE_PLANNED_CONTEXT_INELIGIBLE', 'This route is not eligible for planned proof issuance.');
+            }
+            if (! (new RouteEstimateProvenanceReadinessService)->installed($sourceRoute->getConnection())) {
+                throw new HttpResponseException(response()->json(['success' => false, 'code' => 'ROUTE_PROVENANCE_SCHEMA_NOT_READY',
+                    'message' => 'The route estimate schema is not ready.'], 503));
+            }
+            if ((string) $sourceRoute->estimate_revision !== (string) $input['expected_estimate_revision']) {
+                throw new HttpResponseException(response()->json(['success' => false, 'code' => 'ROUTE_ESTIMATE_REVISION_STALE',
+                    'message' => 'The route changed. Reload it before calculating again.'], 409));
+            }
+            $proofContext = $this->provenanceService->plannedContext($sourceRoute, $reservation, (int) $request->user()->id,
+                $input['intended_operation'], (int) $sourceRoute->estimate_revision, $input['target_status']);
         }
 
         try {
-            $departAt = $validated['depart_at'] ?? ($includeComparison ? now()->toIso8601String() : null);
+            $departAt = $departureContext['depart_at'] ?? $validated['depart_at'] ?? ($includeComparison ? now()->toIso8601String() : null);
             $comparisonStartedAt = hrtime(true) / 1e9;
             $result = $includeComparison
                 ? $tomTom->calculateRoute($validated['coordinates'], $departAt, true, RouteComparisonService::REQUEST_SECONDS)
@@ -1376,6 +1312,53 @@ class RoutePlanController extends Controller
                 $stopCount === 1 => 'TomTom Traffic-Aware Multi-stop',
                 default => 'TomTom Traffic-Aware Fastest',
             };
+            if ($isPlanned) {
+                if (! is_array($result['points'] ?? null) || count($result['points']) < 2) {
+                    throw new \InvalidArgumentException('Planned route geometry is unavailable.');
+                }
+                foreach ($result['points'] as $point) {
+                    foreach (['latitude' => 90, 'longitude' => 180] as $axis => $limit) {
+                        $value = $point[$axis] ?? null;
+                        if (! is_numeric($value) || ! is_finite((float) $value) || abs((float) $value) > $limit) {
+                            throw new \InvalidArgumentException('Planned route geometry is invalid.');
+                        }
+                    }
+                }
+                $token = $proofContext === null ? null : $proofs->issue($proofContext, [
+                    'coordinates' => $validated['coordinates'], 'stop_labels' => $input['stop_labels'], 'result' => $result,
+                ]);
+                $saveEligible = $token !== null && $proofs->capabilities()['save']
+                    && (new RouteEstimateProvenanceReadinessService)->recordingEnabled();
+
+                return response()->json([
+                    'success' => true,
+                    'departure_context' => $departureContext,
+                    'save_eligible' => $saveEligible,
+                    'apply_eligible' => $saveEligible,
+                    ...($token === null ? [] : ['optimization_proof' => $token,
+                        'expected_estimate_revision' => $proofContext['expected_estimate_revision'],
+                        'intended_operation' => $proofContext['intended_operation'], 'target_status' => $proofContext['target_status']]),
+                    'calculation' => [
+                        'provider' => $result['provider'],
+                        'routing_context' => $result['routing_context'],
+                        'distance_meters' => $result['distance_meters'],
+                        'distance_km' => $distanceKm,
+                        'travel_time_seconds' => $result['travel_time_seconds'],
+                        'travel_time_minutes' => $travelTimeMinutes,
+                        'traffic_delay_seconds' => $result['traffic_delay_seconds'],
+                        'traffic_length_meters' => $result['traffic_length_meters'],
+                        'no_traffic_travel_time_seconds' => $result['no_traffic_travel_time_seconds'],
+                        'historic_traffic_travel_time_seconds' => $result['historic_traffic_travel_time_seconds'],
+                        'live_traffic_travel_time_seconds' => $result['live_traffic_travel_time_seconds'],
+                        'departure_time' => $result['departure_time'],
+                        'arrival_time' => $result['arrival_time'],
+                        'optimized_waypoints' => $result['optimized_waypoints'],
+                        'instructions' => array_values($result['instructions'] ?? []),
+                        'points' => $result['points'],
+                        ...($includeComparison ? ['comparison' => $comparison->compare($validated['coordinates'], $result, $departAt, $comparisonStartedAt)] : []),
+                    ],
+                ]);
+            }
             $optimizationProof = Crypt::encryptString(json_encode([
                 'user_id' => $request->user()->id,
                 'reservation_id' => $validated['reservation_id'] ?? null,
@@ -1805,6 +1788,192 @@ class RoutePlanController extends Controller
     }
 
     /** @param array<string, mixed> $validated */
+    private function guardPlannedRouteSave(Request $request, Reservation $reservation, ?RoutePlan $routePlan, array $validated): void
+    {
+        $proofData = null;
+        $proof = $request->input('optimization_proof');
+        if (is_string($proof) && $proof !== '') {
+            try {
+                $proofData = json_decode(Crypt::decryptString($proof), true, 512, JSON_THROW_ON_ERROR);
+            } catch (DecryptException|\JsonException) {
+                // Unmarked legacy saves retain their existing optional-proof behavior.
+            }
+        }
+
+        if (! $request->has('departure_mode') && ! $this->hasVersionedProofContext($proofData)) {
+            return;
+        }
+
+        $this->authorize($routePlan === null ? 'create' : 'update', $routePlan ?? RoutePlan::class);
+        $this->authorize('view', $reservation);
+        if ($routePlan !== null) {
+            $this->authorize('view', $routePlan);
+        }
+        if (config('services.tomtom.planned_departure_enabled', false) !== true) {
+            $this->plannedProofFailure('ROUTE_PLANNED_MODE_DISABLED', 'Planned departure calculations are disabled.');
+        }
+        if ($request->has('departure_mode') && $request->input('departure_mode') !== 'planned') {
+            $this->plannedProofFailure('ROUTE_DEPARTURE_MODE_UNSUPPORTED', 'The requested departure mode is unsupported.');
+        }
+        if ($proof === null || $proof === '') {
+            $this->plannedProofFailure('ROUTE_PLANNED_PROOF_REQUIRED', 'A departure-bound routing proof is required.');
+        }
+        if (! is_array($proofData)) {
+            $this->plannedProofFailure('ROUTE_PLANNED_PROOF_INVALID', 'The departure-bound routing proof could not be verified.');
+        }
+
+        if (app(PlannedRouteProofService::class)->capabilities()['save']) {
+            if ($routePlan === null) {
+                $this->plannedProofFailure('ROUTE_PLANNED_SAVE_UNSUPPORTED', 'Planned saving requires an existing Draft or Planned route.');
+            }
+            $this->provenanceService->verifyPlannedSave($routePlan, $reservation, (int) $request->user()->id,
+                $request->routeIs('route-planning.transition') ? 'transition' : 'update',
+                $request->input('expected_estimate_revision'), $this->plannedSubmission($request, $validated, $routePlan->status));
+
+            return;
+        }
+        $this->assertPlannedOptimizationProof($request, $reservation, $routePlan, $validated, $proofData);
+
+        $this->plannedProofFailure('ROUTE_PLANNED_SAVE_DISABLED', 'Planned departure saving is not enabled.');
+    }
+
+    private function hasVersionedProofContext(mixed $proofData): bool
+    {
+        return is_array($proofData) && (
+            array_key_exists('version', $proofData) || array_key_exists('proof_type', $proofData) ||
+            array_key_exists('departure_context', $proofData) || array_key_exists('schedule_fingerprint', $proofData)
+        );
+    }
+
+    /** Request values stay untrusted until canonical verification inside the writer locks. */
+    private function plannedSubmission(Request $request, array $validated, string $currentStatus): ?array
+    {
+        $token = $request->input('optimization_proof');
+        $versioned = false;
+        if (is_string($token) && strlen($token) <= PlannedRouteProofService::MAX_TOKEN_LENGTH) {
+            try {
+                $versioned = $this->hasVersionedProofContext(json_decode(Crypt::decryptString($token), true, 64, JSON_THROW_ON_ERROR));
+            } catch (DecryptException|\JsonException) {
+            }
+        }
+        if (! $request->has('departure_mode') && ! $versioned) {
+            return null;
+        }
+        $coordinates = [['latitude' => $validated['origin_latitude'] ?? null, 'longitude' => $validated['origin_longitude'] ?? null]];
+        foreach ($validated['stops'] ?? [] as $stop) {
+            $coordinates[] = ['latitude' => $stop['latitude'] ?? null, 'longitude' => $stop['longitude'] ?? null];
+        }
+        $coordinates[] = ['latitude' => $validated['destination_latitude'] ?? null, 'longitude' => $validated['destination_longitude'] ?? null];
+
+        return ['token' => is_string($token) ? $token : '', 'target_status' => $validated['status'] ?? $currentStatus,
+            'route' => ['coordinates' => array_map(fn (array $point): array => array_map(fn ($value) => is_numeric($value) ? (float) $value : $value, $point), $coordinates),
+                'stop_labels' => array_column($validated['stops'] ?? [], 'location'), 'stop_order' => $request->input('planned_stop_order'),
+                'provider' => 'TomTom', 'optimization_strategy' => $validated['optimization_strategy'] ?? null,
+                'estimated_distance' => isset($validated['estimated_distance']) ? (float) $validated['estimated_distance'] : null,
+                'estimated_time' => isset($validated['estimated_time']) ? (int) $validated['estimated_time'] : null]];
+    }
+
+    /**
+     * The caller must hold the existing Save locks and authorize the fresh reservation.
+     * Disabled-Save compatibility validation only; enabled operations use the canonical proof service.
+     *
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>  $proofData
+     */
+    private function assertPlannedOptimizationProof(Request $request, Reservation $reservation, ?RoutePlan $routePlan, array $validated, array $proofData): void
+    {
+        if (
+            ($proofData['version'] ?? null) !== 2 || ($proofData['proof_type'] ?? null) !== 'planned_route' ||
+            ! is_int($proofData['user_id'] ?? null) || $proofData['user_id'] !== $request->user()?->id ||
+            ! is_int($proofData['reservation_id'] ?? null) || $proofData['reservation_id'] !== $reservation->id ||
+            ! array_key_exists('route_id', $proofData) || $proofData['route_id'] !== $routePlan?->id ||
+            ($routePlan !== null && (int) $routePlan->reservation_id !== (int) $reservation->id) ||
+            ($proofData['provider'] ?? null) !== 'TomTom' ||
+            ! in_array($proofData['optimization_strategy'] ?? null, [
+                'TomTom Traffic-Aware Optimized', 'TomTom Traffic-Aware Multi-stop', 'TomTom Traffic-Aware Fastest',
+            ], true) ||
+            ! is_int($proofData['issued_at'] ?? null)
+        ) {
+            $this->plannedProofFailure('ROUTE_PLANNED_PROOF_INVALID', 'The departure-bound proof does not match this user, reservation or route context.');
+        }
+
+        $now = now()->timestamp;
+        if ($proofData['issued_at'] < $now - 1800 || $proofData['issued_at'] > $now + 60) {
+            $this->plannedProofFailure('ROUTE_PLANNED_PROOF_EXPIRED', 'The departure-bound proof has expired or has an invalid issue time.');
+        }
+
+        try {
+            $context = app(RouteDepartureContextService::class)->forPlannedDeparture(
+                $reservation->getRawOriginal('schedule_date'),
+                $reservation->getRawOriginal('schedule_time'),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            $this->plannedProofFailure('ROUTE_DEPARTURE_CONTEXT_INVALID', $exception->getMessage());
+        }
+
+        $fingerprint = hash('sha256', json_encode([
+            'reservation_id' => $reservation->id,
+            'schedule_date' => $reservation->getRawOriginal('schedule_date'),
+            'schedule_time' => $reservation->getRawOriginal('schedule_time'),
+        ], JSON_THROW_ON_ERROR));
+        if (! is_string($proofData['schedule_fingerprint'] ?? null) || ! hash_equals($fingerprint, $proofData['schedule_fingerprint'])) {
+            $this->plannedProofFailure('ROUTE_PLANNED_SCHEDULE_CHANGED', 'The reservation schedule changed after calculation. Calculate the route again.');
+        }
+        if (($proofData['departure_context'] ?? null) !== $context) {
+            $this->plannedProofFailure('ROUTE_PLANNED_DEPARTURE_MISMATCH', 'The proof departure assumptions do not match the authorized reservation schedule.');
+        }
+
+        $stops = $validated['stops'] ?? [];
+        $coordinates = $proofData['coordinates'] ?? null;
+        $order = $proofData['stop_order'] ?? null;
+        if (
+            ! is_array($stops) || ! array_is_list($stops) ||
+            ! is_array($coordinates) || ! array_is_list($coordinates) || count($coordinates) !== count($stops) + 2 ||
+            ! is_array($order) || ! array_is_list($order) || count($order) !== count($stops) ||
+            $request->input('planned_stop_order') !== $order ||
+            ($proofData['stop_labels'] ?? null) !== array_column($stops, 'location')
+        ) {
+            $this->plannedProofFailure('ROUTE_PLANNED_VALUES_MISMATCH', 'The submitted stop occurrences do not match the departure-bound proof.');
+        }
+        $indexes = $order;
+        foreach ($indexes as $index) {
+            if (! is_int($index)) {
+                $this->plannedProofFailure('ROUTE_PLANNED_VALUES_MISMATCH', 'The stop occurrence mapping is invalid.');
+            }
+        }
+        sort($indexes);
+        if ($indexes !== ($stops === [] ? [] : range(0, count($stops) - 1))) {
+            $this->plannedProofFailure('ROUTE_PLANNED_VALUES_MISMATCH', 'The stop occurrence mapping is invalid.');
+        }
+        $endpoints = [
+            ['latitude' => $proofData['origin_latitude'] ?? null, 'longitude' => $proofData['origin_longitude'] ?? null],
+            ['latitude' => $proofData['destination_latitude'] ?? null, 'longitude' => $proofData['destination_longitude'] ?? null],
+        ];
+        foreach ([...$coordinates, ...$endpoints] as $coordinate) {
+            foreach (['latitude' => 90, 'longitude' => 180] as $axis => $limit) {
+                $value = is_array($coordinate) ? ($coordinate[$axis] ?? null) : null;
+                if ((! is_int($value) && ! is_float($value)) || ! is_finite((float) $value) || abs($value) > $limit) {
+                    $this->plannedProofFailure('ROUTE_PLANNED_VALUES_MISMATCH', 'The proof coordinates are invalid.');
+                }
+            }
+        }
+        $distance = $proofData['estimated_distance'] ?? null;
+        if (
+            (! is_int($distance) && ! is_float($distance)) || ! is_finite((float) $distance) || $distance < 0 ||
+            ! is_int($proofData['estimated_time'] ?? null) || $proofData['estimated_time'] < 0 ||
+            ! isset($validated['estimated_time']) ||
+            ! $this->optimizationValuesMatch($proofData, $validated)
+        ) {
+            $this->plannedProofFailure('ROUTE_PLANNED_VALUES_MISMATCH', 'The route values do not match the departure-bound proof.');
+        }
+    }
+
+    private function plannedProofFailure(string $code, string $message): never
+    {
+        throw new HttpResponseException(response()->json(['success' => false, 'code' => $code, 'message' => $message], 422));
+    }
+
+    /** @param array<string, mixed> $validated */
     private function assertOptimizationProof(RoutePlan $routePlan, array $validated): void
     {
         $proof = $validated['optimization_proof'] ?? null;
@@ -1828,6 +1997,14 @@ class RoutePlanController extends Controller
             );
         }
 
+        if ($this->hasVersionedProofContext($proofData)) {
+            if (! app(PlannedRouteProofService::class)->capabilities()['save'] || request()->input('optimization_proof') !== $proof) {
+                throw new \Exception('The applied route optimization could not be verified. Run optimization again.');
+            }
+            $this->guardPlannedRouteSave(request(), $routePlan->reservation, $routePlan, $validated);
+
+            return;
+        }
         if (! is_array($proofData)) {
             throw new \Exception(
                 'The applied route optimization could not be verified. Run optimization again.'
@@ -1989,70 +2166,91 @@ class RoutePlanController extends Controller
             'estimated_time' => $routePlan->estimated_time,
             'optimization_strategy' => $routePlan->optimization_strategy,
             'optimization_score' => $routePlan->optimization_score,
+            'origin_latitude' => $routePlan->origin_latitude,
+            'origin_longitude' => $routePlan->origin_longitude,
+            'destination_latitude' => $routePlan->destination_latitude,
+            'destination_longitude' => $routePlan->destination_longitude,
+            'notes_hash' => $routePlan->notes === null ? null : hash('sha256', $routePlan->notes),
+            'purpose_hash' => $routePlan->purpose === null ? null : hash('sha256', $routePlan->purpose),
+            'stop_occurrences' => $routePlan->relationLoaded('stops') ? $routePlan->getRelation('stops')->map(fn (RouteStop $stop): array => [
+                'position' => $stop->stop_order, 'label_hash' => hash('sha256', $stop->location),
+                'latitude' => $stop->latitude, 'longitude' => $stop->longitude,
+            ])->all() : null,
+            ...array_key_exists('estimate_revision', $routePlan->getAttributes()) ? ['estimate_revision' => $routePlan->estimate_revision] : [],
         ];
     }
 
-    private function logRoutePlanUpdate(
-        RoutePlan $routePlan,
-        array $oldValues,
-        array $newValues
-    ): void {
-        $changedOldValues = [];
-        $changedNewValues = [];
-
-        foreach ($newValues as $field => $newValue) {
-            $oldValue =
-                $oldValues[$field] ?? null;
-
-            if ((string) $oldValue !== (string) $newValue) {
-                $changedOldValues[$field] =
-                    $oldValue;
-
-                $changedNewValues[$field] =
-                    $newValue;
+    /** @param array<string, mixed> $values @param list<array<string, mixed>> $stops */
+    private function saveRouteAndStops(RoutePlan $route, array $values, array $stops): void
+    {
+        $expected = (clone $route)->fill($values);
+        if (! $route->update($values)) {
+            throw new \RuntimeException('Route persistence failed.');
+        }
+        $route->stops()->delete();
+        foreach ($stops as $index => $stop) {
+            $created = $route->stops()->create([
+                'stop_order' => $index + 1, 'location' => $stop['location'],
+                'latitude' => $stop['latitude'] ?? null, 'longitude' => $stop['longitude'] ?? null,
+            ]);
+            if (! $created->exists) {
+                throw new \RuntimeException('Route stop persistence failed.');
             }
         }
-
-        if (empty($changedNewValues)) {
-            return;
+        $route->refresh()->load('stops');
+        foreach (array_keys($values) as $field) {
+            $actualValue = $field === 'departure_date' ? $route->departure_date?->format('Y-m-d') : $route->getAttribute($field);
+            $expectedValue = $field === 'departure_date' ? $expected->departure_date?->format('Y-m-d') : $expected->getAttribute($field);
+            if ($actualValue !== $expectedValue) {
+                throw new \RuntimeException('Persisted route fields do not match the requested state.');
+            }
         }
+        if ($route->stops->count() !== count($stops)) {
+            throw new \RuntimeException('Persisted stops do not match the requested occurrences.');
+        }
+        foreach ($route->stops as $index => $stop) {
+            $expectedStop = new RouteStop([
+                'stop_order' => $index + 1, 'location' => $stops[$index]['location'],
+                'latitude' => $stops[$index]['latitude'] ?? null, 'longitude' => $stops[$index]['longitude'] ?? null,
+            ]);
+            foreach (['stop_order', 'location', 'latitude', 'longitude'] as $field) {
+                if ($stop->getAttribute($field) !== $expectedStop->getAttribute($field)) {
+                    throw new \RuntimeException('Persisted stop identity does not match the requested state.');
+                }
+            }
+        }
+    }
 
-        $oldStatus =
-            $oldValues['status'] ?? null;
-        $newStatus =
-            $newValues['status'] ?? null;
-        $action = 'Updated';
-
-        if (
-            $oldStatus !== $newStatus &&
-            $newStatus
-        ) {
-            $action = match ($newStatus) {
-                'Planned' => 'Planned',
-                'Ready For Dispatch' => 'Ready For Dispatch',
-                'Completed' => 'Completed',
-                'Archived' => 'Archived',
-                'Draft' => 'Returned To Draft',
+    /** @param array<string, mixed> $context */
+    private function auditRouteOperation(Connection $connection, RoutePlan $before, RoutePlan $after, array $context): ?AuditLog
+    {
+        $old = $this->getRoutePlanAuditValues($before);
+        $new = $this->getRoutePlanAuditValues($after);
+        $changedOld = [];
+        $changedNew = [];
+        foreach ($new as $field => $value) {
+            if (($old[$field] ?? null) !== $value) {
+                $changedOld[$field] = $old[$field] ?? null;
+                $changedNew[$field] = $value;
+            }
+        }
+        if ($changedNew === [] && ! $context['protected']) {
+            return null;
+        }
+        $action = $context['event'] === 'restore' ? 'Restored'
+            : ($before->status !== $after->status ? match ($after->status) {
+                'Planned' => 'Planned', 'Ready For Dispatch' => 'Ready For Dispatch',
+                'Completed' => 'Completed', 'Archived' => 'Archived', 'Draft' => 'Returned To Draft',
                 default => 'Updated',
-            };
+            } : 'Updated');
+        if ($context['protected']) {
+            $changedNew['estimate_provenance'] = array_diff_key($context, ['protected' => true]);
         }
 
-        $description = match ($action) {
-            'Planned' => "Planned route {$routePlan->route_number}.",
-            'Ready For Dispatch' => "Marked route {$routePlan->route_number} as Ready For Dispatch.",
-            'Completed' => "Completed route {$routePlan->route_number}.",
-            'Archived' => "Archived route {$routePlan->route_number}.",
-            'Returned To Draft' => "Returned route {$routePlan->route_number} to Draft.",
-            default => "Updated route {$routePlan->route_number}.",
-        };
-
-        AuditLogService::log(
-            module: 'Route Planning',
-            action: $action,
-            description: $description,
-            record: $routePlan,
-            oldValues: $changedOldValues,
-            newValues: $changedNewValues
+        return AuditLogService::log(
+            module: 'Route Planning', action: $action,
+            description: $action.' route '.$after->route_number.'.', record: $after,
+            oldValues: $changedOld, newValues: $changedNew, connection: $connection->getName(),
         );
     }
 }

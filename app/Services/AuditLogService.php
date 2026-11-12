@@ -13,57 +13,43 @@ class AuditLogService
         string $description,
         ?Model $record = null,
         ?array $oldValues = null,
-        ?array $newValues = null
+        ?array $newValues = null,
+        ?string $connection = null,
     ): AuditLog {
         $user = auth()->user();
 
-        return AuditLog::create([
-            'user_id' =>
-                $user?->id,
+        return AuditLog::on($connection)->create([
+            'user_id' => $user?->id,
 
-            'user_name' =>
-                $user?->name,
+            'user_name' => $user?->name,
 
-            'user_email' =>
-                $user?->email,
+            'user_email' => $user?->email,
 
-            'user_role' =>
-                $user?->role,
+            'user_role' => $user?->role,
 
-            'module' =>
-                $module,
+            'module' => $module,
 
-            'action' =>
-                $action,
+            'action' => $action,
 
-            'description' =>
-                $description,
+            'description' => $description,
 
-            'auditable_type' =>
-                $record
+            'auditable_type' => $record
                     ? get_class($record)
                     : null,
 
-            'auditable_id' =>
-                $record?->getKey(),
+            'auditable_id' => $record?->getKey(),
 
-            'old_values' =>
-                self::sanitize($oldValues),
+            'old_values' => self::sanitize($oldValues),
 
-            'new_values' =>
-                self::sanitize($newValues),
+            'new_values' => self::sanitize($newValues),
 
-            'ip_address' =>
-                request()?->ip(),
+            'ip_address' => request()?->ip(),
 
-            'user_agent' =>
-                request()?->userAgent(),
+            'user_agent' => request()?->userAgent(),
 
-            'request_method' =>
-                request()?->method(),
+            'request_method' => request()?->method(),
 
-            'request_path' =>
-                request()?->path(),
+            'request_path' => request()?->path(),
         ]);
     }
 

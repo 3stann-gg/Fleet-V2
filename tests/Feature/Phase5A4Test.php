@@ -95,6 +95,303 @@ JS;
     return p54RunRouteJavaScript($setup."\n".$scenario);
 }
 
+function p54PlannedPreviewSetup(): string
+{
+    return <<<'JS'
+for(const id of ['routePlanningPage','routeDepartureContext','applyRouteOptimizationBtn'])nodes[id]??=new Element();
+nodes.routePlanningPage.dataset.plannedDepartureEnabled='true';
+context.FormData=class {};
+const departureContext={mode:'planned',depart_at:'2026-11-20T09:00:00+08:00',timezone:'Asia/Manila',source:'reservation_schedule',verification:'requested_context_only'};
+const plannedResponse=()=>({success:true,save_eligible:false,departure_context:{...departureContext},calculation:{
+    provider:'TomTom',routing_context:{depart_at:departureContext.depart_at},distance_meters:12000,travel_time_seconds:900,
+    distance_km:12,travel_time_minutes:15,traffic_delay_seconds:null,live_traffic_travel_time_seconds:null,
+    optimized_waypoints:[{providedIndex:0,optimizedIndex:0},{providedIndex:1,optimizedIndex:1},{providedIndex:2,optimizedIndex:2}],
+    points:[coordinates.origin,...coordinates.stops.map(s=>s.coordinate),coordinates.destination].map(p=>({latitude:p.lat,longitude:p.lng})),
+    optimization_proof:'unexpected-token-must-never-enter-legacy-state',
+}});
+const jsonResponse=(data,status=200)=>({ok:status>=200&&status<300,status,headers:{get:name=>name.toLowerCase()==='content-type'?'application/json':null},json:async()=>data});
+JS;
+}
+
+it('preserves server eligible planned evidence through preview apply and revision bound save', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+const originalRecord=record;
+context.fetchRoutePlanById=async id=>({...originalRecord(id),estimateRevision:7});
+await open();
+context.fetch=async(url,options)=>{
+    const payload=JSON.parse(options.body);
+    assert.equal(payload.route_id,11);assert.equal(payload.expected_estimate_revision,7);
+    assert.equal(payload.intended_operation,'transition');assert.equal(payload.target_status,'Planned');
+    assert.deepEqual(payload.stop_labels,stops.map(s=>s.location));
+    const response=plannedResponse();
+    return jsonResponse({...response,save_eligible:true,apply_eligible:true,optimization_proof:'opaque-server-proof',
+        expected_estimate_revision:7,intended_operation:'transition',target_status:'Planned'});
+};
+const before=context.getRouteStopsFromForm();
+const result=await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+assert.equal(result.optimizationProof,'opaque-server-proof');assert.equal(result.saveEligible,true);
+assert.deepEqual(plain(context.getRouteStopsFromForm()),plain(before));assert.equal(nodes.applyRouteOptimizationBtn.disabled,false);
+assert.equal(context.applyPendingRouteOptimization({showToast:false}),true);
+const data=context.collectRouteFormData();
+assert.equal(data.calculationMode,'planned');assert.equal(data.expectedEstimateRevision,7);
+assert.deepEqual(plain(data.plannedStopOrder),[0,1,2]);
+await context.saveRouteFromForm();assert.equal(saveCalls.length,1);
+const payload=saveCalls[0].payload;
+assert.equal(payload.departure_mode,'planned');assert.equal(payload.expected_estimate_revision,7);
+assert.equal(payload.optimization_proof,'opaque-server-proof');assert.equal(saveCalls[0].mode,'transition');
+console.log(JSON.stringify({passed:true}));
+JS))->toBe(['passed' => true]);
+});
+
+it('rejects planned frontend errors without fallback automatic saves or changed form data', function (int $status): void {
+    $scenario = 'const responseStatus='.$status.';'.p54PlannedPreviewSetup().<<<'JS'
+context.fetchRoutePlanById=async id=>({...record(id),estimateRevision:4});await open();
+const before=plain(context.collectRouteFormData());let requests=0;
+context.fetch=async()=>{requests++;return jsonResponse({success:false,code:responseStatus===429?'ROUTE_RATE_LIMITED':'ROUTE_PLANNED_PROOF_INVALID',message:'Synthetic rejection'},responseStatus);};
+await assert.rejects(context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false}),error=>error.status===responseStatus);
+assert.equal(requests,1);assert.equal(fallbackCalls,0);assert.equal(saveCalls.length,0);
+assert.deepEqual(plain(context.collectRouteFormData()),before);
+console.log(JSON.stringify({passed:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript($scenario))->toBe(['passed' => true]);
+})->with([409, 422, 429]);
+
+it('invalidates an applied planned result when programmatic form state changes', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+context.fetchRoutePlanById=async id=>({...record(id),estimateRevision:2});await open();
+context.fetch=async()=>jsonResponse({...plannedResponse(),save_eligible:true,apply_eligible:true,optimization_proof:'opaque-server-proof',expected_estimate_revision:2,intended_operation:'transition',target_status:'Planned'});
+await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+context.applyPendingRouteOptimization({showToast:false});
+nodes.routeStatus.value='Draft';
+assert.throws(()=>context.collectRouteFormData(),/inputs changed/);assert.equal(saveCalls.length,0);
+console.log(JSON.stringify({passed:true}));
+JS))->toBe(['passed' => true]);
+});
+
+it('handles stale planned saves without unhandled errors and permits explicit recalculation', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+context.fetchRoutePlanById=async id=>({...record(id),estimateRevision:2});await open();let requests=0;
+context.fetch=async()=>{requests++;return jsonResponse({...plannedResponse(),save_eligible:true,apply_eligible:true,optimization_proof:'opaque-server-proof',expected_estimate_revision:2,intended_operation:'transition',target_status:'Planned'});};
+await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+context.applyPendingRouteOptimization({showToast:false});
+nodes.routeNotes.value='Synthetic corrected notes';
+await context.saveRouteFromForm();
+assert.equal(saveCalls.length,0);assert.equal(requests,1);
+assert.match(notices.at(-1).message,/inputs changed/);assert.equal(notices.at(-1).type,'warning');
+const result=await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+assert.equal(requests,2);assert.equal(result.saveEligible,true);assert.equal(nodes.routeNotes.value,'Synthetic corrected notes');
+context.applyPendingRouteOptimization({showToast:false});await context.saveRouteFromForm();
+assert.equal(saveCalls.length,1);assert.equal(saveCalls[0].payload.notes,'Synthetic corrected notes');
+console.log(JSON.stringify({passed:true}));
+JS))->toBe(['passed' => true]);
+});
+
+it('renders the strict server departure gate without enabling planned controls', function (mixed $gate): void {
+    if ($gate !== 'missing') {
+        config(['services.tomtom.planned_departure_enabled' => $gate]);
+    }
+    $expected = $gate === true ? 'true' : 'false';
+    $this->actingAs(User::factory()->create(['role' => 'fleet_manager']))->get(route('route-planning'))
+        ->assertSuccessful()->assertSee('data-planned-departure-enabled="'.$expected.'"', false)
+        ->assertSee('id="routeDepartureContext"', false)
+        ->assertSee('Calculation departure assumptions were not recorded for this saved route.');
+})->with(['missing', false, null, 'true', 1, true]);
+
+it('keeps planned preview metrics labels and Manila departure independent from browser timezone', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+await open();const before=plain(context.collectRouteFormData()),beforeLast=plain(vm.runInContext('routeLastOptimization',context));let requests=0;
+context.fetch=async(url,options)=>{requests++;const payload=JSON.parse(options.body);assert.equal(payload.departure_mode,'planned');assert.equal(payload.reservation_id,11);assert.equal('depart_at' in payload,false);return jsonResponse(plannedResponse());};
+const preview=await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+assert.equal(requests,1);assert.equal(preview.optimizationProof,null);assert.equal(preview.saveEligible,false);
+assert.deepEqual(plain(context.collectRouteFormData()),before);assert.deepEqual(plain(vm.runInContext('routeLastOptimization',context)),beforeLast);assert.equal(vm.runInContext('routePendingOptimization',context),null);
+for(const timezone of ['UTC','America/New_York','Asia/Tokyo']){process.env.TZ=timezone;context.renderRouteDepartureContext(preview);assert.match(nodes.routeDepartureContext.innerHTML,/2026-11-20 09:00:00 \(Asia\/Manila, UTC\+08:00\)/);}
+assert.match(nodes.routeDepartureContext.innerHTML,/not independent confirmation/);assert.match(nodes.routeDepartureContext.innerHTML,/traffic estimates are unavailable/);
+assert.equal(nodes.applyRouteOptimizationBtn.disabled,true);assert.equal(preview.routingMetrics.distanceMeters,12000);assert.equal(preview.routingMetrics.travelTimeSeconds,900);
+assert.equal(nodes.routeDepartureContext.hidden,false);assert.deepEqual(plain(preview.optimizedStops),stops.map(s=>s.location));
+assert.throws(()=>context.applyPendingRouteOptimization(),e=>e.code==='ROUTE_PLANNED_SAVE_DISABLED');
+assert.throws(()=>context.applyOptimizationToForm(preview),e=>e.code==='ROUTE_PLANNED_SAVE_DISABLED');
+await context.saveRouteFromForm();assert.equal(saveCalls.length,0);assert.deepEqual(plain(context.collectRouteFormData()),before);
+assert.throws(()=>context.buildUpdateRoutePayload(preview),e=>e.code==='ROUTE_PLANNED_SAVE_DISABLED');
+assert.throws(()=>context.buildCreateRoutePayload(preview),e=>e.code==='ROUTE_PLANNED_SAVE_DISABLED');
+process.stdout.write(JSON.stringify({serverContext:true,timezoneIndependent:true,noLegacyMutation:true,noApplyOrSave:true}));
+JS))->toBe(['serverContext' => true, 'timezoneIndependent' => true, 'noLegacyMutation' => true, 'noApplyOrSave' => true]);
+});
+
+it('blocks planned API saves before network access even if called without the modal', function (): void {
+    expect(p54RunRouteJavaScript(<<<'JS'
+for(const save of [()=>context.createRoutePlanApi({departure_mode:'planned'}),()=>context.updateRoutePlanApi(1,{saveEligible:false}),()=>context.transitionRoutePlanApi(1,{departureContext:{mode:'planned'}})])await assert.rejects(save,e=>e.code==='ROUTE_PLANNED_SAVE_DISABLED');
+process.stdout.write(JSON.stringify({allSavePathsBlocked:true}));
+JS))->toBe(['allSavePathsBlocked' => true]);
+});
+
+it('fails closed on absent malformed or mismatched planned server metadata', function (string $field, mixed $value): void {
+    $scenario = <<<'JS'
+const body=plannedResponse();let target=body;const keys=FIELD.split('.');for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=VALUE;
+context.fetch=async()=>jsonResponse(body);let draws=0;context.drawRouteOnLeaflet=()=>draws++;
+await assert.rejects(context.calculateRouteWithTraffic({origin:'O',destination:'D',reservationId:1,calculationMode:'planned'},{draw:true,silent:true}),e=>e.code==='ROUTE_DEPARTURE_CONTEXT_INVALID');
+assert.equal(fallbackCalls,0);assert.equal(draws,0);
+process.stdout.write(JSON.stringify({noFallback:true,noNavigationMutation:true}));
+JS;
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().str_replace(['FIELD', 'VALUE'], [json_encode($field), json_encode($value)], $scenario)))
+        ->toBe(['noFallback' => true, 'noNavigationMutation' => true]);
+})->with([
+    ['departure_context', null], ['departure_context.mode', 'current'],
+    ['departure_context.timezone', 'UTC'], ['departure_context.source', 'browser_clock'],
+    ['departure_context.verification', 'provider_verified'],
+    ['departure_context.depart_at', '2026-11-20T09:00:00'],
+    ['departure_context.depart_at', '2026-02-30T09:00:00+08:00'],
+    ['departure_context.depart_at', '0000-01-01T09:00:00+08:00'],
+    ['calculation.routing_context.depart_at', '2026-11-20T10:00:00+08:00'],
+    ['save_eligible', true], ['calculation.points.0.latitude', null], ['calculation.provider', 'Unknown provider'],
+]);
+
+it('keeps planned preview metric absence distinct from legitimate zero values', function (mixed $metric, mixed $expected): void {
+    $scenario = <<<'JS'
+const body=plannedResponse();for(const key of ['distance_meters','travel_time_seconds','distance_km','travel_time_minutes'])body.calculation[key]=METRIC;
+context.fetch=async()=>jsonResponse(body);
+const preview=await context.optimizeRouteWithOsrm({origin:'O',destination:'D',reservationId:1,stops:stops.map(s=>s.location),calculationMode:'planned'});
+assert.equal(preview.estimatedDistance,EXPECTED);assert.equal(preview.estimatedTravelTimeMinutes,EXPECTED);
+context.renderRouteDepartureContext(preview);assert.match(nodes.routeDepartureContext.innerHTML,EXPECTED===null?/Unavailable/:/0 km/);
+assert.equal(preview.optimizationProof,null);assert.equal(preview.saveEligible,false);
+process.stdout.write(JSON.stringify({metricContract:true}));
+JS;
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().str_replace(['METRIC', 'EXPECTED'], [json_encode($metric), json_encode($expected)], $scenario)))
+        ->toBe(['metricContract' => true]);
+})->with([[null, null], [0, 0], [-1, null], ['invalid', null]]);
+
+it('does not expose planned preview requests while the server-rendered gate is off', function (): void {
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().<<<'JS'
+for(const gate of [undefined,'false',true,'1']){nodes.routePlanningPage.dataset.plannedDepartureEnabled=gate;await assert.rejects(context.requestTomTomRoute(coordinates,{calculationMode:'planned',reservationId:1}),e=>e.code==='ROUTE_PLANNED_MODE_DISABLED');}
+context.renderRouteDepartureContext({calculationMode:'planned',departureContext});assert.equal(nodes.routeDepartureContext.hidden,true);
+process.stdout.write(JSON.stringify({strictGate:true,noRequests:true}));
+JS))->toBe(['strictGate' => true, 'noRequests' => true]);
+});
+
+it('propagates semantic routing errors without fallback or automatic Save continuation', function (int $status, string $code, string $message): void {
+    $scenario = <<<'JS'
+await open();let requests=0,draws=0;const before=plain(context.collectRouteFormData());
+context.drawRouteOnLeaflet=()=>draws++;context.fetch=async()=>{requests++;return jsonResponse({code:CODE,message:MESSAGE},STATUS);};
+await context.saveRouteFromForm();assert.equal(saveCalls.length,0);assert.equal(fallbackCalls,0);assert.equal(draws,0);assert.deepEqual(plain(context.collectRouteFormData()),before);
+assert.equal(requests,1);assert.equal(notices.filter(n=>n.type==='warning').length,1);
+if(STATUS!==429){await assert.rejects(context.calculateTrafficRouteFromCoordinates(coordinates),e=>e.status===STATUS&&e.code===CODE);assert.equal(requests,2);}
+assert.equal(fallbackCalls,0);assert.equal(notices.some(n=>n.message.includes('INTERNAL_SECRET')),false);
+process.stdout.write(JSON.stringify({semanticFailure:true,noFallbackOrSave:true,formPreserved:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().str_replace(['STATUS', 'CODE', 'MESSAGE'], [json_encode($status), json_encode($code), json_encode($message)], $scenario)))
+        ->toBe(['semanticFailure' => true, 'noFallbackOrSave' => true, 'formPreserved' => true]);
+})->with([
+    [403, 'FORBIDDEN', 'INTERNAL_SECRET'], [404, 'NOT_FOUND', 'INTERNAL_SECRET'],
+    [422, 'ROUTE_DEPARTURE_CONTEXT_INVALID', 'The planned departure must not be in the past.'],
+    [422, 'ROUTE_DEPARTURE_CONTEXT_INVALID', 'Invalid schedule'],
+    [422, 'ROUTE_PLANNED_MODE_DISABLED', 'INTERNAL_SECRET'],
+    [422, 'ROUTE_PLANNED_SCHEDULE_CHANGED', 'INTERNAL_SECRET'],
+    [422, 'ROUTE_PLANNED_PROOF_INVALID', 'INTERNAL_SECRET'],
+    [422, 'ROUTE_PLANNED_DEPARTURE_MISMATCH', 'INTERNAL_SECRET'],
+    [422, 'ROUTE_PLANNED_SAVE_DISABLED', 'INTERNAL_SECRET'],
+    [429, 'ROUTE_RATE_LIMITED', 'Too many requests'],
+]);
+
+it('preserves semantic HTTP status when an error response has malformed JSON content', function (int $status): void {
+    $scenario = <<<'JS'
+for(const body of [null,'unexpected text',[]]){
+    context.fetch=async()=>jsonResponse(body,STATUS);
+    await assert.rejects(context.calculateTrafficRouteFromCoordinates(coordinates),e=>e.status===STATUS);
+}
+assert.equal(fallbackCalls,0);process.stdout.write(JSON.stringify({statusPreserved:true,noFallback:true}));
+JS;
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().str_replace('STATUS', json_encode($status), $scenario)))
+        ->toBe(['statusPreserved' => true, 'noFallback' => true]);
+})->with([403, 404, 422]);
+
+it('prevents unexpected planned results from continuing an automatic legacy Save', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+await open();const before=plain(context.collectRouteFormData()),beforeLast=plain(vm.runInContext('routeLastOptimization',context));
+context.optimizeRouteWithOsrm=async()=>({...validResult(),saveEligible:false,calculationMode:'planned',departureContext,optimizationProof:null});
+await context.saveRouteFromForm();assert.equal(saveCalls.length,0);assert.deepEqual(plain(context.collectRouteFormData()),before);
+assert.deepEqual(plain(vm.runInContext('routeLastOptimization',context)),beforeLast);assert.equal(nodes.applyRouteOptimizationBtn.disabled,true);
+process.stdout.write(JSON.stringify({noAutomaticSave:true,noLegacyMetrics:true}));
+JS))->toBe(['noAutomaticSave' => true, 'noLegacyMetrics' => true]);
+});
+
+it('invalidates planned previews and ignores responses from older form generations', function (string $change): void {
+    $scenario = <<<'JS'
+await open();const calculation=deferred();context.optimizeRouteWithOsrm=()=>calculation.promise;
+const older=context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false}).catch(e=>e.message);
+if(CHANGE==='form'){context.closeRouteFormModal();await open('edit',22);}
+else if(CHANGE==='reservation'){nodes.routeReservation.value='22';context.resetRouteOptimization();}
+else if(CHANGE==='schedule'){nodes.routeDepartureTime.value='10:00';context.resetRouteOptimization();}
+else{const input=nodes.routeStopsList.querySelectorAll('input.route-stop-input')[0];input.dataset.latitude='15';context.invalidateRouteComparisonContext();}
+const before=state(),noticeCount=notices.length;
+calculation.resolve({...validResult(),calculationMode:'planned',saveEligible:false,departureContext});await older;
+assert.deepEqual(state(),before);assert.equal(vm.runInContext('routePlannedPreview',context),null);assert.equal(notices.length,noticeCount);assert.equal(saveCalls.length,0);
+process.stdout.write(JSON.stringify({oldResponseIgnored:true,contextInvalidated:true}));
+JS;
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().str_replace('CHANGE', json_encode($change), $scenario)))
+        ->toBe(['oldResponseIgnored' => true, 'contextInvalidated' => true]);
+})->with(['form', 'reservation', 'schedule', 'coordinate']);
+
+it('keeps legacy provider fallback honest without inventing saved departure provenance', function (): void {
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().<<<'JS'
+context.requestTomTomRoute=async()=>{throw Object.assign(new Error('Provider unavailable'),{status:502});};
+const fallback=await context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true});
+assert.equal(fallback.provider,'OSRM');assert.equal(fallback.distanceKm,12);assert.equal(fallback.durationMinutes,15);assert.deepEqual(plain(fallback.routeCoordinates),coordinates);
+context.renderRouteDepartureContext(fallback);assert.match(nodes.routeDepartureContext.innerHTML,/not recorded/);assert.match(nodes.routeDepartureContext.innerHTML,/OSRM fallback/);assert.match(nodes.routeDepartureContext.innerHTML,/traffic estimates.*unavailable/);
+context.fetch=async()=>jsonResponse({success:false,message:'Provider unavailable'},502);
+await assert.rejects(context.calculateTrafficRouteFromCoordinates(coordinates,{calculationMode:'planned',reservationId:1}),e=>e.status===502);assert.equal(fallbackCalls,1);
+process.stdout.write(JSON.stringify({legacyFallback:true,requestedContextNotInvented:true}));
+JS))->toBe(['legacyFallback' => true, 'requestedContextNotInvented' => true]);
+});
+
+it('preserves reordered planned stop occurrences and clears their preview after input changes', function (): void {
+    expect(p54RunRouteSaveJavaScript(p54PlannedPreviewSetup().<<<'JS'
+await open();stops[1].coordinate={...stops[0].coordinate};
+context.fetch=async()=>{const body=plannedResponse();body.calculation.optimized_waypoints=[{providedIndex:0,optimizedIndex:1},{providedIndex:1,optimizedIndex:2},{providedIndex:2,optimizedIndex:0}];return jsonResponse(body);};
+const before=plain(context.collectRouteFormData());const preview=await context.runRouteOptimization({calculationMode:'planned',showSuccessToast:false});
+assert.deepEqual(plain(preview.routeCoordinates.stops),[stops[2],stops[0],stops[1]]);assert.deepEqual(plain(context.collectRouteFormData()),before);
+assert.equal(preview.routeCoordinates.stops[1],stops[0]);assert.equal(preview.routeCoordinates.stops[2],stops[1]);
+context.invalidateRouteComparisonContext();assert.equal(vm.runInContext('routePlannedPreview',context),null);assert.equal(nodes.routeDepartureContext.hidden,true);
+context.closeRouteFormModal();await open('edit',22);assert.equal(vm.runInContext('routePlannedPreview',context),null);assert.equal(nodes.routeDepartureContext.hidden,true);
+process.stdout.write(JSON.stringify({occurrencesPreserved:true,previewInvalidated:true,noFormMutation:true}));
+JS))->toBe(['occurrencesPreserved' => true, 'previewInvalidated' => true, 'noFormMutation' => true]);
+});
+
+it('rejects unexpected planned envelopes on legacy requests rather than treating them as provider fallback', function (): void {
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().<<<'JS'
+context.fetch=async()=>jsonResponse(plannedResponse());
+for(const calculate of [()=>context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true}),()=>context.calculateTrafficRouteFromCoordinates(coordinates)])await assert.rejects(calculate,e=>e.code==='ROUTE_DEPARTURE_CONTEXT_INVALID');
+assert.equal(fallbackCalls,0);process.stdout.write(JSON.stringify({noLegacyContinuation:true}));
+JS))->toBe(['noLegacyContinuation' => true]);
+});
+
+it('ties planned comparisons to their canonical departure and existing freshness timeout', function (): void {
+    expect(p54RunRouteJavaScript(p54PlannedPreviewSetup().<<<'JS'
+nodes.routeComparisonEnabled=new Element();nodes.routeComparisonEnabled.checked=true;nodes.routeComparisonSummary=new Element();
+const source=[coordinates.origin,...stops.map(s=>s.coordinate),coordinates.destination].map(p=>({latitude:p.lat,longitude:p.lng}));
+const comparison={status:'available',provider:'TomTom',routing_context:{api_version:'1',route_type:'fastest',travel_mode:'car',traffic:true,depart_at:departureContext.depart_at},expires_at:new Date(Date.now()+30000).toISOString(),source_coordinates:source,candidate_order:[0,1,2],original:{distance_meters:12000,travel_time_seconds:900},candidate:{distance_meters:12000,travel_time_seconds:900},difference:{distance_meters:0,distance_meters_percent:0,travel_time_seconds:0,travel_time_seconds_percent:0}};
+const preview={provider:'TomTom',calculationMode:'planned',saveEligible:false,departureContext,originalRouteCoordinates:coordinates,routeCoordinates:coordinates,comparison};
+context.renderRouteComparison(preview);assert.match(nodes.routeComparisonSummary.innerHTML,/Comparable estimates/);
+context.renderRouteComparison({...preview,departureContext:{...departureContext,depart_at:'2026-11-20T10:00:00+08:00'}});assert.doesNotMatch(nodes.routeComparisonSummary.innerHTML,/Comparable estimates/);
+let expire;context.window.setTimeout=(callback,delay)=>{assert.ok(delay>0&&delay<=30000);expire=callback;};
+context.renderRouteComparison(preview);expire();assert.match(nodes.routeComparisonSummary.innerHTML,/expired/);
+context.renderRouteDepartureContext({...preview,provider:'<script>invalid</script>'});assert.doesNotMatch(nodes.routeDepartureContext.innerHTML,/<script>/);
+context.renderRouteDepartureContext({...preview,departureContext:null});assert.match(nodes.routeDepartureContext.innerHTML,/Departure assumptions unavailable/);assert.doesNotMatch(nodes.routeDepartureContext.innerHTML,/server-authorized/);
+process.stdout.write(JSON.stringify({sharedContext:true,freshnessPreserved:true,escapedPresentation:true}));
+JS))->toBe(['sharedContext' => true, 'freshnessPreserved' => true, 'escapedPresentation' => true]);
+});
+
+it('preserves legacy fallback Save rounding while keeping missing metrics distinct from zero', function (): void {
+    expect(p54RunRouteJavaScript(<<<'JS'
+context.requestTomTomRoute=async()=>{throw Object.assign(new Error('Provider failure'),{status:502});};
+for(const [distance,duration,expectedDistance,expectedDuration] of [[12000,901,12,16],[0,0,0,0],[null,null,null,null],[-1,-1,null,null]]){
+    context.requestOsrmRoute=async()=>({distance,duration,distanceMeters:99999,durationSeconds:99999,geometry});
+    const result=await context.calculateRouteWithTraffic({origin:'O',destination:'D'},{draw:false,silent:true});
+    assert.equal(result.distanceKm,expectedDistance);assert.equal(result.durationMinutes,expectedDuration);
+    assert.deepEqual(plain(result.routeCoordinates),coordinates);
+}
+process.stdout.write(JSON.stringify({saveRoundingPreserved:true,zeroAndMissingDistinct:true}));
+JS))->toBe(['saveRoundingPreserved' => true, 'zeroAndMissingDistinct' => true]);
+});
+
 it('abandons stale automatic Save calculations without touching the current form', function (string $outcome, string $change) {
     $scenario = <<<'JS'
 const outcome=OUTCOME,change=CHANGE;

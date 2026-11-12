@@ -37,6 +37,14 @@ return [
 
     'tomtom' => [
         'key' => env('TOMTOM_API_KEY'),
+        'planned_departure_enabled' => env('FLEET_ROUTE_PLANNED_DEPARTURE_ENABLED', false) === true,
+        'planned_proof_issuance_enabled' => env('FLEET_ROUTE_PLANNED_PROOF_ISSUANCE_ENABLED', false) === true,
+        'planned_apply_enabled' => env('FLEET_ROUTE_PLANNED_APPLY_ENABLED', false) === true,
+        'planned_save_enabled' => env('FLEET_ROUTE_PLANNED_SAVE_ENABLED', false) === true,
+    ],
+
+    'route_estimates' => [
+        'provenance_recording_enabled' => env('FLEET_ROUTE_PROVENANCE_RECORDING_ENABLED', false) === true,
     ],
 
     'gemini' => [

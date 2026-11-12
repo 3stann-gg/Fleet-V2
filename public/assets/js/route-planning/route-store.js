@@ -16,6 +16,70 @@ const HIMS_FLEET_ROUTE_TEMPLATES_KEY = "himsFleetRouteTemplates";
 const ROUTE_TEMPLATES_MAX = 30;
 const routeTrafficCooldowns = { all: 0, comparison: 0 };
 
+function isPlannedRoutePreviewEnabled() {
+    return document.getElementById("routePlanningPage")?.dataset.plannedDepartureEnabled === "true";
+}
+
+function normalizeRouteDepartureContext(context) {
+    if (!context || context.mode !== "planned" || context.timezone !== "Asia/Manila" ||
+        context.source !== "reservation_schedule" || context.verification !== "requested_context_only" ||
+        typeof context.depart_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/.test(context.depart_at)) return null;
+    const instant = Date.parse(context.depart_at);
+    if (context.depart_at.startsWith("0000-") || !Number.isFinite(instant) || new Date(instant + 8 * 3600000).toISOString().slice(0, 19) !== context.depart_at.slice(0, 19)) return null;
+    return Object.freeze({mode: "planned", depart_at: context.depart_at, timezone: context.timezone,
+        source: context.source, verification: context.verification});
+}
+
+function isNonSaveEligibleRouteResult(result) {
+    const planned = result?.calculationMode === "planned" || result?.departure_mode === "planned" ||
+        result?.departureContext?.mode === "planned" || result?.departure_context?.mode === "planned";
+    const eligible = result?.saveEligible === true && result?.applyEligible === true &&
+        typeof result?.optimizationProof === "string" && result.optimizationProof.length > 0 && result.optimizationProof.length <= 10000 &&
+        Number.isSafeInteger(result.expectedEstimateRevision) && result.expectedEstimateRevision >= 0 &&
+        normalizeRouteDepartureContext(result.departureContext) !== null && result?.provider === "TomTom" && result.fallback !== true;
+    return result?.saveEligible === false || result?.save_eligible === false || (planned && !eligible);
+}
+
+function routeSemanticError(code, message, status = 422) {
+    return Object.assign(new Error(message), {code, status});
+}
+
+function isRouteSemanticError(error) {
+    return [400, 401, 403, 404, 409, 419, 422, 429].includes(error?.status) ||
+        /^ROUTE_(PLANNED_|DEPARTURE_)/.test(error?.code || "");
+}
+
+function routeRequestErrorMessage(status, data) {
+    const messages = {
+        ROUTE_PLANNED_MODE_DISABLED: "Planned departure previews are not enabled.",
+        ROUTE_PLANNED_SAVE_DISABLED: "Planned departure previews cannot be saved yet.",
+        ROUTE_DEPARTURE_MODE_UNSUPPORTED: "This departure calculation mode is not supported.",
+        ROUTE_DEPARTURE_CONTEXT_INVALID: data.message === "The planned departure must not be in the past."
+            ? "The reservation departure is already past. Check its schedule before calculating again."
+            : "The reservation schedule is missing or invalid. Check its date and time.",
+        ROUTE_PLANNED_SCHEDULE_CHANGED: "The reservation schedule changed. Calculate the route again.",
+        ROUTE_PLANNED_PROOF_REQUIRED: "A verified planned routing result is required. Planned saving is not enabled yet.",
+        ROUTE_PLANNED_PROOF_INVALID: "The planned routing result could not be verified. Calculate it again.",
+        ROUTE_PLANNED_PROOF_EXPIRED: "The planned routing result expired. Calculate it again.",
+        ROUTE_PLANNED_DEPARTURE_MISMATCH: "The departure assumptions no longer match. Calculate the route again.",
+        ROUTE_PLANNED_VALUES_MISMATCH: "The route details no longer match the calculation. Calculate it again.",
+    };
+    if (status === 403) return "You do not have permission to use this route or reservation.";
+    if (status === 404) return "This route or reservation is unavailable.";
+    if (status === 409) return "This route changed. Reload it and calculate again before saving.";
+    if (status === 401 || status === 419) return "Your session needs refreshing. Sign in again before continuing.";
+    if (Object.prototype.hasOwnProperty.call(messages, data.code)) return messages[data.code];
+    if (status === 422) return "Please check the route information before trying again.";
+    if (status >= 500) return "The routing request is temporarily unavailable. Please try again later.";
+    return "Route Planning request failed. Please try again.";
+}
+
+function assertLegacyRouteSaveEligible(result) {
+    if (isNonSaveEligibleRouteResult(result)) {
+        throw routeSemanticError("ROUTE_PLANNED_SAVE_DISABLED", "Planned departure previews cannot be applied or saved yet.");
+    }
+}
+
 function routeTrafficRetryDeadline(header, fallbackSeconds) {
     const now = Date.now();
     const value = String(header || "").trim();
@@ -198,6 +262,7 @@ async function routeApiRequest(url, options = {}) {
         }
     }
 
+    if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
     if (!response.ok) {
         if (isTrafficRequest && response.status === 429) {
             const scope = data.scope === "comparison" ? "comparison" : "all";
@@ -214,9 +279,10 @@ async function routeApiRequest(url, options = {}) {
             throw error;
         }
         const error = new Error(
-            data.message || "Route Planning request failed.",
+            routeRequestErrorMessage(response.status, data),
         );
         error.status = response.status;
+        error.code = typeof data.code === "string" ? data.code : null;
         error.errors = data.errors || {};
         error.data = data;
 
@@ -422,6 +488,8 @@ function normalizeRouteApiRecord(raw, index = 0) {
     */
 
         id: raw.id === null || raw.id === undefined ? "" : String(raw.id),
+        estimateRevision: raw.estimate_revision === undefined || raw.estimate_revision === null ? null : Number(raw.estimate_revision),
+        estimateProvenance: raw.estimate_provenance || null,
         reservationId:
             raw.reservation_id === null || raw.reservation_id === undefined
                 ? ""
@@ -899,7 +967,7 @@ async function fetchRoutePlanById(id) {
         return null;
     }
 
-    const record = normalizeRouteApiRecord(data.routePlan, 0);
+    const record = normalizeRouteApiRecord({...data.routePlan, estimate_provenance: data.estimateProvenance}, 0);
 
     if (record) {
         upsertRouteRecord(record);
@@ -945,6 +1013,7 @@ async function fetchNextRouteNumber() {
  * according to RoutePlanController.
  */
 async function createRoutePlanApi(payload) {
+    assertLegacyRouteSaveEligible(payload);
     const data = await routeApiRequest(ROUTE_API_BASE, {
         method: "POST",
 
@@ -969,6 +1038,7 @@ async function createRoutePlanApi(payload) {
  * Update Route Plan.
  */
 async function updateRoutePlanApi(id, payload) {
+    assertLegacyRouteSaveEligible(payload);
     const data = await routeApiRequest(
         `${ROUTE_API_BASE}/${encodeURIComponent(id)}`,
         {
@@ -996,6 +1066,7 @@ async function updateRoutePlanApi(id, payload) {
  * Save a Route Plan through its dedicated lifecycle workflow.
  */
 async function transitionRoutePlanApi(id, payload) {
+    assertLegacyRouteSaveEligible(payload);
     const data = await routeApiRequest(
         `${ROUTE_API_BASE}/${encodeURIComponent(id)}/transition`,
         {
@@ -1028,7 +1099,7 @@ async function archiveRoutePlanApi(id) {
         {
             method: "POST",
 
-            body: JSON.stringify({}),
+            body: JSON.stringify({expected_estimate_revision: getRouteRecordById(id)?.estimateRevision ?? undefined}),
         },
     );
 
@@ -1068,7 +1139,7 @@ async function restoreRoutePlanApi(id) {
         {
             method: "POST",
 
-            body: JSON.stringify({}),
+            body: JSON.stringify({expected_estimate_revision: getRouteRecordById(id)?.estimateRevision ?? undefined}),
         },
     );
 

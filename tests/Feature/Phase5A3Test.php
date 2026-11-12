@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\RoutePlanController;
 use App\Models\AuditLog;
 use App\Models\Dispatch;
 use App\Models\Driver;
@@ -11,13 +12,727 @@ use App\Models\Vehicle;
 use App\Policies\ReservationPolicy;
 use App\Policies\RoutePlanPolicy;
 use App\Services\RouteComparisonService;
+use App\Services\RouteDepartureContextService;
 use App\Services\TomTomRoutingService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
+
+function p53EnablePlannedDeparture(string $clock = '2026-11-12T00:00:00Z'): void
+{
+    config(['services.tomtom.planned_departure_enabled' => true, 'services.tomtom.key' => 'synthetic-planned-test-only']);
+    app()->instance(RouteDepartureContextService::class, new RouteDepartureContextService(
+        fn (): CarbonImmutable => CarbonImmutable::parse($clock),
+    ));
+    Http::preventStrayRequests();
+}
+
+function p53PlannedPayload(Reservation $reservation, bool $comparison = false): array
+{
+    return [...p53ComparisonPayload($reservation), 'departure_mode' => 'planned', 'include_comparison' => $comparison];
+}
+
+/** @return array<string, mixed> */
+function p53DepartureProofData(User $user, Reservation $reservation, ?RoutePlan $route, array $payload): array
+{
+    $reservation = $reservation->fresh();
+    $stops = $payload['stops'] ?? [];
+
+    return [
+        'version' => 2, 'proof_type' => 'planned_route',
+        'user_id' => $user->id, 'reservation_id' => $reservation->id, 'route_id' => $route?->id,
+        'issued_at' => now()->timestamp, 'provider' => 'TomTom',
+        'departure_context' => app(RouteDepartureContextService::class)->forPlannedDeparture(
+            $reservation->getRawOriginal('schedule_date'), $reservation->getRawOriginal('schedule_time'),
+        ),
+        'schedule_fingerprint' => hash('sha256', json_encode([
+            'reservation_id' => $reservation->id,
+            'schedule_date' => $reservation->getRawOriginal('schedule_date'),
+            'schedule_time' => $reservation->getRawOriginal('schedule_time'),
+        ], JSON_THROW_ON_ERROR)),
+        'origin_latitude' => $payload['origin_latitude'], 'origin_longitude' => $payload['origin_longitude'],
+        'destination_latitude' => $payload['destination_latitude'], 'destination_longitude' => $payload['destination_longitude'],
+        'coordinates' => [
+            ['latitude' => $payload['origin_latitude'], 'longitude' => $payload['origin_longitude']],
+            ...array_map(fn (array $stop): array => ['latitude' => $stop['latitude'], 'longitude' => $stop['longitude']], $stops),
+            ['latitude' => $payload['destination_latitude'], 'longitude' => $payload['destination_longitude']],
+        ],
+        'stop_order' => $stops === [] ? [] : range(0, count($stops) - 1),
+        'stop_labels' => array_column($stops, 'location'),
+        'estimated_distance' => $payload['estimated_distance'], 'estimated_time' => $payload['estimated_time'],
+        'optimization_strategy' => $payload['optimization_strategy'],
+    ];
+}
+
+function p53EncryptDepartureProof(array $proof): string
+{
+    return Crypt::encryptString(json_encode($proof, JSON_THROW_ON_ERROR));
+}
+
+/** @return array<string, mixed> */
+function p53RouteSaveSnapshot(): array
+{
+    return [
+        'routes' => DB::table('route_plans')->orderBy('id')->get()->toJson(),
+        'stops' => DB::table('route_stops')->orderBy('id')->get()->toJson(),
+        'reservations' => DB::table('reservations')->orderBy('id')->get()->toJson(),
+        'audits' => DB::table('audit_logs')->orderBy('id')->get()->toJson(),
+        'dispatches' => Dispatch::query()->orderBy('id')->get()->toJson(),
+    ];
+}
+
+it('validates an internal departure-bound proof under Save locks without enabling planned saving', function (bool $create, bool $repeated): void {
+    p53EnablePlannedDeparture();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = $create ? null : p53Route($reservation);
+    $stops = $repeated ? [
+        ['location' => 'Synthetic repeated stop', 'latitude' => 14.601, 'longitude' => 121.001],
+        ['location' => 'Synthetic repeated stop', 'latitude' => 14.601, 'longitude' => 121.001],
+    ] : [];
+    $payload = p53UpdatePayload(['stops' => $stops]);
+    $proof = p53DepartureProofData($user, $reservation, $route, $payload);
+    if ($repeated) {
+        $proof['stop_order'] = [1, 0];
+    }
+    $request = Illuminate\Http\Request::create('/', 'POST', ['planned_stop_order' => $proof['stop_order']]);
+    $request->setUserResolver(fn (): User => $user);
+    $before = p53RouteSaveSnapshot();
+    DB::transaction(function () use ($request, $reservation, $route, $payload, $proof): void {
+        $lockedRoute = $route === null ? null : RoutePlan::query()->lockForUpdate()->findOrFail($route->id);
+        $lockedReservation = Reservation::query()->lockForUpdate()->findOrFail($reservation->id);
+        (new ReflectionMethod(RoutePlanController::class, 'assertPlannedOptimizationProof'))->invoke(
+            app(RoutePlanController::class), $request, $lockedReservation, $lockedRoute, $payload, $proof,
+        );
+    });
+    expect(p53RouteSaveSnapshot())->toBe($before)
+        ->and($proof['departure_context']['depart_at'])->toBe('2026-11-20T09:00:00+08:00')
+        ->and(count($proof['coordinates']))->toBe(count($stops) + 2);
+})->with([[true, false], [false, false], [true, true], [false, true]]);
+
+it('rejects departure-bound proof replay and malformed authenticated fields', function (string $field, mixed $value, string $code): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00', 'priority' => 'routine']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => []]);
+    $proof = p53DepartureProofData($user, $reservation, $route, $payload);
+    if ($field === 'issued_at') {
+        $value += now()->timestamp;
+    }
+    data_set($proof, $field, $value);
+    $payload['optimization_proof'] = p53EncryptDepartureProof($proof);
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', $code);
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([
+    ['version', 1, 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['version', '2', 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['proof_type', 'legacy_route', 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['user_id', 999999, 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['reservation_id', 999999, 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['route_id', null, 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['route_id', 999999, 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['provider', 'OSRM', 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['optimization_strategy', 'Unknown strategy', 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['issued_at', -1801, 'ROUTE_PLANNED_PROOF_EXPIRED'],
+    ['issued_at', 61, 'ROUTE_PLANNED_PROOF_EXPIRED'],
+    ['departure_context.depart_at', '2026-11-20T10:00:00+08:00', 'ROUTE_PLANNED_DEPARTURE_MISMATCH'],
+    ['departure_context.mode', 'current', 'ROUTE_PLANNED_DEPARTURE_MISMATCH'],
+    ['departure_context.timezone', 'UTC', 'ROUTE_PLANNED_DEPARTURE_MISMATCH'],
+    ['departure_context.verification', 'provider_verified', 'ROUTE_PLANNED_DEPARTURE_MISMATCH'],
+    ['schedule_fingerprint', 'wrong', 'ROUTE_PLANNED_SCHEDULE_CHANGED'],
+    ['coordinates.0.latitude', 15, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['coordinates.0.latitude', null, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['coordinates.0.latitude', '14.5995', 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['coordinates.0.latitude', 91, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['coordinates', [], 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['origin_latitude', 'invalid', 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['origin_longitude', [121], 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['destination_latitude', null, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['destination_longitude', 181, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['estimated_distance', null, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['estimated_time', 28.5, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+    ['estimated_distance', -1, 'ROUTE_PLANNED_VALUES_MISMATCH'],
+]);
+
+it('keeps planned saves disabled on create ordinary update and readiness transition even for a valid internal token', function (string $action, string $priority, bool $marked): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00', 'priority' => $priority]);
+    $route = $action === 'store' ? null : p53Route($reservation);
+    $payload = p53UpdatePayload(['reservation_id' => $reservation->id, 'planned_stop_order' => []]);
+    if ($marked) {
+        $payload['departure_mode'] = 'planned';
+    }
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user);
+    $response = $action === 'update'
+        ? $this->putJson(route('route-planning.update', $route), $payload)
+        : $this->postJson(route('route-planning.'.$action, $route), $payload);
+    $response->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_SAVE_DISABLED');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([
+    ['store', 'routine', true], ['store', 'emergency', false],
+    ['update', 'routine', false], ['update', 'emergency', true],
+    ['transition', 'routine', true], ['transition', 'emergency', false],
+]);
+
+it('rechecks changed invalid and past schedules under the existing Save boundary', function (array $change, string $code): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00', 'priority' => 'routine']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => []]);
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    DB::table('reservations')->where('id', $reservation->id)->update($change);
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', $code);
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([
+    [['schedule_time' => '10:00:00'], 'ROUTE_PLANNED_SCHEDULE_CHANGED'],
+    [['schedule_date' => '2026-11-21'], 'ROUTE_PLANNED_SCHEDULE_CHANGED'],
+    [['schedule_time' => ''], 'ROUTE_DEPARTURE_CONTEXT_INVALID'],
+    [['schedule_time' => '24:00:00'], 'ROUTE_DEPARTURE_CONTEXT_INVALID'],
+    [['schedule_date' => ''], 'ROUTE_DEPARTURE_CONTEXT_INVALID'],
+    [['schedule_date' => '2026-11-11'], 'ROUTE_DEPARTURE_CONTEXT_INVALID'],
+]);
+
+it('detects a controlled schedule change after route locking but before the authoritative reservation read', function (): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => []]);
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    $level = DB::transactionLevel();
+    $triggered = false;
+    RoutePlan::retrieved(function (RoutePlan $retrieved) use ($route, $reservation, $level, &$triggered): void {
+        if (! $triggered && $retrieved->id === $route->id && DB::transactionLevel() > $level) {
+            $triggered = true;
+            DB::table('reservations')->where('id', $reservation->id)->update(['schedule_time' => '10:00:00']);
+        }
+    });
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_SCHEDULE_CHANGED');
+    expect($triggered)->toBeTrue()->and(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+});
+
+it('rejects missing tampered and legacy tokens on explicitly planned saves', function (string $kind, string $code): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => []]);
+    $payload['optimization_proof'] = match ($kind) {
+        'missing' => null,
+        'tampered' => substr(p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload)), 0, -5).'AAAAA',
+        'malformed' => Crypt::encryptString('not json'),
+        'legacy' => p53OptimizationProof($user, $reservation, $payload),
+    };
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', $code);
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([
+    ['missing', 'ROUTE_PLANNED_PROOF_REQUIRED'], ['tampered', 'ROUTE_PLANNED_PROOF_INVALID'],
+    ['malformed', 'ROUTE_PLANNED_PROOF_INVALID'], ['legacy', 'ROUTE_PLANNED_PROOF_INVALID'],
+]);
+
+it('binds repeated label and coordinate occurrences to their explicit original indices', function (string $change): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $stop = ['location' => 'Repeated synthetic stop', 'latitude' => 14.601, 'longitude' => 121.001];
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => [1, 0], 'stops' => [$stop, $stop]]);
+    $proof = p53DepartureProofData($user, $reservation, $route, $payload);
+    $proof['stop_order'] = [1, 0];
+    $payload['optimization_proof'] = p53EncryptDepartureProof($proof);
+    if ($change === 'index order') {
+        $payload['planned_stop_order'] = [0, 1];
+    } elseif ($change === 'missing occurrence') {
+        array_pop($payload['stops']);
+    } elseif ($change === 'label') {
+        $payload['stops'][0]['location'] = 'Different synthetic stop';
+    } elseif ($change === 'coordinate') {
+        $payload['stops'][0]['latitude'] = 14.602;
+    } else {
+        $proof['stop_order'] = $payload['planned_stop_order'] = [0, 0];
+        $payload['optimization_proof'] = p53EncryptDepartureProof($proof);
+    }
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_VALUES_MISMATCH');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with(['index order', 'missing occurrence', 'label', 'coordinate', 'duplicate index']);
+
+it('keeps the planned Save gate disabled by default without changing an ordinary manual save', function (): void {
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['priority' => 'routine']);
+    $route = p53Route($reservation);
+    $before = p53RouteSaveSnapshot();
+    expect(config('services.tomtom.planned_departure_enabled', false))->toBeFalse();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), p53UpdatePayload(['departure_mode' => 'planned']))
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_MODE_DISABLED');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    $this->putJson(route('route-planning.update', $route), p53UpdatePayload(['notes' => 'Synthetic legacy manual correction']))
+        ->assertSuccessful()->assertJsonPath('routePlan.notes', 'Synthetic legacy manual correction');
+    Http::assertNothingSent();
+});
+
+it('rechecks resource authorization before revealing planned proof or schedule failures', function (string $resource): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation();
+    $route = p53Route($reservation);
+    if ($resource === 'reservation') {
+        $policy = new class extends ReservationPolicy
+        {
+            public function view(User $user, Reservation $reservation): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(Reservation::class, $policy::class);
+    } else {
+        $policy = new class extends RoutePlanPolicy
+        {
+            public function view(User $user, RoutePlan $routePlan): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(RoutePlan::class, $policy::class);
+    }
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), p53UpdatePayload(['departure_mode' => 'planned']))
+        ->assertForbidden()->assertJsonMissingPath('code');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with(['reservation', 'route']);
+
+it('does not let versioned tokens enter the legacy proof validator', function (): void {
+    p53EnablePlannedDeparture();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload();
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    $this->actingAs($user);
+    expect(fn () => (new ReflectionMethod(RoutePlanController::class, 'assertOptimizationProof'))->invoke(
+        app(RoutePlanController::class), $route, $payload,
+    ))->toThrow(Exception::class, 'The applied route optimization could not be verified.');
+});
+
+it('rejects cross-user departure-bound tokens without permitting a Driver Save', function (string $role): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $owner = p53User();
+    $otherUser = User::factory()->create(['role' => $role]);
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => []]);
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($owner, $reservation, $route, $payload));
+    $before = p53RouteSaveSnapshot();
+    $response = $this->actingAs($otherUser)->putJson(route('route-planning.update', $route), $payload);
+    if ($role === 'driver') {
+        $response->assertForbidden();
+    } else {
+        $response->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_PROOF_INVALID');
+    }
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with(['driver', 'dispatcher']);
+
+it('requires explicit valid metrics even when a departure-bound token contains legitimate zero values', function (bool $missing): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['departure_mode' => 'planned', 'planned_stop_order' => [], 'estimated_distance' => 0, 'estimated_time' => 0]);
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    if ($missing) {
+        $payload['estimated_time'] = null;
+    }
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', $missing ? 'ROUTE_PLANNED_VALUES_MISMATCH' : 'ROUTE_PLANNED_SAVE_DISABLED');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+})->with([true, false]);
+
+it('keeps versioned Save attempts disabled when the request omits the planned marker', function (): void {
+    Http::fake();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2099-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload(['planned_stop_order' => []]);
+    $payload['optimization_proof'] = p53EncryptDepartureProof(p53DepartureProofData($user, $reservation, $route, $payload));
+    $before = p53RouteSaveSnapshot();
+    $this->actingAs($user)->putJson(route('route-planning.update', $route), $payload)
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_MODE_DISABLED');
+    expect(p53RouteSaveSnapshot())->toBe($before);
+    Http::assertNothingSent();
+});
+
+it('rejects non-finite departure-bound metrics and endpoint coordinates before numeric coercion', function (string $field, float $value): void {
+    p53EnablePlannedDeparture();
+    $user = p53User();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $payload = p53UpdatePayload();
+    $proof = p53DepartureProofData($user, $reservation, $route, $payload);
+    data_set($proof, $field, $value);
+    $request = Illuminate\Http\Request::create('/', 'POST', ['planned_stop_order' => []]);
+    $request->setUserResolver(fn (): User => $user);
+    $before = p53RouteSaveSnapshot();
+    try {
+        DB::transaction(function () use ($request, $reservation, $route, $payload, $proof): void {
+            $lockedRoute = RoutePlan::query()->lockForUpdate()->findOrFail($route->id);
+            $lockedReservation = Reservation::query()->lockForUpdate()->findOrFail($reservation->id);
+            (new ReflectionMethod(RoutePlanController::class, 'assertPlannedOptimizationProof'))->invoke(
+                app(RoutePlanController::class), $request, $lockedReservation, $lockedRoute, $payload, $proof,
+            );
+        });
+        $this->fail('Invalid proof values must be rejected.');
+    } catch (HttpResponseException $exception) {
+        expect($exception->getResponse()->getStatusCode())->toBe(422)
+            ->and($exception->getResponse()->getData(true)['code'])->toBe('ROUTE_PLANNED_VALUES_MISMATCH');
+    }
+    expect(p53RouteSaveSnapshot())->toBe($before);
+})->with([
+    ['estimated_distance', INF], ['estimated_distance', NAN],
+    ['origin_latitude', INF], ['destination_longitude', NAN],
+    ['coordinates.0.latitude', -INF],
+]);
+
+it('keeps planned routing disabled unless its server configuration is exactly true', function (mixed $gate): void {
+    if ($gate !== 'missing') {
+        config(['services.tomtom.planned_departure_enabled' => $gate]);
+    } else {
+        expect(config('services.tomtom.planned_departure_enabled', false))->toBeFalse();
+    }
+    Http::fake();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        'departure_mode' => 'planned', 'planned_departure_enabled' => true,
+        'reservation_id' => 999999, 'include_comparison' => true,
+    ])->assertUnprocessable()->assertJsonPath('code', 'ROUTE_PLANNED_MODE_DISABLED');
+    Http::assertNothingSent();
+})->with(['missing', false, null, 'true', 1]);
+
+it('calculates preview-only planned routes with one authoritative context and unchanged provider assumptions', function (string $role, bool $comparison, array $order): void {
+    p53EnablePlannedDeparture();
+    $clockReads = 0;
+    app()->instance(RouteDepartureContextService::class, new RouteDepartureContextService(function () use (&$clockReads): CarbonImmutable {
+        $clockReads++;
+
+        return CarbonImmutable::parse('2026-11-12T00:00:00Z');
+    }));
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $before = $reservation->fresh()->getAttributes();
+    $audits = AuditLog::count();
+    $requests = [];
+    Http::fake(function (Request $request) use (&$requests, $order) {
+        $requests[] = $request;
+        $body = p53ComparisonBody($request, $order, $request['computeBestOrder'] === 'true' ? 12000.5 : 15000.75, 900.5);
+        $body['routes'][0]['summary']['departureTime'] = '2026-11-20T09:00:00+08:00';
+        $body['routes'][0]['summary']['arrivalTime'] = '2026-11-20T09:15:00+08:00';
+
+        return Http::response($body);
+    });
+    $payload = p53PlannedPayload($reservation, $comparison);
+    $payload['coordinates'] = [
+        ['latitude' => 14.5995, 'longitude' => 120.9842],
+        ['latitude' => 14.601, 'longitude' => 121.001],
+        ['latitude' => 14.601, 'longitude' => 121.001],
+        ['latitude' => 14.603, 'longitude' => 121.003],
+        ['latitude' => 14.6091, 'longitude' => 121.0223],
+    ];
+    $response = $this->actingAs(User::factory()->create(['role' => $role]))
+        ->postJson(route('route-planning.traffic-route'), $payload)
+        ->assertSuccessful()->assertJsonPath('save_eligible', false)
+        ->assertJsonPath('departure_context', [
+            'mode' => 'planned', 'depart_at' => '2026-11-20T09:00:00+08:00', 'timezone' => 'Asia/Manila',
+            'source' => 'reservation_schedule', 'verification' => 'requested_context_only',
+        ])->assertJsonPath('calculation.provider', 'TomTom')
+        ->assertJsonPath('calculation.routing_context.depart_at', '2026-11-20T09:00:00+08:00')
+        ->assertJsonPath('calculation.departure_time', '2026-11-20T09:00:00+08:00')
+        ->assertJsonPath('calculation.arrival_time', '2026-11-20T09:15:00+08:00')
+        ->assertJsonPath('calculation.distance_meters', 12000)
+        ->assertJsonPath('calculation.travel_time_seconds', 900)
+        ->assertJsonMissingPath('optimization_proof')->assertJsonMissingPath('points')
+        ->assertJsonMissingPath('estimated_distance')->assertJsonMissingPath('calculation.optimization_proof');
+    foreach ($requests as $request) {
+        expect($request['departAt'])->toBe('2026-11-20T09:00:00+08:00')
+            ->and($request['traffic'])->toBe('true')->and($request['routeType'])->toBe('fastest')
+            ->and($request['travelMode'])->toBe('car')->and($request['computeTravelTimeFor'])->toBe('all');
+    }
+    Http::assertSentCount($comparison ? 2 : 1);
+    expect($requests[0]['computeBestOrder'])->toBe('true')
+        ->and($clockReads)->toBe(1)
+        ->and(count($response->json('calculation.points')))->toBe(5)
+        ->and($reservation->fresh()->getAttributes())->toBe($before)
+        ->and(AuditLog::count())->toBe($audits)->and(RoutePlan::count())->toBe(0)->and(Dispatch::count())->toBe(0);
+    if ($comparison) {
+        expect($requests[1]['computeBestOrder'])->toBe('false')
+            ->and($response->json('calculation.comparison.status'))->toBe('available')
+            ->and($response->json('calculation.comparison.candidate_order'))->toBe($order)
+            ->and($response->json('calculation.comparison.difference.distance_meters'))->toEqual(3000.25)
+            ->and($response->json('calculation.comparison.order_changed'))->toBe($order !== [0, 1, 2]);
+    } else {
+        $response->assertJsonMissingPath('calculation.comparison');
+    }
+    $expected = [$payload['coordinates'][0], ...array_map(fn (int $index): array => $payload['coordinates'][$index + 1], $order), $payload['coordinates'][4]];
+    expect($response->json('calculation.points'))->toEqual($expected);
+})->with([
+    ['fleet_manager', false, [0, 1, 2]],
+    ['dispatcher', false, [2, 0, 1]],
+    ['fleet_manager', true, [0, 1, 2]],
+    ['dispatcher', true, [2, 0, 1]],
+]);
+
+it('preserves unflagged legacy routing and proof contracts even when the planned gate is enabled', function (bool $comparison): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation();
+    $payload = p53ComparisonPayload($reservation);
+    $payload['include_comparison'] = $comparison;
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [0, 1, 2], 12000, 900)));
+    $user = p53User();
+    $response = $this->actingAs($user)->postJson(route('route-planning.traffic-route'), $payload)
+        ->assertSuccessful()->assertJsonPath('provider', 'TomTom')->assertJsonStructure(['points', 'optimization_proof'])
+        ->assertJsonMissingPath('departure_context')->assertJsonMissingPath('calculation')->assertJsonMissingPath('save_eligible');
+    $proof = json_decode(Crypt::decryptString($response->json('optimization_proof')), true, flags: JSON_THROW_ON_ERROR);
+    expect(array_keys($proof))->toBe(['user_id', 'reservation_id', 'issued_at', 'origin_latitude', 'origin_longitude', 'destination_latitude', 'destination_longitude', 'coordinates', 'estimated_distance', 'estimated_time', 'optimization_strategy', 'provider']);
+    Http::assertSent(fn (Request $request): bool => $request['departAt'] === $payload['depart_at']);
+    Http::assertSentCount($comparison ? 2 : 1);
+})->with([true, false]);
+
+it('ignores forged browser departure values in planned mode', function (mixed $forged): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [0, 1, 2], 12000, 900)));
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), [
+        ...p53PlannedPayload($reservation), 'depart_at' => $forged,
+    ])->assertSuccessful()->assertJsonPath('departure_context.depart_at', '2026-11-20T09:00:00+08:00');
+    Http::assertSent(fn (Request $request): bool => $request['departAt'] === '2026-11-20T09:00:00+08:00');
+    Http::assertSentCount(1);
+})->with(['not a date', '2099-01-01T09:00:00-05:00', '2000-01-01T00:00:00Z', [['client' => 'timestamp']], null]);
+
+it('rejects invalid or past authoritative planned schedule fields without any provider request', function (array $schedule): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    DB::table('reservations')->where('id', $reservation->id)->update($schedule);
+    Http::fake();
+    $audits = AuditLog::count();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation, true))
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_DEPARTURE_CONTEXT_INVALID')
+        ->assertJsonMissingPath('calculation')->assertJsonMissingPath('optimization_proof');
+    Http::assertNothingSent();
+    expect(AuditLog::count())->toBe($audits)->and(RoutePlan::count())->toBe(0);
+})->with([
+    [['schedule_date' => '']], [['schedule_time' => '']], [['schedule_date' => '2027-02-29']],
+    [['schedule_date' => '2026-11-20T09:00:00']], [['schedule_time' => '09:00:00-05:00']],
+    [['schedule_time' => '24:00:00']], [['schedule_date' => '2026-11-11']],
+]);
+
+it('preserves exact current boundary midnight and stored second precision in planned API contexts', function (string $clock, string $date, string $time, string $expected): void {
+    p53EnablePlannedDeparture($clock);
+    $reservation = p53Reservation(['schedule_date' => $date, 'schedule_time' => $time]);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [0, 1, 2], 12000, 900)));
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation))
+        ->assertSuccessful()->assertJsonPath('departure_context.depart_at', $expected);
+    Http::assertSent(fn (Request $request): bool => $request['departAt'] === $expected);
+})->with([
+    ['2026-11-20T01:00:00Z', '2026-11-20', '09:00', '2026-11-20T09:00:00+08:00'],
+    ['2026-11-19T16:00:00Z', '2026-11-20', '00:00:00', '2026-11-20T00:00:00+08:00'],
+    ['2026-11-12T00:00:00Z', '2028-02-29', '09:00:45', '2028-02-29T09:00:45+08:00'],
+]);
+
+it('requires route management before resolving planned reservation data', function (string $role): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $this->actingAs(User::factory()->create(['role' => $role]))->postJson(route('route-planning.traffic-route'), [
+        'departure_mode' => 'planned', 'reservation_id' => 999999,
+    ])->assertForbidden();
+    Http::assertNothingSent();
+})->with(['driver', 'it_admin', 'department_head']);
+
+it('preserves reservation and associated route policy denials for planned previews', function (bool $denyReservation): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation();
+    p53Route($reservation);
+    if ($denyReservation) {
+        $policy = new class extends ReservationPolicy
+        {
+            public function view(User $user, Reservation $reservation): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(Reservation::class, $policy::class);
+    } else {
+        $policy = new class extends RoutePlanPolicy
+        {
+            public function view(User $user, RoutePlan $routePlan): bool
+            {
+                return false;
+            }
+        };
+        Gate::policy(RoutePlan::class, $policy::class);
+    }
+    Http::fake();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation))
+        ->assertForbidden()->assertJsonMissingPath('departure_context');
+    Http::assertNothingSent();
+})->with([true, false]);
+
+it('rejects absent and nonexistent planned reservations without provider calls', function (bool $missing): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $payload = ['departure_mode' => 'planned', 'coordinates' => [['latitude' => 14, 'longitude' => 121], ['latitude' => 15, 'longitude' => 122]]];
+    if (! $missing) {
+        $payload['reservation_id'] = 999999;
+    }
+    $response = $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), $payload);
+    if ($missing) {
+        $response->assertUnprocessable()->assertJsonValidationErrors('reservation_id');
+    } else {
+        $response->assertNotFound();
+    }
+    Http::assertNothingSent();
+})->with([true, false]);
+
+it('rejects unsupported departure modes without contacting providers', function (mixed $mode): void {
+    p53EnablePlannedDeparture();
+    Http::fake();
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), ['departure_mode' => $mode])
+        ->assertUnprocessable()->assertJsonPath('code', 'ROUTE_DEPARTURE_MODE_UNSUPPORTED');
+    Http::assertNothingSent();
+})->with(['current', 'legacy', 'PLANNED', true, [['planned']], null]);
+
+it('isolates planned provider and comparison failures without proof fallback or writes', function (string $scenario): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    Http::fake(function (Request $request) use ($scenario) {
+        $candidate = $request['computeBestOrder'] === 'true';
+        if (($scenario === 'candidate failure' && $candidate) || ($scenario === 'baseline failure' && ! $candidate)) {
+            return Http::response(['message' => 'Synthetic provider unavailable'], 503);
+        }
+        $body = p53ComparisonBody($request, [0, 1, 2], 12000, 900);
+        if (($scenario === 'candidate missing metrics' && $candidate) || ($scenario === 'baseline missing metrics' && ! $candidate)) {
+            unset($body['routes'][0]['summary']['travelTimeInSeconds']);
+        }
+        if ($scenario === 'invalid mapping' && $candidate) {
+            $body['optimizedWaypoints'] = [['providedIndex' => 0, 'optimizedIndex' => 0]];
+        }
+
+        return Http::response($body);
+    });
+    $response = $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation, true));
+    if (in_array($scenario, ['candidate failure', 'invalid mapping'], true)) {
+        $response->assertStatus(502)->assertJsonMissingPath('calculation');
+        Http::assertSentCount(1);
+    } else {
+        $response->assertSuccessful()->assertJsonPath('save_eligible', false)
+            ->assertJsonPath('calculation.comparison.status', 'unavailable')
+            ->assertJsonPath('calculation.comparison.difference', null);
+        Http::assertSentCount($scenario === 'candidate missing metrics' ? 1 : 2);
+        if ($scenario === 'candidate missing metrics') {
+            $response->assertJsonPath('calculation.travel_time_minutes', null);
+        }
+    }
+    $response->assertJsonMissingPath('optimization_proof')->assertJsonMissingPath('calculation.optimization_proof');
+    expect(RoutePlan::count())->toBe(0)->and(Dispatch::count())->toBe(0);
+})->with(['candidate failure', 'baseline failure', 'candidate missing metrics', 'baseline missing metrics', 'invalid mapping']);
+
+it('does not issue planned previews a legacy proof or permit emergency readiness promotion from their metrics', function (): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    $route = p53Route($reservation);
+    $before = $route->fresh()->getAttributes();
+    $audits = AuditLog::count();
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [], 12000, 900)));
+    $payload = p53PlannedPayload($reservation);
+    $payload['coordinates'] = [$payload['coordinates'][0], $payload['coordinates'][4]];
+    $preview = $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), $payload)
+        ->assertSuccessful()->assertJsonPath('save_eligible', false)->assertJsonMissingPath('optimization_proof');
+    $this->postJson(route('route-planning.transition', $route), $preview->json())->assertUnprocessable();
+    $this->postJson(route('route-planning.transition', $route), p53UpdatePayload([
+        'estimated_distance' => $preview->json('calculation.distance_km'),
+        'estimated_time' => (int) ceil($preview->json('calculation.travel_time_minutes')),
+    ]))->assertUnprocessable();
+    expect($route->fresh()->getAttributes())->toBe($before)->and(AuditLog::count())->toBe($audits);
+    Http::assertSentCount(1);
+});
+
+it('keeps the existing shared limiter ahead of enabled planned previews', function (): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [0, 1, 2], 12000, 900)));
+    $user = p53User();
+    $this->freezeTime();
+    for ($i = 0; $i < 20; $i++) {
+        $this->actingAs($user)->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation))->assertSuccessful();
+    }
+    $this->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation))
+        ->assertStatus(429)->assertJsonPath('code', 'ROUTE_RATE_LIMITED')->assertJsonPath('scope', 'all')->assertHeader('Retry-After', '60');
+    Http::assertSentCount(20);
+});
+
+it('keeps the six-comparison limiter ahead of enabled planned previews', function (): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody($request, [0, 1, 2], 12000, 900)));
+    $this->actingAs(p53User());
+    $this->freezeTime();
+    for ($i = 0; $i < 6; $i++) {
+        $this->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation, true))
+            ->assertSuccessful()->assertJsonPath('save_eligible', false);
+    }
+    $this->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation, true))
+        ->assertStatus(429)->assertJsonPath('code', 'ROUTE_RATE_LIMITED')->assertJsonPath('scope', 'comparison')->assertHeader('Retry-After', '60');
+    Http::assertSentCount(12);
+});
+
+it('preserves signed planned comparison differences without claiming verified savings', function (): void {
+    p53EnablePlannedDeparture();
+    $reservation = p53Reservation(['schedule_date' => '2026-11-20', 'schedule_time' => '09:00:00']);
+    Http::fake(fn (Request $request) => Http::response(p53ComparisonBody(
+        $request, [2, 0, 1], $request['computeBestOrder'] === 'true' ? 15000 : 12000, 900,
+    )));
+    $this->actingAs(p53User())->postJson(route('route-planning.traffic-route'), p53PlannedPayload($reservation, true))
+        ->assertSuccessful()->assertJsonPath('calculation.comparison.difference.distance_meters', -3000)
+        ->assertJsonPath('calculation.comparison.difference.distance_meters_percent', -25)
+        ->assertJsonPath('departure_context.verification', 'requested_context_only')
+        ->assertJsonMissingPath('optimization_proof');
+    Http::assertSentCount(2);
+});
 
 it('allows twenty shared routing attempts and rejects variations and new sessions for the same user', function () {
     $this->freezeTime();

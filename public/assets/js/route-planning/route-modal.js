@@ -16,6 +16,7 @@ let routeModalsInitialized = false;
 
 let routeFormMode = "add"; // add | edit
 let routeEditingId = null;
+let routeObservedEstimateRevision = null;
 let routeDeleteTargetId = null;
 
 /* ==========================================
@@ -128,6 +129,7 @@ function canDuplicateRoute() {
 
 let routeLastOptimization = null;
 let routePendingOptimization = null;
+let routePlannedPreview = null;
 
 let routeOptimizationGeneration = 0;
 let routeOptimizationRequestPending = false;
@@ -176,7 +178,7 @@ function refreshRouteTrafficCooldownControls() {
 }
 
 function routeCalculationFingerprint() {
-    const ids = ["routeReservation", "routeOrigin", "routeDestination", "routeDepartureDate", "routeDepartureTime", "routeVehicle", "routeDriver"];
+    const ids = ["routeReservation", "routeOrigin", "routeDestination", "routeDepartureDate", "routeDepartureTime", "routeVehicle", "routeDriver", "routeStatus", "routeDepartment", "routeNotes", "routePurpose"];
     return JSON.stringify({
         mode: routeFormMode,
         id: routeEditingId,
@@ -188,6 +190,43 @@ function routeCalculationFingerprint() {
         stopCoordinates: Array.from(document.getElementById("routeStopsList")?.querySelectorAll("input.route-stop-input") || []).map(input => [input.dataset.latitude ?? null, input.dataset.longitude ?? null]),
         comparison: document.getElementById("routeComparisonEnabled")?.checked === true,
     });
+}
+
+function clearRouteDepartureContext() {
+    routePlannedPreview = null;
+    const panel = document.getElementById("routeDepartureContext");
+    if (panel) { panel.hidden = true; panel.innerHTML = ""; }
+}
+
+function renderRouteDepartureContext(result) {
+    const panel = document.getElementById("routeDepartureContext");
+    if (!panel) return;
+    const planned = result?.calculationMode === "planned" || isNonSaveEligibleRouteResult(result);
+    if (planned && !isPlannedRoutePreviewEnabled()) { panel.hidden = true; panel.innerHTML = ""; return; }
+    const context = normalizeRouteDepartureContext(result?.departureContext);
+    const escape = value => escapeRouteHtml(String(value));
+    panel.hidden = false;
+    if (!planned) {
+        panel.innerHTML = "<strong>Calculation departure assumptions</strong><p>Departure assumptions were not recorded for this legacy calculation.</p>" +
+            (result?.provider === "OSRM" ? "<p>OSRM fallback uses the supplied stop order. Departure-sensitive traffic estimates and verified optimization savings are unavailable.</p>" : "");
+        return;
+    }
+    if (!context) {
+        panel.innerHTML = "<strong>Departure assumptions unavailable</strong><p>The server departure context is invalid or missing. Apply and Save remain unavailable.</p>";
+        return;
+    }
+    const departure = context.depart_at.slice(0, 10) + " " + context.depart_at.slice(11, 19) + " (Asia/Manila, UTC+08:00)";
+    const metric = (value, unit) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? escape(value) + unit : "Unavailable";
+    panel.innerHTML = (isNonSaveEligibleRouteResult(result) ? "<strong>Planned departure preview — cannot be applied or saved</strong>" : "<strong>Planned departure — proof-bound Apply and Save eligible</strong>") +
+        "<p>Requested departure: " + escape(departure) + "</p><p>Provider: " + escape(result.provider || "Unavailable") + "</p>" +
+        "<p>Distance: " + metric(result.estimatedDistance ?? result.distanceKm, " km") + " · Estimated travel time: " + metric(result.estimatedTravelTimeMinutes ?? result.durationMinutes, " min") + "</p>" +
+        "<p>This is the server-authorized requested schedule, not independent confirmation of provider behavior. Future-departure traffic accuracy is unverified.</p>" +
+        (normalizeRouteMetric(result.liveTrafficTravelTimeSeconds) === null ? "<p>Future-departure traffic estimates are unavailable.</p>" : "");
+}
+
+function routeProvenanceDescription(evidence) {
+    if (typeof evidence?.label !== "string") return "Calculation departure assumptions were not recorded for this saved route.";
+    return evidence.label + (evidence.status === "current_planned" ? ". Requested context only; future traffic accuracy remains unverified." : ".");
 }
 
 function clearRouteComparison() {
@@ -216,6 +255,7 @@ function renderRouteComparison(result) {
         const points = [result.originalRouteCoordinates?.origin, ...originalStops.map(stop => stop.coordinate), result.originalRouteCoordinates?.destination];
         const source = comparison.source_coordinates, order = comparison.candidate_order, context = comparison.routing_context;
         available = comparison.provider === "TomTom" && context?.api_version === "1" && context.route_type === "fastest" && context.travel_mode === "car" && context.traffic === true &&
+            (result.calculationMode !== "planned" || context.depart_at === result.departureContext?.depart_at) &&
             Array.isArray(source) && source.length === points.length && points.every((point, i) => point && source[i]?.latitude === point.lat && source[i]?.longitude === point.lng) &&
             Array.isArray(order) && order.length === originalStops.length && new Set(order).size === order.length &&
             order.every((index, i) => Number.isInteger(index) && index >= 0 && index < originalStops.length && candidateStops[i]?.location === originalStops[index]?.location && candidateStops[i]?.coordinate?.lat === originalStops[index]?.coordinate?.lat && candidateStops[i]?.coordinate?.lng === originalStops[index]?.coordinate?.lng);
@@ -270,6 +310,8 @@ function verifyRouteComparisonSnapshot() {
 }
 
 function invalidateRouteComparisonContext() {
+    if (routeLastOptimization?.calculationMode === "planned" || routePendingOptimization?.calculationMode === "planned") resetRouteOptimization();
+    if (routePlannedPreview) clearRouteDepartureContext();
     routeOptimizationGeneration++;
     routeOptimizationRequestPending = false;
     const result = routeComparisonSnapshot?.result;
@@ -502,6 +544,12 @@ function updateRouteFormWorkflowUi(reservation = null) {
         isCompleted,
     );
     setRouteWorkflowPrimaryAction(primaryAction);
+    const saveButton = document.getElementById("saveRouteBtn");
+    if (saveButton && !routeSaveOperation?.ownsSubmitButton) {
+        saveButton.disabled = Boolean(routePlannedPreview ||
+            (routePendingOptimization?.calculationMode === "planned") ||
+            isNonSaveEligibleRouteResult(routeLastOptimization));
+    }
     refreshRouteTrafficCooldownControls();
 }
 
@@ -765,6 +813,7 @@ function updateRouteStrategyPresentation() {
 }
 
 function resetRouteOptimization() {
+    clearRouteDepartureContext();
     routeOptimizationGeneration++;
     routeOptimizationRequestPending = false;
     clearRouteComparison();
@@ -946,10 +995,15 @@ async function populateRouteReservations(selectedReservation = null) {
 /* ==========================================
    COLLECT FORM DATA
 ========================================== */
-function collectRouteFormData() {
+function collectRouteFormData({ forCalculation = false } = {}) {
+    if (!forCalculation) assertLegacyRouteSaveEligible(routeLastOptimization);
+    if (!forCalculation && routeLastOptimization?.calculationMode === "planned" && routeLastOptimization.optimizationApplied === true &&
+        routeLastOptimization.appliedFingerprint !== routeCalculationFingerprint()) {
+        throw routeSemanticError("ROUTE_PLANNED_VALUES_MISMATCH", "Route inputs changed. Calculate and apply the route again.");
+    }
     const get = (id) => document.getElementById(id)?.value?.trim() || "";
     const stops = getRouteStopsFromForm();
-    const optimization = routeLastOptimization;
+    const optimization = forCalculation && routeLastOptimization?.calculationMode === "planned" ? null : routeLastOptimization;
     if (optimization?.optimizationApplied === true) {
         assertRouteOptimizationStops(optimization);
         if (
@@ -1045,6 +1099,13 @@ function collectRouteFormData() {
             document.getElementById("routeOptScore")?.dataset.raw || "",
         optimizationApplied: optimization?.optimizationApplied === true,
         optimizationProof: optimization?.optimizationProof || null,
+        expectedEstimateRevision: routeObservedEstimateRevision,
+        ...(optimization?.calculationMode === "planned" ? {
+            calculationMode: "planned", departureContext: optimization.departureContext,
+            saveEligible: optimization.saveEligible, applyEligible: optimization.applyEligible,
+            provider: optimization.provider, plannedStopOrder: optimization.plannedStopOrder,
+            intendedOperation: optimization.intendedOperation, targetStatus: optimization.targetStatus,
+        } : {}),
         stopCoordinates,
     };
 }
@@ -1209,6 +1270,9 @@ async function optimizeRouteWithOsrm(data, options = {}) {
             departureTime: data.departureTime,
             reservationId: data.reservationId,
             includeComparison: data.includeComparison === true,
+            calculationMode: data.calculationMode || "legacy",
+            routeId: data.routeId, expectedEstimateRevision: data.expectedEstimateRevision,
+            intendedOperation: data.intendedOperation, targetStatus: data.targetStatus,
         },
         {
             draw: true,
@@ -1236,21 +1300,31 @@ async function optimizeRouteWithOsrm(data, options = {}) {
     }
     const optimizedStops = routeCoordinates.stops.map((stop) => stop.location);
 
+    if (isNonSaveEligibleRouteResult(result)) {
+        return {
+            ...result, optimizedStops, routeCoordinates,
+            originalRouteCoordinates: result.originalRouteCoordinates || routeCoordinates,
+            estimatedDistance: normalizeRouteMetric(result.distanceKm),
+            estimatedTravelTimeMinutes: normalizeRouteMetric(result.durationMinutes),
+            optimizationProof: null, optimizationApplied: false, saveEligible: false,
+        };
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Validate route values
     |--------------------------------------------------------------------------
     */
     const estimatedDistance = Number(result.distanceKm);
-    const estimatedTravelTimeMinutes = Number(result.durationMinutes);
+    const estimatedTravelTimeMinutes = result.calculationMode === "planned" ? Math.ceil(Number(result.durationMinutes)) : Number(result.durationMinutes);
 
-    if (!Number.isFinite(estimatedDistance) || estimatedDistance <= 0) {
+    if (result.distanceKm === null || !Number.isFinite(estimatedDistance) || (result.calculationMode === "planned" ? estimatedDistance < 0 : estimatedDistance <= 0)) {
         throw new Error("The routing service returned an invalid distance.");
     }
 
     if (
         !Number.isFinite(estimatedTravelTimeMinutes) ||
-        estimatedTravelTimeMinutes <= 0
+        result.durationMinutes === null || (result.calculationMode === "planned" ? estimatedTravelTimeMinutes < 0 : estimatedTravelTimeMinutes <= 0)
     ) {
         throw new Error("The routing service returned an invalid travel time.");
     }
@@ -1323,6 +1397,13 @@ async function optimizeRouteWithOsrm(data, options = {}) {
             : [],
         optimizationProof: result.optimizationProof || null,
         comparison: result.comparison || null,
+        calculationMode: result.calculationMode || "legacy",
+        departureContext: result.departureContext || null,
+        saveEligible: result.saveEligible !== false,
+        applyEligible: result.applyEligible === true,
+        expectedEstimateRevision: result.expectedEstimateRevision,
+        plannedStopOrder: result.plannedStopOrder,
+        intendedOperation: result.intendedOperation, targetStatus: result.targetStatus,
     };
 }
 
@@ -1330,6 +1411,7 @@ async function optimizeRouteWithOsrm(data, options = {}) {
    OPTIMIZATION
 ========================================== */
 function applyOptimizationToForm(result) {
+    assertLegacyRouteSaveEligible(result);
     routeLastOptimization = result;
     const distance = document.getElementById("routeEstimatedDistance");
     const time = document.getElementById("routeEstimatedTime");
@@ -1435,10 +1517,12 @@ function assertRouteOptimizationStops(result) {
 function applyPendingRouteOptimization({
     showToast: shouldShowToast = true,
 } = {}) {
+    if (routePlannedPreview) assertLegacyRouteSaveEligible(routePlannedPreview);
     if (!routePendingOptimization) {
         return false;
     }
     const result = routePendingOptimization;
+    assertLegacyRouteSaveEligible(result);
     if (routeOptimizationRequestPending) {
         return false;
     }
@@ -1475,6 +1559,7 @@ function applyPendingRouteOptimization({
         applyButton.disabled = true;
     }
     routePendingOptimization = null;
+    if (routeLastOptimization?.calculationMode === "planned") routeLastOptimization.appliedFingerprint = routeCalculationFingerprint();
     /*
     |--------------------------------------------------------------------------
     | Update summary state
@@ -1643,6 +1728,8 @@ function validateRouteForm() {
    API PAYLOAD BUILDERS
 ========================================== */
 function buildCreateRoutePayload(data) {
+    assertLegacyRouteSaveEligible(data);
+    if (data.calculationMode === "planned") throw routeSemanticError("ROUTE_PLANNED_SAVE_UNSUPPORTED", "Planned saving requires an existing route.");
     return {
         reservation_id: Number(data.reservationId),
         department: data.department,
@@ -1670,7 +1757,15 @@ function buildCreateRoutePayload(data) {
 }
 
 function buildUpdateRoutePayload(data) {
+    assertLegacyRouteSaveEligible(data);
     return {
+        ...(Number.isSafeInteger(data.expectedEstimateRevision) ? {expected_estimate_revision: data.expectedEstimateRevision} : {}),
+        ...(data.calculationMode === "planned" ? {
+            departure_mode: "planned", planned_stop_order: data.plannedStopOrder,
+            calculationMode: "planned", departureContext: data.departureContext, provider: data.provider,
+            saveEligible: data.saveEligible, applyEligible: data.applyEligible,
+            optimizationProof: data.optimizationProof, expectedEstimateRevision: data.expectedEstimateRevision,
+        } : {}),
         origin: data.origin,
         origin_latitude: data.originLatitude,
         origin_longitude: data.originLongitude,
@@ -1717,6 +1812,7 @@ async function openRouteFormModal(mode, record = null) {
         return;
     }
     invalidateRouteSaveContext();
+    clearRouteDepartureContext();
     routeFormMode = mode;
     routeOptimizationGeneration++;
     routeOptimizationRequestPending = false;
@@ -1724,6 +1820,7 @@ async function openRouteFormModal(mode, record = null) {
     const comparisonOption = document.getElementById("routeComparisonEnabled");
     if (comparisonOption) comparisonOption.checked = false;
     routeEditingId = mode === "edit" && record ? record.id : null;
+    routeObservedEstimateRevision = null;
     routeLastOptimization = null;
     routePendingOptimization = null;
     form.dataset.persistedOptimization = "false";
@@ -1767,6 +1864,12 @@ async function openRouteFormModal(mode, record = null) {
             }
         } catch (error) {
             console.warn("Unable to refresh route before editing:", error);
+        }
+        routeObservedEstimateRevision = Number.isSafeInteger(fullRoute.estimateRevision) ? fullRoute.estimateRevision : null;
+        const evidencePanel = document.getElementById("routeDepartureContext");
+        if (evidencePanel && fullRoute.estimateProvenance) {
+            evidencePanel.hidden = false;
+            evidencePanel.textContent = routeProvenanceDescription(fullRoute.estimateProvenance);
         }
         const existingReservation = {
             id: fullRoute.reservationId,
@@ -2010,6 +2113,7 @@ async function openRouteFormModal(mode, record = null) {
 }
 
 function closeRouteFormModal() {
+    clearRouteDepartureContext();
     invalidateRouteSaveContext();
     window.clearTimeout?.(routeTrafficCooldownTimer);
     routeTrafficCooldownTimer = null;
@@ -2024,6 +2128,7 @@ function closeRouteFormModal() {
     modal.classList.remove("show");
     document.body.style.overflow = "";
     routeEditingId = null;
+    routeObservedEstimateRevision = null;
     routeFormMode = "add";
     routeLastOptimization = null;
     routePendingOptimization = null;
@@ -2084,6 +2189,7 @@ function openViewRouteModal(record) {
     set("viewRouteNotes", record.notes);
     set("viewRouteCreated", formatRouteCreated(record.createdAt));
     set("viewRouteUpdated", formatRouteCreated(record.updatedAt));
+    set("viewRouteCalculationContext", routeProvenanceDescription(record.estimateProvenance));
 
     /*
   |--------------------------------------------------------------------------
@@ -2224,6 +2330,10 @@ function closeDeleteRouteModal() {
 }
 */ 
 async function saveRouteFromForm() {
+    if (routePlannedPreview || isNonSaveEligibleRouteResult(routePendingOptimization) || isNonSaveEligibleRouteResult(routeLastOptimization)) {
+        window.showToast?.("Planned departure previews cannot be applied or saved yet.", "warning");
+        return;
+    }
     if (routeOptimizationRequestPending) {
         window.showToast?.("Wait for the current route calculation before saving.", "warning");
         return;
@@ -2254,7 +2364,13 @@ async function saveRouteFromForm() {
     | This is a preference, not a hard requirement.
     |
     */
-    let data = collectRouteFormData();
+    let data;
+    try {
+        data = collectRouteFormData();
+    } catch (error) {
+        window.showToast?.(error.message || "Route inputs changed. Calculate the route again.", "warning");
+        return;
+    }
     if (routePendingOptimization) {
         if (typeof showToast === "function") {
             showToast(
@@ -2291,6 +2407,10 @@ async function saveRouteFromForm() {
                 operation.optimizationGeneration = routeOptimizationGeneration;
                 await calculation;
                 if (!isRouteSaveCurrent(operation)) return;
+                if (routePlannedPreview || isNonSaveEligibleRouteResult(routePendingOptimization)) {
+                    window.showToast?.("Planned departure previews cannot be applied or saved yet.", "warning");
+                    return;
+                }
                 applyPendingRouteOptimization({
                     showToast: false,
                 });
@@ -2303,7 +2423,7 @@ async function saveRouteFromForm() {
                 data = collectRouteFormData();
             } catch (error) {
                 if (!isRouteSaveCurrent(operation)) return;
-                if (error?.status === 429) {
+                if (isRouteSemanticError(error)) {
                     window.showToast?.(error.message, "warning");
                     return;
                 }
@@ -2509,8 +2629,18 @@ async function duplicateRouteFromView(routeId) {
     }
 }
 
-async function runRouteOptimization({ showSuccessToast = true } = {}) {
-    const data = collectRouteFormData();
+async function runRouteOptimization({ showSuccessToast = true, calculationMode = "legacy" } = {}) {
+    if (calculationMode === "planned" && !isPlannedRoutePreviewEnabled()) {
+        throw routeSemanticError("ROUTE_PLANNED_MODE_DISABLED", "Planned departure previews are not enabled.");
+    }
+    const data = collectRouteFormData({forCalculation: true});
+    data.calculationMode = calculationMode;
+    if (calculationMode === "planned") {
+        data.routeId = routeEditingId;
+        data.expectedEstimateRevision = routeObservedEstimateRevision;
+        data.intendedOperation = "transition";
+        data.targetStatus = data.status;
+    }
     data.includeComparison = document.getElementById("routeComparisonEnabled")?.checked === true;
     const generation = ++routeOptimizationGeneration;
     const fingerprint = routeCalculationFingerprint();
@@ -2550,6 +2680,24 @@ async function runRouteOptimization({ showSuccessToast = true } = {}) {
         refreshRouteTrafficCooldownControls();
     }
     result.sourceFingerprint = fingerprint;
+    if (isNonSaveEligibleRouteResult(result)) {
+        if (!normalizeRouteDepartureContext(result.departureContext)) {
+            throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The server departure context could not be verified. No form changes were applied.");
+        }
+        routePlannedPreview = {...result, optimizationProof: null, optimizationApplied: false, saveEligible: false};
+        renderRouteDepartureContext(routePlannedPreview);
+        renderRouteComparison(routePlannedPreview);
+        const applyButton = document.getElementById("applyRouteOptimizationBtn");
+        if (applyButton) applyButton.disabled = true;
+        updateRouteFormWorkflowUi();
+        if (showSuccessToast) window.showToast?.("Planned route preview ready. Apply and Save remain unavailable.", "success");
+        return routePlannedPreview;
+    }
+    if (calculationMode === "planned" && result.calculationMode !== "planned") {
+        throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The server calculation mode did not match the requested preview.");
+    }
+    clearRouteDepartureContext();
+    renderRouteDepartureContext(result);
     if (
         Array.isArray(data.stops) &&
         Array.isArray(result.optimizedStops) &&
@@ -2636,8 +2784,26 @@ function initRoutePlanningModals() {
     routeModalsInitialized = true;
     document.getElementById("routeComparisonEnabled")?.addEventListener("change", resetRouteOptimization);
     const comparisonForm = document.getElementById("routeForm");
+    const invalidatePlannedInputs = () => {
+        if (routeLastOptimization?.calculationMode !== "planned" && routePendingOptimization?.calculationMode !== "planned") return;
+        const result = routePendingOptimization || routeLastOptimization;
+        const expected = result.optimizationApplied ? result.appliedFingerprint : result.sourceFingerprint;
+        if (expected === routeCalculationFingerprint()) return;
+        const apply = document.getElementById("applyRouteOptimizationBtn");
+        const save = document.getElementById("saveRouteBtn");
+        if (apply) apply.disabled = true;
+        if (save) save.disabled = true;
+        const panel = document.getElementById("routeDepartureContext");
+        if (panel) { panel.hidden = false; panel.textContent = "Route inputs changed. Calculate and apply the route again before saving."; }
+    };
+    comparisonForm?.addEventListener("input", invalidatePlannedInputs);
+    comparisonForm?.addEventListener("change", invalidatePlannedInputs);
     if (comparisonForm && typeof MutationObserver === "function") {
-        new MutationObserver(() => invalidateRouteComparisonContext()).observe(comparisonForm, {
+        new MutationObserver(() => {
+            if (routeLastOptimization?.calculationMode === "planned" && routeLastOptimization.optimizationApplied === true &&
+                routeLastOptimization.appliedFingerprint === routeCalculationFingerprint()) return;
+            invalidateRouteComparisonContext();
+        }).observe(comparisonForm, {
             subtree: true,
             attributes: true,
             attributeFilter: ["data-latitude", "data-longitude"],
@@ -2786,9 +2952,11 @@ function initRoutePlanningModals() {
     document
         .getElementById("applyRouteOptimizationBtn")
         ?.addEventListener("click", () => {
-            applyPendingRouteOptimization({
-                showToast: true,
-            });
+            try {
+                applyPendingRouteOptimization({showToast: true});
+            } catch (error) {
+                window.showToast?.(error.message || "Route inputs changed. Calculate the route again.", "warning");
+            }
         });
     document
         .getElementById("routeForm")
@@ -2831,7 +2999,12 @@ function initRoutePlanningModals() {
                 updateOptimizationSummaryPanel(record);
             }
             if (viewButton) {
-                openViewRouteModal(record);
+                try {
+                    const fresh = await fetchRoutePlanById(record.id);
+                    if (fresh) openViewRouteModal(fresh);
+                } catch (error) {
+                    window.showToast?.(error.message || "Unable to load saved route evidence.", "error");
+                }
                 return;
             }
             if (editButton && !editButton.disabled && canUpdateRoute()) {

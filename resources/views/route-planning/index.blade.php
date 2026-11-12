@@ -5,7 +5,7 @@
 @section('content')
 
         <section class="page-wrapper">
-          <div class="vehicle-page route-planning-page" id="routePlanningPage">
+          <div class="vehicle-page route-planning-page" id="routePlanningPage" data-planned-departure-enabled="{{ config('services.tomtom.planned_departure_enabled', false) === true ? 'true' : 'false' }}">
             <div class="page-header">
               <div>
                 <h1>Route Planning</h1>
@@ -764,6 +764,7 @@
               </div>
               <div class="route-result-panels">
                 <div id="routeOptimizeSummary" class="route-optimize-summary" hidden></div>
+                <section id="routeDepartureContext" class="route-departure-context" aria-live="polite" hidden></section>
                 <section id="routeComparisonSummary" class="route-comparison-summary" aria-live="polite" aria-labelledby="routeComparisonTitle" hidden></section>
               </div>
             </div>
@@ -809,6 +810,7 @@
               <div><label>Status</label><p id="viewRouteStatus"></p></div>
               <div><label>Priority</label><p id="viewRoutePriority"></p></div>
               <div><label>Departure</label><p id="viewRouteDeparture"></p></div>
+              <div class="route-detail-full"><label>Calculation departure assumptions</label><p id="viewRouteCalculationContext">Calculation departure assumptions were not recorded for this saved route.</p></div>
               <div class="detail-section-heading"><h3>Origin &amp; Destination</h3></div>
               <div><label>Origin</label><p id="viewRouteOrigin"></p></div>
               <div><label>Destination</label><p id="viewRouteDestination"></p></div>

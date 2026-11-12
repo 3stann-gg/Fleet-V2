@@ -1829,6 +1829,13 @@ function getOptimizedRouteStops(originalStops, waypoints) {
  * geocodeRouteRecord().
  */
 async function requestTomTomRoute(routeCoordinates, record) {
+    const calculationMode = record?.calculationMode || "legacy";
+    if (!["legacy", "planned"].includes(calculationMode)) {
+        throw routeSemanticError("ROUTE_DEPARTURE_MODE_UNSUPPORTED", "This departure calculation mode is not supported.");
+    }
+    if (calculationMode === "planned" && !isPlannedRoutePreviewEnabled()) {
+        throw routeSemanticError("ROUTE_PLANNED_MODE_DISABLED", "Planned departure previews are not enabled.");
+    }
     const coordinates = [
         routeCoordinates.origin,
         ...routeCoordinates.stops.map((stop) => stop.coordinate),
@@ -1854,15 +1861,48 @@ async function requestTomTomRoute(routeCoordinates, record) {
     | TomTom supports departAt for time-aware routing.
     |
     */
-    if (record?.departureDate && record?.departureTime) {
+    if (calculationMode === "planned") {
+        payload.departure_mode = "planned";
+        if (record?.routeId && Number.isSafeInteger(record.expectedEstimateRevision)) {
+            payload.route_id = Number(record.routeId);
+            payload.expected_estimate_revision = record.expectedEstimateRevision;
+            payload.intended_operation = record.intendedOperation;
+            payload.target_status = record.targetStatus;
+            payload.stop_labels = routeCoordinates.stops.map(stop => stop.location);
+        }
+    } else if (record?.departureDate && record?.departureTime) {
         payload.depart_at = `${record.departureDate}T${record.departureTime}:00`;
     }
-    const data = await routeApiRequest(`${ROUTE_API_BASE}/traffic-route`, {
+    const response = await routeApiRequest(`${ROUTE_API_BASE}/traffic-route`, {
         method: "POST",
         body: JSON.stringify(payload),
     });
+    let departureContext = null;
+    if (calculationMode === "planned") {
+        departureContext = normalizeRouteDepartureContext(response.departure_context);
+        if (!response.success || typeof response.save_eligible !== "boolean" || !departureContext ||
+            response.calculation?.provider !== "TomTom" ||
+            response.calculation?.routing_context?.depart_at !== departureContext.depart_at) {
+            throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The server departure context could not be verified. Calculate the route again.");
+        }
+        if (response.save_eligible === true && (response.apply_eligible !== true ||
+            typeof response.optimization_proof !== "string" || !response.optimization_proof || response.optimization_proof.length > 10000 ||
+            !record?.routeId || !Number.isSafeInteger(response.expected_estimate_revision) || response.expected_estimate_revision < 0 ||
+            response.expected_estimate_revision !== record.expectedEstimateRevision ||
+            response.intended_operation !== record.intendedOperation || response.target_status !== record.targetStatus)) {
+            throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The server planned Save eligibility is incomplete or stale. Calculate the route again.");
+        }
+    } else if (response.departure_context || response.calculation || response.save_eligible === false) {
+        throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The calculation mode does not match this request. No route changes were applied.");
+    }
+    const data = calculationMode === "planned" ? response.calculation : response;
+    if (calculationMode === "planned" && (!Array.isArray(data.points) || data.points.some(point =>
+        typeof point?.latitude !== "number" || !Number.isFinite(point.latitude) || Math.abs(point.latitude) > 90 ||
+        typeof point?.longitude !== "number" || !Number.isFinite(point.longitude) || Math.abs(point.longitude) > 180))) {
+        throw routeSemanticError("ROUTE_DEPARTURE_CONTEXT_INVALID", "The planned preview geometry is invalid. No form changes were applied.");
+    }
     if (
-        !data.success ||
+        !response.success ||
         !Array.isArray(data.points) ||
         data.points.length < 2
     ) {
@@ -1895,18 +1935,33 @@ async function requestTomTomRoute(routeCoordinates, record) {
             ),
     };
     return {
+        calculationMode,
+        departureContext,
+        saveEligible: calculationMode !== "planned" || response.save_eligible === true,
+        applyEligible: calculationMode === "planned" ? response.apply_eligible === true : true,
+        expectedEstimateRevision: calculationMode === "planned" ? response.expected_estimate_revision : null,
+        intendedOperation: response.intended_operation || null,
+        targetStatus: response.target_status || null,
+        plannedStopOrder: calculationMode === "planned" ? orderRouteWaypoints(routeCoordinates.stops.map((_, index) => index), data.optimized_waypoints) : null,
+        routingMetrics: calculationMode === "planned" ? {
+            distanceMeters: normalizeRouteMetric(data.distance_meters),
+            travelTimeSeconds: normalizeRouteMetric(data.travel_time_seconds),
+            trafficDelaySeconds: normalizeRouteMetric(data.traffic_delay_seconds),
+        } : null,
         provider: data.provider || "TomTom",
         comparison: data.comparison || null,
-        distanceKm:
+        distanceKm: calculationMode === "planned" ? normalizeRouteMetric(data.distance_km) :
             data.distance_km !== null && data.distance_km !== undefined
                 ? Number(data.distance_km)
                 : null,
         durationMinutes:
             data.travel_time_minutes !== null &&
             data.travel_time_minutes !== undefined
-                ? Math.ceil(Number(data.travel_time_minutes))
+                ? (calculationMode === "planned" ? normalizeRouteMetric(data.travel_time_minutes) : Math.ceil(Number(data.travel_time_minutes)))
                 : null,
-        trafficDelayMinutes:
+        trafficDelayMinutes: calculationMode === "planned"
+            ? (normalizeRouteMetric(data.traffic_delay_seconds) === null ? null : normalizeRouteMetric(data.traffic_delay_seconds) / 60)
+            :
             data.traffic_delay_minutes !== null &&
             data.traffic_delay_minutes !== undefined
                 ? Number(data.traffic_delay_minutes)
@@ -1916,7 +1971,7 @@ async function requestTomTomRoute(routeCoordinates, record) {
             data.historic_traffic_travel_time_seconds,
         liveTrafficTravelTimeSeconds: data.live_traffic_travel_time_seconds,
         trafficLengthMeters: data.traffic_length_meters,
-        optimizationProof: data.optimization_proof || null,
+        optimizationProof: calculationMode === "planned" ? response.optimization_proof || null : data.optimization_proof || null,
         optimizedWaypoints: Object.prototype.hasOwnProperty.call(data, "optimized_waypoints")
             ? data.optimized_waypoints
             : [],
@@ -1937,7 +1992,7 @@ async function requestTomTomRoute(routeCoordinates, record) {
         instructions: Array.isArray(data.instructions) ? data.instructions : [],
         points: latLngs,
         geometry,
-        raw: data,
+        raw: calculationMode === "planned" ? null : data,
     };
 }
 
@@ -2012,7 +2067,7 @@ async function calculateTrafficRouteFromCoordinates(
             fallback: false,
         };
     } catch (tomTomError) {
-        if (tomTomError?.status === 429) throw tomTomError;
+        if (isRouteSemanticError(tomTomError) || record?.calculationMode === "planned") throw tomTomError;
         console.warn(
             "[Route Pipeline] TomTom return route failed. Using OSRM fallback.",
             tomTomError,
@@ -2030,6 +2085,8 @@ async function calculateTrafficRouteFromCoordinates(
         );
         return {
             provider: "OSRM",
+            calculationMode: "legacy",
+            departureContext: null,
             distanceKm: distanceMeters === null ? null : distanceMeters / 1000,
             durationMinutes: durationSeconds === null ? null : durationSeconds / 60,
             trafficDelayMinutes: 0,
@@ -2295,7 +2352,7 @@ async function calculateRouteWithTraffic(record, options = {}) {
                     trafficRoute.noTrafficTravelTimeSeconds,
             };
         } catch (tomTomError) {
-            if (tomTomError?.status === 429) throw tomTomError;
+            if (isRouteSemanticError(tomTomError) || record?.calculationMode === "planned") throw tomTomError;
             console.warn(
                 "TomTom routing failed. Falling back to OSRM:",
                 tomTomError?.message || tomTomError,
@@ -2310,16 +2367,17 @@ async function calculateRouteWithTraffic(record, options = {}) {
         if (!isCurrent()) {
             return null;
         }
-        const distanceMeters = Number(osrmRoute.distance || 0);
-        const durationSeconds = Number(osrmRoute.duration || 0);
-        const distanceKm = distanceMeters > 0 ? distanceMeters / 1000 : null;
-        const durationMinutes =
-            durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
+        const distanceMeters = normalizeRouteMetric(Object.prototype.hasOwnProperty.call(osrmRoute, "distance") ? osrmRoute.distance : osrmRoute.distanceMeters);
+        const durationSeconds = normalizeRouteMetric(Object.prototype.hasOwnProperty.call(osrmRoute, "duration") ? osrmRoute.duration : osrmRoute.durationSeconds);
+        const distanceKm = distanceMeters === null ? null : distanceMeters / 1000;
+        const durationMinutes = durationSeconds === null ? null : Math.ceil(durationSeconds / 60);
         if (options.draw !== false) {
             drawRouteOnLeaflet(osrmRoute, routeCoordinates, record);
         }
         return {
             provider: "OSRM",
+            calculationMode: "legacy",
+            departureContext: null,
             distanceKm:
                 distanceKm !== null ? Number(distanceKm.toFixed(2)) : null,
             durationMinutes,
