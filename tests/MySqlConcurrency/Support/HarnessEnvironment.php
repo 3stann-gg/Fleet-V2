@@ -53,6 +53,12 @@ final class HarnessEnvironment
             'MYSQL_CONCURRENCY_INSTANCE_ID' => $values['instance_id'],
             'MYSQL_CONCURRENCY_LOCK_TIMEOUT_SECONDS' => self::value('MYSQL_CONCURRENCY_LOCK_TIMEOUT_SECONDS', '5'),
             'MYSQL_CONCURRENCY_OCCURRENCE_MODE' => '0',
+            'MYSQL_CONCURRENCY_ROUTE_PROVENANCE_MODE' => '0',
+            'FLEET_ROUTE_PLANNED_DEPARTURE_ENABLED' => 'false',
+            'FLEET_ROUTE_PLANNED_PROOF_ISSUANCE_ENABLED' => 'false',
+            'FLEET_ROUTE_PLANNED_APPLY_ENABLED' => 'false',
+            'FLEET_ROUTE_PLANNED_SAVE_ENABLED' => 'false',
+            'FLEET_ROUTE_PROVENANCE_RECORDING_ENABLED' => 'false',
             'MAIL_MAILER' => 'array',
             'QUEUE_CONNECTION' => 'sync',
             'FLEET_NOTIFICATION_OCCURRENCES_ENABLED' => 'false',
@@ -183,11 +189,58 @@ final class HarnessEnvironment
         return self::inheritedValue('MYSQL_CONCURRENCY_OCCURRENCE_MODE') === '1';
     }
 
+    public static function routeProvenanceModeRequested(): bool
+    {
+        return self::inheritedValue('MYSQL_CONCURRENCY_ROUTE_PROVENANCE_MODE') === '1';
+    }
+
+    /** Gates remain OFF in the process environment; only guarded test code may override config. */
+    public static function routeProvenanceProcessEnvironment(?string $proofKey = null): array
+    {
+        $proofKey ??= self::inheritedValue('MYSQL_CONCURRENCY_ROUTE_PROOF_KEY');
+        if (! is_string($proofKey) || ! str_starts_with($proofKey, 'base64:') || strlen((string) base64_decode(substr($proofKey, 7), true)) !== 32) {
+            throw new RuntimeException('A separate ephemeral route proof key is required.');
+        }
+
+        return array_replace(self::processEnvironment(), ['MYSQL_CONCURRENCY_ROUTE_PROVENANCE_MODE' => '1',
+            'MYSQL_CONCURRENCY_ROUTE_PROOF_KEY' => $proofKey, 'APP_KEY' => $proofKey,
+            'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array', 'LOG_CHANNEL' => 'null']);
+    }
+
+    public static function routeProvenanceWorkerEnvironment(): array
+    {
+        if (! self::routeProvenanceModeRequested() || self::occurrenceModeRequested()) {
+            throw new RuntimeException('Route provenance workers require their exclusive dedicated mode.');
+        }
+
+        return array_replace(self::workerEnvironment(), self::routeProvenanceProcessEnvironment());
+    }
+
+    /** @return list<string> */
+    public static function routeProvenanceTestCommand(string $projectRoot, string $mode = '--prepare-and-route-provenance'): array
+    {
+        if (! in_array($mode, ['--prepare-and-route-provenance', HarnessSafetyPolicy::ROUTE_DUPLICATE_MODE], true)) {
+            throw new RuntimeException('Unsupported route provenance scenario selection.');
+        }
+        $command = self::testCommand($projectRoot, $projectRoot.'/tests/MySqlConcurrency/RouteProvenanceConcurrencyTest.php',
+            $projectRoot.'/phpunit.mysql-route-provenance.xml');
+
+        return $mode === HarnessSafetyPolicy::ROUTE_DUPLICATE_MODE ? [...$command, '--group='.HarnessSafetyPolicy::ROUTE_DUPLICATE_GROUP] : $command;
+    }
+
+    /** @return list<string> */
+    public static function routeProvenanceWorkerCommand(string $projectRoot, string $action, array $payload): array
+    {
+        return [PHP_BINARY, $projectRoot.'/tests/MySqlConcurrency/bin/route-provenance-worker.php', $action,
+            base64_encode(json_encode($payload, JSON_THROW_ON_ERROR))];
+    }
+
     public static function sanitizeDiagnostic(string $diagnostic): string
     {
         $secrets = array_filter([
             self::value('MYSQL_CONCURRENCY_PASSWORD'),
             self::value('MYSQL_CONCURRENCY_ROOT_PASSWORD'),
+            self::inheritedValue('MYSQL_CONCURRENCY_ROUTE_PROOF_KEY') ?? '',
         ], fn (string $secret): bool => $secret !== '');
 
         return str_replace(

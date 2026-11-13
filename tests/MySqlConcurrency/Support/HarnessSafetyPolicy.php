@@ -31,6 +31,10 @@ final class HarnessSafetyPolicy
 
     public const GUARD_DATABASE = 'fleet_concurrency_guard_test';
 
+    public const ROUTE_DUPLICATE_MODE = '--prepare-and-route-provenance-duplicate-uuid';
+
+    public const ROUTE_DUPLICATE_GROUP = 'mysql-route-provenance-duplicate-uuid';
+
     /** @var list<string> */
     public const RUNNER_MODES = [
         '--prepare-only',
@@ -38,7 +42,20 @@ final class HarnessSafetyPolicy
         '--business-only',
         '--prepare-and-smoke',
         '--prepare-and-occurrence',
+        '--prepare-and-route-provenance',
+        self::ROUTE_DUPLICATE_MODE,
     ];
+
+    /** Reject additional filters/options before configuration loading or database access. */
+    public static function runnerMode(array $arguments): string
+    {
+        if (count($arguments) !== 2 || ! is_string($arguments[1] ?? null)) {
+            throw new RuntimeException('Exactly one guarded mode is required; additional options are not supported.');
+        }
+        self::assertRunnerMode($arguments[1]);
+
+        return $arguments[1];
+    }
 
     public static function assertRunnerMode(string $mode): void
     {
@@ -268,6 +285,13 @@ final class HarnessSafetyPolicy
     {
         if ($exitCode !== 0) {
             throw new RuntimeException('The guarded MySQL business concurrency tests failed or were considered risky.');
+        }
+    }
+
+    public static function assertSuccessfulRouteProvenanceExitCode(int $exitCode): void
+    {
+        if ($exitCode !== 0) {
+            throw new RuntimeException("The guarded route provenance concurrency tests failed or were risky (exit {$exitCode}).");
         }
     }
 
@@ -584,6 +608,61 @@ final class HarnessSafetyPolicy
             if (! is_array($registered) || $registered !== $baseConfiguration) {
                 throw new RuntimeException("Database connection {$connectionName} is missing or is not an exact isolated clone.");
             }
+        }
+    }
+
+    /** Docker's --tmpfs configuration is recorded in HostConfig.Tmpfs, not necessarily Mounts. */
+    public static function assertDisposableMySqlStorage(array $container): void
+    {
+        $host = $container['HostConfig'] ?? null;
+        $tmpfs = is_array($host) ? ($host['Tmpfs'] ?? null) : null;
+        if (! is_array($tmpfs) || ! array_key_exists('/var/lib/mysql', $tmpfs)
+            || ! is_string($tmpfs['/var/lib/mysql'])
+            || in_array('ro', explode(',', $tmpfs['/var/lib/mysql']), true)) {
+            throw new RuntimeException('MySQL data must have an explicit writable HostConfig.Tmpfs configuration.');
+        }
+        if (array_keys($tmpfs) !== ['/var/lib/mysql']
+            || ! in_array($host['VolumesFrom'] ?? null, [null, []], true)
+            || ! in_array($host['Mounts'] ?? null, [null, []], true)) {
+            throw new RuntimeException('Unexpected inherited or additional storage configuration.');
+        }
+        $mounts = $container['Mounts'] ?? null;
+        if (! is_array($mounts) || ! array_is_list($mounts)) {
+            throw new RuntimeException('Complete Docker mount metadata is required.');
+        }
+        $destinations = [];
+        foreach ($mounts as $mount) {
+            if (! is_array($mount)) {
+                throw new RuntimeException('Malformed Docker mount metadata.');
+            }
+            $destination = $mount['Destination'] ?? null;
+            if (! is_string($destination) || in_array($destination, $destinations, true)) {
+                throw new RuntimeException('Missing or duplicate Docker mount destination.');
+            }
+            $destinations[] = $destination;
+            $allowedInitializer = ($mount['Type'] ?? null) === 'bind'
+                && ($mount['Destination'] ?? null) === '/docker-entrypoint-initdb.d/01-concurrency-guard.sh'
+                && ($mount['RW'] ?? null) === false;
+            $explicitTmpfs = ($mount['Type'] ?? null) === 'tmpfs' && $destination === '/var/lib/mysql' && ($mount['RW'] ?? null) === true;
+            if (! $allowedInitializer && ! $explicitTmpfs) {
+                throw new RuntimeException('Unexpected persistent, overlapping or unapproved Docker mount.');
+            }
+        }
+        $binds = $host['Binds'] ?? [];
+        if ($binds === null) {
+            $binds = [];
+        }
+        if (! is_array($binds) || ! array_is_list($binds) || count($binds) > 1) {
+            throw new RuntimeException('Unexpected Docker bind configuration.');
+        }
+        foreach ($binds as $bind) {
+            if (! is_string($bind) || preg_match('~\A[^\r\n]+:/docker-entrypoint-initdb\.d/01-concurrency-guard\.sh:ro\z~', $bind) !== 1) {
+                throw new RuntimeException('An unapproved Docker host bind is configured.');
+            }
+        }
+        if (($container['Config']['Cmd'] ?? null) !== ['--default-storage-engine=InnoDB']
+            || ($container['Config']['Entrypoint'] ?? null) !== ['docker-entrypoint.sh']) {
+            throw new RuntimeException('MySQL command or entrypoint could override the approved data directory.');
         }
     }
 

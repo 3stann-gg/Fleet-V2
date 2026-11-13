@@ -10,15 +10,14 @@ use Tests\MySqlConcurrency\Support\HarnessSafetyPolicy;
 use Tests\MySqlConcurrency\Support\IsolatedMySqlEnvironment;
 use Tests\MySqlConcurrency\Support\NotificationOccurrenceSchemaTransition;
 use Tests\MySqlConcurrency\Support\OccurrenceRunCoordinator;
+use Tests\MySqlConcurrency\Support\RouteProvenanceRunCoordinator;
 
 $projectRoot = dirname(__DIR__, 3);
 
 require $projectRoot.'/vendor/autoload.php';
 
-$mode = $argv[1] ?? '';
-
 try {
-    HarnessSafetyPolicy::assertRunnerMode($mode);
+    $mode = HarnessSafetyPolicy::runnerMode($argv);
     HarnessEnvironment::load($projectRoot);
     HarnessSafetyPolicy::assertConfiguration(HarnessEnvironment::values());
 
@@ -41,6 +40,7 @@ try {
     $lock = IsolatedMySqlEnvironment::advisoryLock();
     $ownerId = $lock->acquire();
     $occurrenceCoordinatorOwnsRelease = false;
+    $routeCoordinatorOwnsRelease = false;
 
     try {
         if ($mode === '--prepare-and-occurrence') {
@@ -111,7 +111,30 @@ try {
             $transition->assertBaseline();
         }
 
-        if (! in_array($mode, ['--prepare-only', '--prepare-and-occurrence'], true)) {
+        if (in_array($mode, ['--prepare-and-route-provenance', HarnessSafetyPolicy::ROUTE_DUPLICATE_MODE], true)) {
+            $environment = array_merge(HarnessEnvironment::routeProvenanceProcessEnvironment('base64:'.base64_encode(random_bytes(32))), [
+                'MYSQL_CONCURRENCY_PARENT_LOCK_NAME' => HarnessSafetyPolicy::lockName((string) config('mysql-concurrency.instance_id')),
+                'MYSQL_CONCURRENCY_PARENT_LOCK_OWNER' => (string) $ownerId,
+            ]);
+            $process = new Process(HarnessEnvironment::routeProvenanceTestCommand($projectRoot, $mode), $projectRoot, $environment);
+            $process->setTimeout(180);
+            $routeCoordinatorOwnsRelease = true;
+            (new RouteProvenanceRunCoordinator)->run(
+                execute: function () use ($process): void {
+                    $exitCode = $process->run(fn (string $type, string $output) => fwrite($type === Process::ERR ? STDERR : STDOUT, $output));
+                    HarnessSafetyPolicy::assertSuccessfulRouteProvenanceExitCode($exitCode);
+                },
+                verifyBaseline: function () use ($lock, $transition): void {
+                    $lock->assertOwned();
+                    $transition->assertBaseline();
+                },
+                release: function () use ($lock): void {
+                    $lock->release();
+                },
+            );
+        }
+
+        if (! in_array($mode, ['--prepare-only', '--prepare-and-occurrence', '--prepare-and-route-provenance', HarnessSafetyPolicy::ROUTE_DUPLICATE_MODE], true)) {
             $lock->assertOwned();
             $environment = array_merge(HarnessEnvironment::processEnvironment(), [
                 'MYSQL_CONCURRENCY_PARENT_LOCK_NAME' => HarnessSafetyPolicy::lockName((string) config('mysql-concurrency.instance_id')),
@@ -133,7 +156,7 @@ try {
             $lock->assertOwned();
         }
     } finally {
-        if (! $occurrenceCoordinatorOwnsRelease) {
+        if (! $occurrenceCoordinatorOwnsRelease && ! $routeCoordinatorOwnsRelease) {
             $lock->release();
         }
     }

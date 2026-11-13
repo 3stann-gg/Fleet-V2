@@ -10,9 +10,14 @@ require $projectRoot.'/vendor/autoload.php';
 HarnessEnvironment::load($projectRoot);
 HarnessSafetyPolicy::assertConfiguration(HarnessEnvironment::values());
 
-$environment = HarnessEnvironment::occurrenceModeRequested()
+if (HarnessEnvironment::occurrenceModeRequested() && HarnessEnvironment::routeProvenanceModeRequested()) {
+    throw new RuntimeException('Concurrency suite modes must not be combined.');
+}
+$environment = HarnessEnvironment::routeProvenanceModeRequested()
+    ? HarnessEnvironment::routeProvenanceProcessEnvironment()
+    : (HarnessEnvironment::occurrenceModeRequested()
     ? HarnessEnvironment::occurrenceProcessEnvironment()
-    : HarnessEnvironment::processEnvironment();
+    : HarnessEnvironment::processEnvironment());
 
 foreach ($environment as $name => $value) {
     putenv("{$name}={$value}");

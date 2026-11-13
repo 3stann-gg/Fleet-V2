@@ -19,6 +19,7 @@ use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Exceptions\MathException as CastMathException;
@@ -368,7 +369,8 @@ final class RouteEstimateProvenanceService
 
     /**
      * Internal foundation only; no HTTP controller invokes this method. Owns the top-level transaction
-     * so locks are acquired RoutePlan -> Reservation -> provenance -> stops. No automatic retries.
+     * so locks are acquired RoutePlan -> Reservation -> provenance -> stops. Only clean top-level
+     * MySQL deadlock victims may replay the entire transaction, at most three attempts.
      * The future controller must validate its request and authorize the fresh locked resources through
      * the mandatory callback. This path never accepts proofs, changes lifecycle, or promotes readiness.
      *
@@ -568,15 +570,21 @@ final class RouteEstimateProvenanceService
     {
         $pdo = $connection->getPdo();
         $entryLevel = $connection->transactionLevel();
-        try {
-            return $connection->transaction($callback, attempts: 1);
-        } catch (Throwable $exception) {
-            if ($connection->transactionLevel() > $entryLevel) {
-                $connection->rollBack($entryLevel);
-            } elseif ($entryLevel === 0 && $pdo->inTransaction()) {
-                $pdo->rollBack();
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return $connection->transaction($callback, attempts: 1);
+            } catch (Throwable $exception) {
+                if ($connection->transactionLevel() > $entryLevel) {
+                    $connection->rollBack($entryLevel);
+                } elseif ($entryLevel === 0 && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                if ($entryLevel !== 0 || $attempt >= 3 || ! $exception instanceof QueryException
+                    || ($exception->errorInfo[0] ?? null) !== '40001' || (int) ($exception->errorInfo[1] ?? 0) !== 1213
+                    || $connection->getDriverName() !== 'mysql' || $connection->transactionLevel() !== 0 || $pdo->inTransaction()) {
+                    throw $exception;
+                }
             }
-            throw $exception;
         }
     }
 

@@ -18,7 +18,8 @@ final class ConcurrentProcessRunner
     public function __construct(
         ?Closure $processFactory = null,
         ?Closure $treeTerminator = null,
-        ?Closure $environmentFactory = null
+        ?Closure $environmentFactory = null,
+        private ?Closure $evidenceRecorder = null,
     ) {
         $this->processFactory = $processFactory ?? fn (array $command, int $timeout): Process => $this->makeProcess($command, $timeout);
         $this->treeTerminator = $treeTerminator ?? fn (Process $process): bool => $this->terminateProcessTree($process);
@@ -37,6 +38,7 @@ final class ConcurrentProcessRunner
 
         $processes = [];
         $results = [];
+        $processIds = [];
         $failure = null;
 
         try {
@@ -44,15 +46,19 @@ final class ConcurrentProcessRunner
                 $process = ($this->processFactory)($command, $timeoutSeconds);
                 $processes[$name] = $process;
                 $process->start();
+                if ($this->evidenceRecorder !== null) {
+                    $processIds[$name] = $process->getPid();
+                }
             }
 
             foreach ($processes as $name => $process) {
                 $process->wait();
                 $results[$name] = $this->result($process);
-
                 if ($results[$name]['exit_code'] !== 0) {
-                    $failure = new RuntimeException("Concurrency worker {$name} exited unsuccessfully.");
-                    break;
+                    $failure ??= new RuntimeException("Concurrency worker {$name} exited unsuccessfully.");
+                    if ($this->evidenceRecorder === null) {
+                        break;
+                    }
                 }
             }
         } catch (Throwable $exception) {
@@ -67,15 +73,33 @@ final class ConcurrentProcessRunner
                     $failure ??= new RuntimeException("Unable to terminate harness-owned worker {$name}.", 0, $cleanupException);
                 }
 
-                $results[$name] = $this->result($process);
+                try {
+                    $results[$name] = $this->result($process);
+                } catch (Throwable) {
+                    $results[$name] = ['exit_code' => -1, 'output' => '', 'error_output' => ''];
+                    $failure ??= new RuntimeException('Unable to collect an owned worker result.');
+                }
+            }
+        }
+
+        if ($this->evidenceRecorder !== null) {
+            foreach (array_keys($commands) as $name) {
+                try {
+                    ($this->evidenceRecorder)($name, $results[$name] ?? ['exit_code' => -1, 'output' => '', 'error_output' => ''], $processIds[$name] ?? null);
+                } catch (Throwable) {
+                    $failure ??= new RuntimeException('Required worker evidence was unavailable or invalid.');
+                }
             }
         }
 
         if ($failure !== null) {
             $diagnostics = collect($results)
-                ->map(fn (array $result, string $name): string => "{$name}: exit={$result['exit_code']} stderr=".$this->sanitizeDiagnostic($result['error_output']))
+                ->map(fn (array $result, string $name): string => $this->evidenceRecorder !== null
+                    ? (in_array($name, ['a', 'b', 'holder', 'contender', 'probe'], true) ? $name : 'unknown').": exit={$result['exit_code']} (see sanitized worker evidence)"
+                    : "{$name}: exit={$result['exit_code']} stderr=".$this->sanitizeDiagnostic($result['error_output']))
                 ->implode('; ');
-            $cause = $this->sanitizeDiagnostic($failure::class.': '.$failure->getMessage());
+            $cause = $this->evidenceRecorder !== null ? 'Worker execution or evidence validation failed.'
+                : $this->sanitizeDiagnostic($failure::class.': '.$failure->getMessage());
 
             throw new RuntimeException("A concurrency worker failed and all launched workers were cleaned up. Cause: {$cause}. {$diagnostics}", 0, $failure);
         }

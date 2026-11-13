@@ -93,7 +93,7 @@ final class RouteEstimateProvenanceReadinessService
         }
         $checks = $this->checks($connection);
         foreach ($this->expectedChecks() as $name => $condition) {
-            $this->require(isset($checks[$name]) && $this->condition($checks[$name]) === $this->condition($condition));
+            $this->require(isset($checks[$name]) && $this->condition($checks[$name], $driver === 'mysql') === $this->condition($condition));
         }
 
         return true;
@@ -140,21 +140,42 @@ final class RouteEstimateProvenanceReadinessService
         ];
     }
 
-    /** Parse boolean grouping; preserve string literal case and ignore only redundant parentheses. */
-    private function condition(string $condition): array
+    /**
+     * MySQL metadata may escape literal delimiters themselves. Recognize only balanced, charset-prefixed
+     * metadata literals; decode their boundaries and SQL doubled apostrophes, never arbitrary backslashes.
+     * Preserve literal case and the existing boolean tree; unsupported or ambiguous forms fail closed.
+     */
+    private function condition(string $condition, bool $mysqlMetadata = false): array
     {
+        $pattern = <<<'REGEX'
+        ~\G(?:
+            \s+
+            |`[^`]+`
+            |"[^"]+"
+            |(?<metadata>_(?i:utf8mb4|utf8mb3|utf8|ascii|latin1|binary)\s*\\'(?:''|[^'\\\x00-\x1f\x7f])*\\')
+            |(?:_[a-zA-Z0-9]+\s*)?'(?:''|[^'])*'
+            |[a-zA-Z_][a-zA-Z0-9_]*
+            |[0-9]+|>=|<=|<>|!=|[=><(),]
+        )~x
+        REGEX;
         $tokens = [];
         $offset = 0;
         while ($offset < strlen($condition)) {
-            $this->require(preg_match('/\G(?:\s+|`[^`]+`|"[^"]+"|(?:_[a-zA-Z0-9]+)?\x27(?:\x27\x27|[^\x27])*\x27|[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+|>=|<=|<>|!=|[=><(),])/', $condition, $match, 0, $offset) === 1);
+            $this->require(preg_match($pattern, $condition, $match, 0, $offset) === 1);
             $token = $match[0];
             $offset += strlen($token);
             if (trim($token) === '') {
                 continue;
             }
             if (str_contains($token, "'")) {
+                $metadataLiteral = ($match['metadata'] ?? '') !== '';
+                $this->require(! $metadataLiteral || $mysqlMetadata);
                 $quote = strpos($token, "'");
-                $tokens[] = 'literal:'.str_replace("''", "'", substr($token, $quote + 1, -1));
+                $literal = substr($token, $quote + 1, $metadataLiteral ? -2 : -1);
+                if ($mysqlMetadata) {
+                    $this->require(! str_contains($literal, '\\') && preg_match('/[\x00-\x1f\x7f]/', $literal) === 0);
+                }
+                $tokens[] = 'literal:'.str_replace("''", "'", $literal);
             } else {
                 $tokens[] = strtolower(trim($token, '`"'));
             }

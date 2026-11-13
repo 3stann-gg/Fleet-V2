@@ -103,3 +103,50 @@ zero unresolved obsolete notifications. Additional overlapping Maintenance
 concurrency scenarios remain pending and must not be treated as verified by
 this result. A nonzero suite result remains evidence of a production locking or
 design gap, not permission to weaken or skip an assertion.
+
+## Stage 4 route estimate provenance concurrency
+
+The dedicated route suite must be separately authorized before execution:
+
+```powershell
+php tests/MySqlConcurrency/bin/run.php --prepare-and-route-provenance
+```
+
+This command destructively rebuilds only the guarded disposable schema. It
+does not start Docker. The existing exact endpoint, account, instance sentinel,
+privilege, InnoDB and parent advisory-lock checks remain mandatory. Both
+notification unique indexes remain installed; this mode never performs the
+occurrence index transition. Ordinary smoke/business runs do not discover this
+suite. Test fixtures are synthetic and remain in the disposable schema for
+inspection; a subsequent authorized guarded preparation rebuilds them.
+
+The launcher supplies a fresh, process-only encryption key shared by its
+workers. Environment feature gates remain OFF. Only dedicated test code may
+temporarily enable the five Stage 4 capabilities after database, schema and
+live parent-lock checks. No routing providers are called. Workers use real
+controller requests, authorization and production transaction code; these are
+controller concurrency tests, not browser authentication/CSRF coverage.
+
+Independent PHP processes and control connections synchronize at the actual
+route row-lock query. Ordered cases also use a third session's `FOR UPDATE
+NOWAIT` probe: MySQL error 3572 must confirm an incompatible route lock before
+the holder proceeds. This proves a held row lock, not independently observed
+InnoDB waiter metadata. Simultaneous cases align both lock attempts without
+assuming which process wins. All barriers and workers have bounded timeouts.
+
+Prepared scenarios cover competing planned Saves, an explicitly ordered stale
+loser, rollback after the audit INSERT, current-history supersession, both
+manual/planned orders, archive/restore against existing verified history and
+duplicate calculation UUIDs across different routes. Assertions inspect
+committed route, stop, revision, provenance, reservation and audit state.
+MySQL failures are captured without SQL bindings or record contents; only the
+exact duplicate calculation index violation may be an expected unique
+conflict. Deadlocks, lock timeouts, unrelated constraints, malformed responses
+and worker failures fail the suite. No deadlock retry guarantee is claimed.
+
+After interruption, preserve diagnostics and verify that all owned workers
+have stopped before another separately authorized guarded run. Do not use a
+normal application database for recovery. The runner releases its advisory
+lock in `finally` and rechecks both baseline notification indexes. A passing
+SQLite safety regression validates harness logic only; live MySQL outcomes
+remain NOT VERIFIED until this dedicated mode actually executes successfully.

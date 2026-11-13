@@ -5,10 +5,118 @@ use App\Models\RoutePlan;
 use App\Models\RouteStop;
 use App\Services\RouteEstimateProvenanceService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\SQLiteConnection;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
+
+/** Real in-memory transactions with only the driver identification doubled for the MySQL retry branch. */
+function repRetryConnection(string $driver = 'mysql'): SQLiteConnection
+{
+    $connection = new SQLiteConnection(new PDO('sqlite::memory:'), 'isolated', '', ['driver' => $driver]);
+    expect($connection->getPdo()->getAttribute(PDO::ATTR_DRIVER_NAME))->toBe('sqlite')
+        ->and($connection->getDriverName())->toBe($driver);
+    $connection->statement('CREATE TABLE retry_ledger (component TEXT PRIMARY KEY, value INTEGER NOT NULL)');
+    foreach (['route', 'stops', 'revision', 'provenance', 'audit'] as $component) {
+        $connection->insert('INSERT INTO retry_ledger VALUES (?, 0)', [$component]);
+    }
+
+    return $connection;
+}
+
+function repRetryFailure(string $state = '40001', int $code = 1213): QueryException
+{
+    $previous = new PDOException($code === 1213 ? 'Deadlock found when trying to get lock; try restarting transaction' : 'Synthetic terminal SQL failure');
+    $previous->errorInfo = [$state, $code, 'Synthetic safe metadata'];
+
+    return new QueryException('isolated', 'synthetic statement', [], $previous);
+}
+
+it('replays the complete rolled-back top-level transaction at most three times on MySQL deadlocks', function (): void {
+    $connection = repRetryConnection();
+    $calls = 0;
+    $method = new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction');
+    $result = $method->invoke(new RouteEstimateProvenanceService, $connection, function () use ($connection, &$calls): string {
+        $calls++;
+        expect($connection->select('SELECT value FROM retry_ledger WHERE value <> 0'))->toBeEmpty()
+            ->and($connection->transactionLevel())->toBe(1)->and($connection->getPdo()->inTransaction())->toBeTrue();
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        if ($calls < 3) {
+            throw repRetryFailure();
+        }
+
+        return 'committed';
+    });
+    expect($result)->toBe('committed')->and($calls)->toBe(3)
+        ->and($connection->select('SELECT value FROM retry_ledger WHERE value = 1'))->toHaveCount(5)
+        ->and($connection->transactionLevel())->toBe(0)->and($connection->getPdo()->inTransaction())->toBeFalse();
+});
+
+it('exhausts the deadlock budget without partial writes or open transactions', function (): void {
+    $connection = repRetryConnection();
+    $calls = 0;
+    $method = new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction');
+    $operation = function () use ($connection, &$calls): void {
+        $calls++;
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        throw repRetryFailure();
+    };
+    expect(fn () => $method->invoke(new RouteEstimateProvenanceService, $connection, $operation))->toThrow(QueryException::class)
+        ->and($calls)->toBe(3)->and($connection->select('SELECT value FROM retry_ledger WHERE value <> 0'))->toBeEmpty()
+        ->and($connection->transactionLevel())->toBe(0)->and($connection->getPdo()->inTransaction())->toBeFalse();
+});
+
+it('does not retry timeouts unique violations non-MySQL failures or application errors', function (string $state, int $code, string $driver, bool $applicationError): void {
+    $connection = repRetryConnection($driver);
+    $calls = 0;
+    $method = new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction');
+    $operation = function () use ($connection, &$calls, $state, $code, $applicationError): void {
+        $calls++;
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        throw $applicationError ? new InvalidArgumentException('Synthetic validation failure') : repRetryFailure($state, $code);
+    };
+    expect(fn () => $method->invoke(new RouteEstimateProvenanceService, $connection, $operation))->toThrow($applicationError ? InvalidArgumentException::class : QueryException::class)
+        ->and($calls)->toBe(1)->and($connection->select('SELECT value FROM retry_ledger WHERE value <> 0'))->toBeEmpty()
+        ->and($connection->getPdo()->inTransaction())->toBeFalse();
+})->with([['HY000', 1205, 'mysql', false], ['23000', 1062, 'mysql', false], ['40001', 1213, 'sqlite', false], ['40001', 1213, 'mysql', true]]);
+
+it('preserves a terminal duplicate rejection after a fully rolled-back deadlock retry', function (): void {
+    $connection = repRetryConnection();
+    $calls = 0;
+    $terminal = repRetryFailure('23000', 1062);
+    $operation = function () use ($connection, &$calls, $terminal): void {
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        throw ++$calls === 1 ? repRetryFailure() : $terminal;
+    };
+    try {
+        (new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction'))->invoke(new RouteEstimateProvenanceService, $connection, $operation);
+        $this->fail('The duplicate conflict must not be swallowed.');
+    } catch (QueryException $exception) {
+        expect($exception)->toBe($terminal);
+    }
+    expect($calls)->toBe(2)->and($connection->select('SELECT value FROM retry_ledger WHERE value <> 0'))->toBeEmpty()
+        ->and($connection->transactionLevel())->toBe(0)->and($connection->getPdo()->inTransaction())->toBeFalse();
+});
+
+it('never replays a deadlock inside an owner-managed outer transaction', function (): void {
+    $connection = repRetryConnection();
+    $calls = 0;
+    $connection->beginTransaction();
+    try {
+        $operation = function () use (&$calls): void {
+            $calls++;
+            throw repRetryFailure();
+        };
+        expect(fn () => (new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction'))->invoke(new RouteEstimateProvenanceService, $connection, $operation))
+            ->toThrow(DeadlockException::class)->and($calls)->toBe(1);
+    } finally {
+        $connection->rollBack(0);
+    }
+    expect($connection->getPdo()->inTransaction())->toBeFalse();
+});
 
 function repDomainRoute(): RoutePlan
 {
