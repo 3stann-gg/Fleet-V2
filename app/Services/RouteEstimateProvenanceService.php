@@ -572,7 +572,7 @@ final class RouteEstimateProvenanceService
         $entryLevel = $connection->transactionLevel();
         for ($attempt = 1; ; $attempt++) {
             try {
-                return $connection->transaction($callback, attempts: 1);
+                $result = $connection->transaction($callback, attempts: 1);
             } catch (Throwable $exception) {
                 if ($connection->transactionLevel() > $entryLevel) {
                     $connection->rollBack($entryLevel);
@@ -584,7 +584,15 @@ final class RouteEstimateProvenanceService
                     || $connection->getDriverName() !== 'mysql' || $connection->transactionLevel() !== 0 || $pdo->inTransaction()) {
                     throw $exception;
                 }
+                RouteSaveDiagnosticService::retryScheduled($attempt);
+
+                continue;
             }
+            if ($attempt > 1) {
+                RouteSaveDiagnosticService::recovered($attempt);
+            }
+
+            return $result;
         }
     }
 

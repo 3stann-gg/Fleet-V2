@@ -9,6 +9,7 @@ use Illuminate\Database\DeadlockException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteConnection;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
@@ -117,6 +118,82 @@ it('never replays a deadlock inside an owner-managed outer transaction', functio
     }
     expect($connection->getPdo()->inTransaction())->toBeFalse();
 });
+
+it('emits retry monitoring only after rollback and recovery only after a committed attempt', function (bool $terminalDuplicate): void {
+    $connection = repRetryConnection();
+    $events = [];
+    Log::shouldReceive('log')->times($terminalDuplicate ? 1 : 2)->andReturnUsing(function (string $level, string $event, array $context) use ($connection, &$events): void {
+        $events[] = ['level' => $level, 'event' => $event, 'context' => $context,
+            'transaction_level' => $connection->transactionLevel(), 'pdo_open' => $connection->getPdo()->inTransaction(),
+            'ledger' => array_column($connection->select('SELECT value FROM retry_ledger'), 'value')];
+    });
+    $calls = 0;
+    $terminal = repRetryFailure('23000', 1062);
+    $operation = function () use ($connection, &$calls, $terminalDuplicate, $terminal): string {
+        $calls++;
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        if ($calls === 1) {
+            throw repRetryFailure();
+        }
+        if ($terminalDuplicate) {
+            throw $terminal;
+        }
+
+        return 'saved';
+    };
+    $execute = fn () => (new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction'))->invoke(new RouteEstimateProvenanceService, $connection, $operation);
+    if ($terminalDuplicate) {
+        try {
+            $execute();
+            $this->fail('A terminal duplicate must propagate.');
+        } catch (QueryException $exception) {
+            expect($exception)->toBe($terminal);
+        }
+    } else {
+        expect($execute())->toBe('saved');
+    }
+    expect($calls)->toBe(2)->and($events)->toHaveCount($terminalDuplicate ? 1 : 2);
+    foreach ($events as $event) {
+        expect($event['level'])->toBe('notice')->and($event['transaction_level'])->toBe(0)->and($event['pdo_open'])->toBeFalse();
+    }
+    expect($events[0]['event'])->toBe('fleet.route_save.deadlock_retry')->and($events[0]['ledger'])->toBe([0, 0, 0, 0, 0])
+        ->and($events[0]['context'])->toMatchArray(['outcome' => 'retry_scheduled', 'attempt' => 1, 'max_attempts' => 3, 'transaction_clean' => true]);
+    if (! $terminalDuplicate) {
+        expect($events[1]['event'])->toBe('fleet.route_save.deadlock_recovered')->and($events[1]['ledger'])->toBe([1, 1, 1, 1, 1])
+            ->and($events[1]['context'])->toMatchArray(['outcome' => 'committed_after_retry', 'attempt' => 2]);
+    }
+})->with([false, true]);
+
+it('keeps retry results and terminal exceptions unchanged when the logger throws', function (bool $terminalDuplicate): void {
+    $connection = repRetryConnection();
+    Log::shouldReceive('log')->times($terminalDuplicate ? 1 : 2)->andThrow(new RuntimeException('Synthetic logger failure'));
+    $calls = 0;
+    $terminal = repRetryFailure('23000', 1062);
+    $operation = function () use ($connection, &$calls, $terminal, $terminalDuplicate): string {
+        $connection->update('UPDATE retry_ledger SET value = 1');
+        if (++$calls === 1) {
+            throw repRetryFailure();
+        }
+        if ($terminalDuplicate) {
+            throw $terminal;
+        }
+
+        return 'saved';
+    };
+    $execute = fn () => (new ReflectionMethod(RouteEstimateProvenanceService::class, 'writerTransaction'))->invoke(new RouteEstimateProvenanceService, $connection, $operation);
+    if ($terminalDuplicate) {
+        try {
+            $execute();
+            $this->fail('The original terminal failure must propagate.');
+        } catch (QueryException $exception) {
+            expect($exception)->toBe($terminal);
+        }
+    } else {
+        expect($execute())->toBe('saved');
+    }
+    expect($calls)->toBe(2)->and($connection->transactionLevel())->toBe(0)->and($connection->getPdo()->inTransaction())->toBeFalse()
+        ->and($connection->select('SELECT value FROM retry_ledger WHERE value <> 0'))->toHaveCount($terminalDuplicate ? 0 : 5);
+})->with([false, true]);
 
 function repDomainRoute(): RoutePlan
 {

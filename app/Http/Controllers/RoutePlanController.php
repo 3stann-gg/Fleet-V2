@@ -15,6 +15,7 @@ use App\Services\RouteComparisonService;
 use App\Services\RouteDepartureContextService;
 use App\Services\RouteEstimateProvenanceReadinessService;
 use App\Services\RouteEstimateProvenanceService;
+use App\Services\RouteSaveDiagnosticService;
 use App\Services\TomTomRoutingService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -547,8 +548,12 @@ class RoutePlanController extends Controller
         } catch (HttpResponseException|AuthorizationException $e) {
             throw $e;
         } catch (QueryException $e) {
+            RouteSaveDiagnosticService::failed('create', $e);
+
             return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
+            RouteSaveDiagnosticService::failed('create', $e);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -891,8 +896,12 @@ class RoutePlanController extends Controller
         } catch (HttpResponseException|AuthorizationException $e) {
             throw $e;
         } catch (QueryException $e) {
+            RouteSaveDiagnosticService::failed($isLifecycleTransition ? 'transition' : 'update', $e);
+
             return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
+            RouteSaveDiagnosticService::failed($isLifecycleTransition ? 'transition' : 'update', $e);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -955,8 +964,12 @@ class RoutePlanController extends Controller
         } catch (HttpResponseException|AuthorizationException $exception) {
             throw $exception;
         } catch (QueryException $exception) {
+            RouteSaveDiagnosticService::failed($event, $exception);
+
             return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $exception) {
+            RouteSaveDiagnosticService::failed($event, $exception);
+
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
         }
     }
@@ -1150,8 +1163,12 @@ class RoutePlanController extends Controller
         } catch (HttpResponseException|AuthorizationException $e) {
             throw $e;
         } catch (QueryException $e) {
+            RouteSaveDiagnosticService::failed('duplicate', $e);
+
             return response()->json(['success' => false, 'message' => 'Route changes could not be saved.'], 422);
         } catch (\Exception $e) {
+            RouteSaveDiagnosticService::failed('duplicate', $e);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),

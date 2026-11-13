@@ -17,6 +17,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -723,6 +724,42 @@ it('rolls back callbacks that alter saved fields or current evidence during audi
         fn () => null, $audit))->toThrow(InvalidArgumentException::class);
     expect(rpiState())->toBe($before);
 })->with(['evidence', 'notes', 'purpose', 'department', 'optimization_score']);
+
+it('keeps failed Save responses and all protected state unchanged while emitting sanitized diagnostics', function (string $operation, bool $loggerFails): void {
+    config(['services.route_estimates.provenance_recording_enabled' => true]);
+    rpiEvidence($this->route, true);
+    $reservation = null;
+    if (in_array($operation, ['create', 'duplicate'], true)) {
+        $target = rpiRoute();
+        $reservation = $target->reservation;
+        $target->stops()->delete();
+        $target->delete();
+        rpiAssign($reservation);
+    } elseif ($operation === 'restore') {
+        $this->postJson(route('route-planning.archive', $this->route), ['expected_estimate_revision' => 1])->assertSuccessful();
+    }
+    DB::statement("CREATE TRIGGER rpi_monitor_failure BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT, 'seeded-private-proof-location'); END");
+    $before = rpiState();
+    $events = [];
+    Log::shouldReceive('log')->once()->andReturnUsing(function (string $level, string $event, array $context) use (&$events, $loggerFails): void {
+        $events[] = compact('level', 'event', 'context');
+        if ($loggerFails) {
+            throw new RuntimeException('Synthetic logger transport failure');
+        }
+    });
+    $response = match ($operation) {
+        'create' => $this->postJson(route('route-planning.store'), ['reservation_id' => $reservation->id, 'department' => 'Operations']),
+        'duplicate' => $this->postJson(route('route-planning.duplicate', $this->route), ['reservation_id' => $reservation->id]),
+        'archive', 'restore' => $this->postJson(route('route-planning.'.$operation, $this->route), ['expected_estimate_revision' => $operation === 'restore' ? 2 : 1]),
+        default => $this->putJson(route('route-planning.update', $this->route), rpiPayload($this->route, ['estimated_time' => 30])),
+    };
+    $response->assertUnprocessable()->assertExactJson(['success' => false, 'message' => 'Route changes could not be saved.']);
+    expect($events)->toHaveCount(1)->and($events[0]['level'])->toBe('warning')->and($events[0]['event'])->toBe('fleet.route_save.failed')
+        ->and($events[0]['context']['operation'])->toBe($operation)->and(Str::isUuid($events[0]['context']['correlation_id']))->toBeTrue()
+        ->and(json_encode($events))->not->toContain('seeded', 'Synthetic', 'proof', 'binding', 'patient', 'exception');
+    expect(rpiState())->toBe($before)->and(DB::transactionLevel())->toBe(0)->and(DB::connection()->getPdo()->inTransaction())->toBeFalse();
+    Http::assertNothingSent();
+})->with(['create', 'duplicate', 'update', 'archive', 'restore'])->with([false, true]);
 
 it('preserves creation and duplication as unrecorded draft routes without copying history', function (bool $duplicate): void {
     config(['services.route_estimates.provenance_recording_enabled' => true]);
